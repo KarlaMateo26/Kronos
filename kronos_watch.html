@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, width=390">
+<meta name="theme-color" content="#08080e">
+<title>Kronos Watch</title>
+<style>
+:root{
+  --bg:#08080e;--s1:#161622;--border:#2e2e44;
+  --accent:#6c63ff;--teal:#2dd4c0;
+  --amber:#f59e0b;--green:#1db954;--red:#ff4f6a;
+  --text:#ddddf0;--text3:#606080;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{width:390px;height:390px;overflow:hidden;background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;border-radius:50%;}
+::-webkit-scrollbar{width:0;}
+.screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;border-radius:50%;}
+.screen.active{display:flex;}
+
+/* LOADING */
+#scLoad{background:var(--bg);}
+.load-logo{font-family:monospace;font-size:22px;color:var(--accent);letter-spacing:4px;margin-bottom:10px;}
+.load-sub{font-size:11px;color:var(--text3);}
+.spinner{width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:12px auto 0;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* LIST */
+#scList{background:var(--bg);}
+.list-header{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);font-family:monospace;margin-bottom:8px;}
+.act-scroll{width:100%;max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;padding:0 28px;}
+.act-btn{width:100%;background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:9px 11px;display:flex;align-items:center;gap:9px;cursor:pointer;touch-action:manipulation;transition:all .15s;text-align:left;color:var(--text);}
+.act-btn:active{border-color:var(--accent);}
+.act-btn.running{border-color:var(--green);background:rgba(29,185,84,.08);}
+.ab-emoji{font-size:17px;flex-shrink:0;}
+.ab-info{flex:1;min-width:0;}
+.ab-name{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ab-time{font-size:9px;color:var(--text3);font-family:monospace;margin-top:1px;}
+.ab-dot{width:7px;height:7px;background:var(--green);border-radius:50%;flex-shrink:0;animation:pulse 1.2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.sync-row{margin-top:7px;font-size:9px;color:var(--text3);font-family:monospace;display:flex;align-items:center;gap:4px;cursor:pointer;}
+
+/* ACTIVE */
+#scActive{background:var(--bg);}
+.sess-emoji{font-size:32px;margin-bottom:3px;}
+.sess-name{font-size:14px;font-weight:700;margin-bottom:8px;text-align:center;}
+.timer-main{font-family:monospace;font-size:32px;font-weight:600;color:var(--accent);letter-spacing:1px;line-height:1;}
+.timer-break{font-family:monospace;font-size:13px;color:var(--teal);margin-top:4px;min-height:18px;text-align:center;}
+.sess-btns{display:flex;gap:10px;margin-top:12px;}
+.sess-ico{width:46px;height:46px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;touch-action:manipulation;font-size:19px;transition:all .15s;}
+.sess-ico:active{transform:scale(.86);}
+.sess-ico.pause{background:var(--amber);color:#000;}
+.sess-ico.play-r{background:var(--green);color:#fff;}
+.sess-ico.stop{background:transparent;border:2px solid var(--red);color:var(--red);}
+.sess-ico.brk{background:var(--s1);border:1px solid var(--border);color:var(--text3);}
+.sess-ico.brk.on{background:var(--teal);color:#fff;border-color:var(--teal);}
+.back-btn{position:absolute;top:26px;left:26px;font-size:10px;color:var(--text3);cursor:pointer;touch-action:manipulation;background:none;border:none;padding:4px;}
+
+/* ERROR */
+#scError{background:var(--bg);}
+.err-icon{font-size:30px;margin-bottom:8px;}
+.err-msg{font-size:11px;color:var(--text3);text-align:center;padding:0 44px;line-height:1.5;}
+.err-btn{margin-top:12px;background:var(--accent);color:#fff;border:none;border-radius:20px;padding:7px 18px;font-size:11px;cursor:pointer;}
+</style>
+</head>
+<body>
+
+<div class="screen active" id="scLoad">
+  <div class="load-logo">KRONOS</div>
+  <div class="load-sub">sincronizando...</div>
+  <div class="spinner"></div>
+</div>
+
+<div class="screen" id="scList">
+  <div class="list-header">actividades</div>
+  <div class="act-scroll" id="actScroll"></div>
+  <div class="sync-row" onclick="syncAndRender()">
+    <span id="syncDot" style="font-size:11px;">●</span>
+    <span id="syncLbl">sincronizado</span>
+  </div>
+</div>
+
+<div class="screen" id="scActive">
+  <button class="back-btn" onclick="showList()">← volver</button>
+  <div class="sess-emoji" id="sessEmoji">🎹</div>
+  <div class="sess-name" id="sessName">Piano</div>
+  <div class="timer-main" id="timerMain">00:00:00</div>
+  <div class="timer-break" id="timerBreak"></div>
+  <div class="sess-btns">
+    <button class="sess-ico pause" id="btnPause" onclick="togglePause()">⏸</button>
+    <button class="sess-ico stop" onclick="stopSession()">■</button>
+    <button class="sess-ico brk" id="btnBreak" onclick="toggleBreak()">☕</button>
+  </div>
+</div>
+
+<div class="screen" id="scError">
+  <div class="err-icon">📡</div>
+  <div class="err-msg">Sin conexión. Verifica tu red.</div>
+  <button class="err-btn" onclick="syncAndRender()">Reintentar</button>
+</div>
+
+<script>
+const API='https://script.google.com/macros/s/AKfycbx1k0fGxPruFhqu77ZR7HnamkBqVmISWdJ9_oMbhcWu106BNFfBLB9pu3nh33H8-uJW/exec';
+let S=null, activeKey=null, tick=null;
+
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
+
+function getWk(){const n=new Date(),j=new Date(n.getFullYear(),0,1);return`${n.getFullYear()}-W${Math.ceil(((n-j)/86400000+j.getDay()+1)/7)}`;}
+function elapsed(iso){return Math.floor((Date.now()-new Date(iso).getTime())/1000);}
+function fmt(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;return`${ph(h)}:${ph(m)}:${ph(ss)}`;}
+function ph(n){return String(n).padStart(2,'0');}
+function fmtS(s){if(s<60)return`${s}s`;if(s<3600)return`${Math.floor(s/60)}m`;return`${Math.floor(s/3600)}h${Math.floor((s%3600)/60)}m`;}
+function genId(){return'w'+Date.now()+'_'+Math.random().toString(36).slice(2,5);}
+
+function dot(st){
+  const d=document.getElementById('syncDot'),l=document.getElementById('syncLbl');
+  if(st==='load'){d.textContent='↻';d.style.color='#f59e0b';l.textContent='syncing...';}
+  else if(st==='ok'){d.textContent='●';d.style.color='#22d3a0';l.textContent='ok';}
+  else{d.textContent='●';d.style.color='#ff4f6a';l.textContent='sin red';}
+}
+
+async function syncAndRender(){
+  dot('load');
+  try{
+    const r=await fetch(API+'?t='+Date.now());
+    const data=await r.json();
+    if(data.ok&&data.state){
+      S=data.state;
+      if(!S.running)S.running={};
+      if(!S.activities)S.activities=[];
+      const wk=getWk();
+      if(S.currentWeek!==wk){S.activities.forEach(a=>a.weekTotal=0);S.currentWeek=wk;}
+      dot('ok');renderList();show('scList');
+    } else { dot('err');show('scError'); }
+  }catch(e){dot('err');show('scError');}
+}
+
+async function push(){
+  try{
+    await fetch(API,{method:'POST',body:JSON.stringify({state:S}),headers:{'Content-Type':'application/json'}});
+    dot('ok');
+  }catch(e){dot('err');}
+}
+
+function actTotal(actId){
+  const base=S.activities.find(a=>a.id===actId)?.weekTotal||0;
+  let live=0;
+  for(const ctx of Object.values(S.running)){
+    if(ctx.actId!==actId)continue;
+    live+=(ctx.lapTotal||0);
+    if(!ctx.paused)live+=elapsed(ctx.startTime);
+  }
+  return base+live;
+}
+
+function renderList(){
+  if(!S)return;
+  const running=Object.values(S.running);
+  const acts=[...S.activities].sort((a,b)=>{
+    const ar=running.some(r=>r.actId===a.id&&!r.paused);
+    const br=running.some(r=>r.actId===b.id&&!r.paused);
+    if(ar&&!br)return -1;if(br&&!ar)return 1;
+    return actTotal(b.id)-actTotal(a.id);
+  });
+  document.getElementById('actScroll').innerHTML=acts.map(a=>{
+    const ctx=running.find(r=>r.actId===a.id);
+    const isRun=!!ctx&&!ctx.paused;
+    return`<button class="act-btn ${isRun?'running':''}" onclick="tapActivity('${a.id}')">
+      <span class="ab-emoji">${a.emoji}</span>
+      <span class="ab-info">
+        <span class="ab-name">${a.name}</span>
+        <span class="ab-time">${fmtS(actTotal(a.id))}</span>
+      </span>
+      ${isRun?'<span class="ab-dot"></span>':''}
+    </button>`;
+  }).join('');
+}
+
+function tapActivity(actId){
+  if(!S)return;
+  const existKey=Object.keys(S.running).find(k=>S.running[k].actId===actId);
+  if(existKey){openSession(existKey);return;}
+  const act=S.activities.find(a=>a.id===actId);if(!act)return;
+  const rKey='w_'+actId+'_'+Date.now();
+  S.running[rKey]={rKey,actId,actName:act.name,actEmoji:act.emoji,plannedId:null,subtaskId:null,sessionName:'',startTime:new Date().toISOString(),lapTotal:0,lapCount:0,paused:false,pausedAt:null,breakStart:null,breakTotal:0,realActId:null};
+  push();openSession(rKey);
+}
+
+function openSession(rKey){
+  activeKey=rKey;
+  const ctx=S.running[rKey];if(!ctx)return;
+  document.getElementById('sessEmoji').textContent=ctx.actEmoji;
+  document.getElementById('sessName').textContent=ctx.actName;
+  show('scActive');startTick();
+}
+
+function showList(){stopTick();activeKey=null;renderList();show('scList');}
+function startTick(){stopTick();tick=setInterval(updateTimers,1000);updateTimers();}
+function stopTick(){clearInterval(tick);tick=null;}
+
+function updateTimers(){
+  if(!activeKey||!S)return;
+  const ctx=S.running[activeKey];if(!ctx){showList();return;}
+  const lf=ctx.paused?0:elapsed(ctx.startTime);
+  document.getElementById('timerMain').textContent=fmt((ctx.lapTotal||0)+lf);
+  const bp=document.getElementById('btnPause');
+  if(ctx.paused&&!ctx.breakStart){bp.textContent='▶';bp.className='sess-ico play-r';}
+  else{bp.textContent='⏸';bp.className='sess-ico pause';}
+  const isB=!!ctx.breakStart;
+  const tb=(ctx.breakTotal||0)+(isB?elapsed(ctx.breakStart):0);
+  document.getElementById('timerBreak').textContent=tb>0?'☕ '+fmt(tb):'';
+  document.getElementById('btnBreak').classList.toggle('on',isB);
+}
+
+function togglePause(){
+  if(!activeKey||!S)return;
+  const ctx=S.running[activeKey];if(!ctx)return;
+  if(ctx.paused&&!ctx.breakStart){ctx.paused=false;ctx.pausedAt=null;}
+  else if(!ctx.paused){
+    ctx.lapTotal=(ctx.lapTotal||0)+elapsed(ctx.startTime);
+    ctx.startTime=new Date().toISOString();
+    ctx.paused=true;ctx.pausedAt=new Date().toISOString();
+    if(ctx.breakStart){ctx.breakTotal+=elapsed(ctx.breakStart);ctx.breakStart=null;}
+  }
+  push();updateTimers();
+}
+
+function toggleBreak(){
+  if(!activeKey||!S)return;
+  const ctx=S.running[activeKey];if(!ctx)return;
+  if(ctx.breakStart){
+    ctx.breakTotal+=elapsed(ctx.breakStart);ctx.breakStart=null;
+    ctx.paused=false;ctx.pausedAt=null;
+  } else {
+    if(!ctx.paused){ctx.lapTotal=(ctx.lapTotal||0)+elapsed(ctx.startTime);ctx.startTime=new Date().toISOString();ctx.paused=true;}
+    ctx.breakStart=new Date().toISOString();
+  }
+  push();updateTimers();
+}
+
+function stopSession(){
+  if(!activeKey||!S)return;
+  const ctx=S.running[activeKey];if(!ctx)return;
+  const lf=ctx.paused?0:elapsed(ctx.startTime);
+  const total=(ctx.lapTotal||0)+lf;
+  const act=S.activities.find(a=>a.id===ctx.actId);
+  if(act)act.weekTotal=(act.weekTotal||0)+total;
+  if(!S.sessions)S.sessions=[];
+  if(total>2)S.sessions.unshift({id:genId(),groupId:activeKey,actId:ctx.actId,actName:ctx.actName,actEmoji:ctx.actEmoji,plannedId:null,subtaskId:null,subtaskName:null,sessionName:ctx.sessionName||null,lapName:null,lapNum:1,startTime:ctx.startTime,endTime:new Date().toISOString(),duration:total,breakTotal:ctx.breakTotal||0,realActId:null,realActName:null,note:''});
+  delete S.running[activeKey];
+  stopTick();push();activeKey=null;renderList();show('scList');
+}
+
+syncAndRender();
+setInterval(()=>{if(document.getElementById('scList').classList.contains('active'))syncAndRender();},30000);
+</script>
+</body>
+</html>
