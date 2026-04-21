@@ -109,16 +109,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .add-sub-row{padding:5px 10px 6px;border-top:1px solid var(--border2);}
 .add-sub-input{width:100%;background:transparent;border:none;color:var(--text2);font-family:var(--sans);font-size:11px;outline:none;padding:2px 0;}
 .add-sub-input::placeholder{color:var(--text3);}
+.add-sub-row{display:flex;align-items:center;gap:6px;}
+.add-sub-btn{background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);border-radius:6px;width:24px;height:24px;font-size:16px;line-height:1;cursor:pointer;touch-action:manipulation;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
 
 .empty-planned{text-align:center;padding:20px;color:var(--text3);font-size:11px;font-family:var(--mono);}
 
 /* ─────────────────────────────────────────
    RUNNING CARDS
 ───────────────────────────────────────── */
-/* running grid: 2-col when ≥2 cards, 1-col when solo or in break/expanded */
 .running-list{padding:0 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-.running-list:has(.run-card:only-child){grid-template-columns:1fr;}
-/* Fallback for browsers without :has */
 .running-list.solo{grid-template-columns:1fr;}
 
 .run-card{background:linear-gradient(135deg,#111120,#0e0e1c);border:1px solid var(--accent);border-radius:12px;overflow:hidden;position:relative;min-width:0;padding:10px 12px 8px;}
@@ -143,7 +142,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 
 /* ── timers row: focus | break stacked ── */
 .rc-timers{display:flex;flex-direction:column;gap:2px;}
-.rc-timer-row{display:flex;align-items:center;gap:6px;}
+.rc-timer-row{display:flex;align-items:center;gap:6px;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px;}
+.rc-timer-row::-webkit-scrollbar{display:none;}
 .rc-timer-val{font-family:var(--mono);font-size:20px;font-weight:500;color:var(--accent);letter-spacing:1px;line-height:1;}
 .rc-timer-val.break-val{color:var(--teal);font-size:14px;}
 .rc-timer-lbl{font-size:8px;letter-spacing:1px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);}
@@ -264,12 +264,77 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .dfield{margin-bottom:10px;}
 .dlbl{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);margin-bottom:3px;}
 .dval{font-size:12px;font-family:var(--mono);color:var(--text);background:var(--s0);border-radius:8px;padding:8px 11px;}
+
+/* ─── DÍA PAGE ─── */
+.dia-view-toggle{display:flex;gap:4px;padding:10px 16px 0;}
+.dvt-btn{flex:1;padding:7px;background:var(--s1);border:1px solid var(--border);border-radius:8px;color:var(--text3);font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;touch-action:manipulation;transition:all .2s;text-align:center;}
+.dvt-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+/* date nav */
+.date-nav{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 0;}
+.date-nav-btn{background:transparent;border:1px solid var(--border);color:var(--text3);border-radius:8px;padding:5px 12px;font-size:14px;cursor:pointer;touch-action:manipulation;}
+.date-nav-btn:active{background:var(--s1);}
+.date-nav-lbl{font-size:12px;font-weight:600;color:var(--text);font-family:var(--mono);}
+
+/* ── TIMELINE ── */
+.tl-empty{text-align:center;color:var(--text3);font-size:12px;padding:30px 16px;font-family:var(--mono);}
+.tl-page{padding:8px 16px 20px;overflow-x:hidden;}
+
+/* block header */
+.tl-block-hdr{display:flex;align-items:center;gap:8px;padding:10px 0 6px;}
+.tl-block-hdr-line{flex:1;height:1px;background:var(--border);}
+.tl-block-title{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);flex-shrink:0;}
+.tl-block-total{font-size:9px;font-family:var(--mono);color:var(--accent);flex-shrink:0;}
+
+/* hour ruler */
+.tl-ruler{position:relative;width:100%;overflow:hidden;}
+.tl-ruler-labels{display:flex;margin-bottom:2px;}
+.tl-ruler-lbl{font-size:8px;color:var(--text3);font-family:var(--mono);flex:1;text-align:left;}
+
+/* lanes: each lane is a row of non-overlapping sessions */
+.tl-lanes{display:flex;flex-direction:column;gap:3px;}
+.tl-lane{position:relative;height:28px;width:100%;}
+
+/* individual session pill */
+.tl-pill{
+  position:absolute;top:0;height:28px;
+  border-radius:6px;
+  display:flex;align-items:center;
+  padding:0 5px;gap:3px;
+  cursor:pointer;touch-action:manipulation;
+  overflow:hidden;
+  transition:opacity .15s;
+  min-width:4px;
+  box-sizing:border-box;
+}
+.tl-pill:active{opacity:.7;}
+.tl-pill-emoji{font-size:11px;flex-shrink:0;}
+.tl-pill-name{font-size:9px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;}
+.tl-pill-dur{font-size:8px;font-family:var(--mono);flex-shrink:0;opacity:.85;}
+
+/* ruler tick lines */
+.tl-ticks{position:relative;height:8px;margin-bottom:2px;}
+.tl-tick{position:absolute;top:0;width:1px;height:6px;background:var(--border);}
+.tl-tick.hour{background:var(--border2);height:8px;}
+
+/* ── HABIT TRACKER ── */
+.habit-wrap{padding:8px 16px 0;}
+.habit-row{display:flex;align-items:center;gap:6px;margin-bottom:8px;}
+.habit-emoji{font-size:16px;flex-shrink:0;width:22px;text-align:center;}
+.habit-name{font-size:11px;font-weight:600;flex-shrink:0;width:70px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.habit-dots{display:flex;gap:3px;flex:1;}
+.habit-dot{flex:1;height:28px;border-radius:5px;background:var(--s1);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:8px;font-family:var(--mono);color:var(--text3);transition:all .2s;cursor:pointer;touch-action:manipulation;min-width:0;}
+.habit-dot.done{background:var(--accent);border-color:var(--accent);color:#fff;}
+.habit-dot.partial{background:rgba(108,99,255,.3);border-color:var(--accent);color:var(--accent);}
+.habit-day-labels{display:flex;gap:3px;margin-left:98px;margin-bottom:4px;}
+.habit-day-lbl{flex:1;text-align:center;font-size:8px;color:var(--text3);font-family:var(--mono);min-width:0;}
 </style>
 </head>
 <body>
 
 <div class="nav">
   <button class="nav-tab active" onclick="showPage('tracker')">⏱ Tracker</button>
+  <button class="nav-tab" onclick="showPage('dia')">📅 Día</button>
   <button class="nav-tab" onclick="showPage('history')">📋 Historial</button>
 </div>
 
@@ -302,9 +367,34 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   <div class="act-list" id="actList"></div>
 </div>
 
+<!-- ═══════════ DÍA ═══════════ -->
+<div class="page" id="page-dia">
+  <div class="hdr"><div class="logo">KRONOS</div><div class="wk-badge" id="diaBadge">HOY</div></div>
+  <!-- view toggle -->
+  <div class="dia-view-toggle">
+    <button class="dvt-btn active" id="dvtHabit" onclick="setDiaView('habit')">📊 Hábitos</button>
+    <button class="dvt-btn" id="dvtTimeline" onclick="setDiaView('timeline')">⏱ Cronograma</button>
+  </div>
+  <!-- date nav (only for timeline) -->
+  <div class="date-nav" id="diaDateNav" style="display:none;">
+    <button class="date-nav-btn" onclick="shiftDiaDate(-1)">‹</button>
+    <div class="date-nav-lbl" id="diaDateLbl">—</div>
+    <button class="date-nav-btn" onclick="shiftDiaDate(+1)">›</button>
+  </div>
+  <!-- content -->
+  <div id="diaHabitContent"></div>
+  <div id="diaTimelineContent" style="display:none;"></div>
+</div>
+
 <!-- ═══════════ HISTORY ═══════════ -->
 <div class="page" id="page-history">
-  <div class="hdr"><div class="logo">KRONOS</div><button class="csv-btn" onclick="exportCSV()">↓ CSV</button></div>
+  <div class="hdr">
+    <div class="logo">KRONOS</div>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <button class="csv-btn" onclick="exportCSV()" style="color:var(--green);border-color:var(--green);">↓ CSV</button>
+      <button class="csv-btn" onclick="openImport()" style="color:var(--amber);border-color:var(--amber);">↑ Importar</button>
+    </div>
+  </div>
   <div class="hist-toolbar">
     <select class="filter-sel" id="filterSel" onchange="renderHistory()">
       <option value="">Todas las actividades</option>
@@ -312,6 +402,27 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   </div>
   <div class="sec-lbl">registros</div>
   <div class="hist-list" id="histList"></div>
+</div>
+
+<!-- ── IMPORT MODAL ── -->
+<div class="overlay" id="importModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Importar CSV</div>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:14px;text-align:center;line-height:1.5;">
+      Importa un archivo CSV exportado desde Kronos.<br>
+      Los registros nuevos se <strong style="color:var(--amber)">añaden</strong> sin borrar los existentes.
+    </p>
+    <!-- file input styled -->
+    <label style="display:block;background:var(--s0);border:1px dashed var(--border2);border-radius:10px;padding:20px;text-align:center;cursor:pointer;margin-bottom:10px;" id="importDropZone">
+      <input type="file" id="importFileInput" accept=".csv" style="display:none;" onchange="handleImportFile(this)">
+      <div style="font-size:24px;margin-bottom:6px;">📂</div>
+      <div style="font-size:12px;color:var(--text3);">Toca para elegir un archivo CSV</div>
+    </label>
+    <div id="importPreview" style="display:none;background:var(--s0);border-radius:10px;padding:12px;margin-bottom:10px;font-size:11px;font-family:var(--mono);color:var(--text2);line-height:1.6;"></div>
+    <button class="mbtn" id="importConfirmBtn" style="display:none;" onclick="confirmImport()">Importar registros</button>
+    <button class="mcancel" onclick="closeModal('importModal')">Cancelar</button>
+  </div>
 </div>
 
 <!-- FAB -->
@@ -598,7 +709,8 @@ function startActivity(actId, plannedId, subtaskId){
     plannedId:plannedId||null,subtaskId:subtaskId||null,
     sessionName:'',startTime:new Date().toISOString(),
     lapTotal:0,lapCount:0,paused:false,pausedAt:null,
-    breakStart:null,breakTotal:0,realActId:null
+    breakStart:null,breakTotal:0,realActId:null,
+    insertOrder:Date.now()
   };
   save();startTick(rKey);renderAll();
 }
@@ -780,12 +892,18 @@ function renderPlanned(){
           </button>
         </div>`).join('')}
       <div class="add-sub-row">
-        <input class="add-sub-input" placeholder="+ Añadir subtarea" id="sub_${p.id}"
-          onkeydown="if(event.key==='Enter'){addSubtask('${p.id}',this.value);this.value='';}">
+        <input class="add-sub-input" placeholder="+ Añadir subtarea..." id="sub_${p.id}"
+          inputmode="text" enterkeyhint="done"
+          onkeydown="if(event.key==='Enter'){addSubtask('${p.id}',this.value);this.value='';this.blur();}"
+          onkeyup="if(event.key==='Enter'){addSubtask('${p.id}',this.value);this.value='';this.blur();}">
+        <button class="add-sub-btn" onclick="var el=document.getElementById('sub_${p.id}');addSubtask('${p.id}',el.value);el.value='';">+</button>
       </div>
     </div>`:`<div class="subtasks"><div class="add-sub-row">
-      <input class="add-sub-input" placeholder="+ Añadir subtarea" id="sub_${p.id}"
-        onkeydown="if(event.key==='Enter'){addSubtask('${p.id}',this.value);this.value='';}">
+      <input class="add-sub-input" placeholder="+ Añadir subtarea..." id="sub_${p.id}"
+        inputmode="text" enterkeyhint="done"
+        onkeydown="if(event.key==='Enter'){addSubtask('${p.id}',this.value);this.value='';this.blur();}"
+        onkeyup="if(event.key==='Enter'){addSubtask('${p.id}',this.value);this.value='';this.blur();}">
+      <button class="add-sub-btn" onclick="var el=document.getElementById('sub_${p.id}');addSubtask('${p.id}',el.value);el.value='';">+</button>
     </div></div>`;
 
     const subCount=p.subtasks.length;
@@ -853,10 +971,9 @@ function renderRunning(){
   document.getElementById('runningCount').textContent=keys.length?`(${keys.length})`:'';
   lbl.style.display=keys.length?'flex':'none';
   if(!keys.length){list.innerHTML='';return;}
-  // sort by total elapsed descending (longest first)
-  const sorted=[...keys].sort((a,b)=>runningTotalSecs(S.running[b])-runningTotalSecs(S.running[a]));
+  // stable order: keep insertion order, never reorder on play/pause
+  const sorted=[...keys].sort((a,b)=>(S.running[a].insertOrder||0)-(S.running[b].insertOrder||0));
   list.innerHTML=sorted.map((k,i)=>buildRunCard(k,i===0)).join('');
-  // toggle .solo for CSS grid fallback
   list.classList.toggle('solo', sorted.length===1);
   // init ticks for all that are running
   keys.forEach(k=>{const ctx=S.running[k];if(ctx&&!ctx.paused&&!timers[k])startTick(k);});
@@ -1206,6 +1323,224 @@ function confirmAddAct(){
 // ═══════════════════════════════════════════════════════
 //  CSV
 // ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+//  IMPORT CSV
+// ═══════════════════════════════════════════════════════
+var _importData = null; // parsed sessions ready to commit
+
+function openImport(){
+  _importData=null;
+  document.getElementById('importFileInput').value='';
+  document.getElementById('importPreview').style.display='none';
+  document.getElementById('importConfirmBtn').style.display='none';
+  openModal('importModal');
+}
+
+function handleImportFile(input){
+  const file=input.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const text=e.target.result;
+    parseImportCSV(text);
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+// Make the drop zone label trigger the file input
+document.addEventListener('DOMContentLoaded',function(){
+  const dz=document.getElementById('importDropZone');
+  if(dz) dz.addEventListener('click',function(){document.getElementById('importFileInput').click();});
+});
+
+function parseImportCSV(text){
+  // Remove BOM if present
+  if(text.charCodeAt(0)===0xFEFF) text=text.slice(1);
+
+  const lines=text.split('\n').filter(l=>l.trim());
+  if(lines.length<2){showImportError('Archivo vacío o inválido.');return;}
+
+  // Parse CSV respecting quoted fields
+  function parseRow(line){
+    const result=[];let cur='';let inQ=false;
+    for(let i=0;i<line.length;i++){
+      const ch=line[i];
+      if(ch==='"'){
+        if(inQ&&line[i+1]==='"'){cur+='"';i++;}
+        else inQ=!inQ;
+      } else if(ch===','&&!inQ){result.push(cur);cur='';}
+      else cur+=ch;
+    }
+    result.push(cur);
+    return result;
+  }
+
+  const headers=parseRow(lines[0]).map(h=>h.trim().toLowerCase());
+  
+  // Map column names → indices (flexible, works even if order changes)
+  const col={};
+  const colMap={
+    fecha:['fecha'],
+    planeado:['planeado'],
+    actividad:['actividad'],
+    subtarea:['subtarea','subtarea name'],
+    sesion:['sesión','sesion','session'],
+    lap:['nombre lap','lap name','nombre_lap'],
+    inicio:['inicio'],
+    fin:['fin'],
+    duracion:['duración','duracion'],
+    duracion_seg:['duración (seg)','duracion_seg'],
+    descanso:['descanso'],
+    descanso_seg:['descanso(seg)','descanso_seg'],
+    real:['real'],
+    nota:['nota','note'],
+    actId:['actid','act_id'],
+    actEmoji:['actemoji','act_emoji','emoji'],
+  };
+  Object.entries(colMap).forEach(([key,names])=>{
+    const idx=names.map(n=>headers.indexOf(n)).find(i=>i>=0);
+    if(idx!==undefined&&idx>=0) col[key]=idx;
+  });
+
+  if(col.inicio===undefined||col.fin===undefined||col.actividad===undefined){
+    showImportError('No se encontraron columnas requeridas (Actividad, Inicio, Fin).');
+    return;
+  }
+
+  const parsed=[];
+  const errors=[];
+  const existingIds=new Set(S.sessions.map(s=>s.id));
+
+  for(let i=1;i<lines.length;i++){
+    const row=parseRow(lines[i]);
+    if(row.length<3) continue;
+
+    const get=(k,def='')=>col[k]!==undefined?(row[col[k]]||'').trim():def;
+
+    const actName=get('actividad');
+    const startStr=get('inicio');
+    const endStr=get('fin');
+    if(!actName||!startStr||!endStr) continue;
+
+    // Parse dates
+    const startTime=new Date(startStr);
+    const endTime=new Date(endStr);
+    if(isNaN(startTime)||isNaN(endTime)){errors.push(`Fila ${i+1}: fecha inválida`);continue;}
+
+    const durSecs=Math.round((endTime-startTime)/1000);
+    if(durSecs<0){errors.push(`Fila ${i+1}: duración negativa`);continue;}
+
+    // Find or create activity
+    let act=S.activities.find(a=>a.name.toLowerCase()===actName.toLowerCase());
+    if(!act){
+      // create new activity from import
+      const emoji=get('actEmoji','📝');
+      act={id:'imp_'+actName.replace(/ /g,'_').toLowerCase()+'_'+Date.now(),name:actName,emoji,weekTotal:0};
+      // will add to S.activities on confirm
+    }
+
+    const breakSeg=parseInt(get('descanso_seg'))||0;
+    const realVal=get('real');
+    const realActName=(realVal&&realVal.toLowerCase()!=='same'&&realVal!==actName)?realVal:null;
+    const realAct=realActName?S.activities.find(a=>a.name.toLowerCase()===realActName.toLowerCase()):null;
+
+    // Generate stable ID from startTime+actName to avoid duplicates
+    const stableId='imp_'+actName.slice(0,6).replace(/ /g,'')+'_'+startTime.getTime();
+    if(existingIds.has(stableId)) continue; // skip duplicate
+
+    const session={
+      id:stableId,
+      groupId:stableId,
+      actId:act.id,
+      actName:act.name,
+      actEmoji:act.emoji,
+      plannedId:null,
+      subtaskId:null,
+      subtaskName:get('subtarea')||null,
+      sessionName:get('sesion')||null,
+      lapName:get('lap')||null,
+      lapNum:1,
+      startTime:startTime.toISOString(),
+      endTime:endTime.toISOString(),
+      duration:durSecs,
+      breakTotal:breakSeg,
+      realActId:realAct?realAct.id:null,
+      realActName:realActName,
+      note:get('nota')||'',
+      _newAct: !S.activities.find(a=>a.id===act.id)?act:null,
+    };
+    parsed.push(session);
+  }
+
+  if(!parsed.length){showImportError('No se encontraron registros válidos nuevos.');return;}
+
+  _importData=parsed;
+  const newActs=[...new Map(parsed.filter(s=>s._newAct).map(s=>[s._newAct.id,s._newAct])).values()];
+
+  const preview=document.getElementById('importPreview');
+  preview.style.display='';
+  preview.innerHTML=`✓ ${parsed.length} registro${parsed.length>1?'s':''} listos para importar
+${errors.length?'⚠ '+errors.length+' filas omitidas (fechas inválidas)':''}
+${newActs.length?'+ '+newActs.length+' actividad(es) nueva(s): '+newActs.map(a=>a.name).join(', '):''}`;
+  document.getElementById('importConfirmBtn').style.display='';
+}
+
+function showImportError(msg){
+  const preview=document.getElementById('importPreview');
+  preview.style.display='';
+  preview.innerHTML='❌ '+msg;
+  preview.style.color='var(--red)';
+  document.getElementById('importConfirmBtn').style.display='none';
+}
+
+function confirmImport(){
+  if(!_importData||!_importData.length)return;
+
+  // Add any new activities
+  _importData.forEach(s=>{
+    if(s._newAct&&!S.activities.find(a=>a.id===s._newAct.id)){
+      S.activities.push({...s._newAct,weekTotal:0});
+    }
+  });
+
+  // Add sessions (skip if id already exists)
+  const existingIds=new Set(S.sessions.map(s=>s.id));
+  let added=0;
+  _importData.forEach(s=>{
+    if(existingIds.has(s.id))return;
+    const {_newAct,...session}=s; // strip internal field
+    S.sessions.push(session);
+    added++;
+  });
+
+  // Sort sessions by startTime descending
+  S.sessions.sort((a,b)=>new Date(b.startTime)-new Date(a.startTime));
+
+  // Recalculate weekTotal for current week
+  const wk=getWk();
+  S.activities.forEach(a=>{a.weekTotal=0;});
+  S.sessions.forEach(s=>{
+    const wkS=getWkFromDate(new Date(s.startTime));
+    if(wkS===wk){
+      const act=S.activities.find(a=>a.id===s.actId);
+      if(act) act.weekTotal=(act.weekTotal||0)+s.duration;
+    }
+  });
+
+  save();
+  _importData=null;
+  closeModal('importModal');
+  renderAll();
+
+  // Show success feedback
+  setTimeout(()=>alert(`✓ ${added} registro${added!==1?'s':''} importado${added!==1?'s':''} correctamente.`),200);
+}
+
+function getWkFromDate(d){
+  const j=new Date(d.getFullYear(),0,1);
+  return`${d.getFullYear()}-W${Math.ceil(((d-j)/86400000+j.getDay()+1)/7)}`;
+}
+
 function exportCSV(){
   const rows=[['Fecha','Planeado','Actividad','Subtarea','Sesión','Nombre Lap','Inicio','Fin','Duración','Descanso','Descanso(seg)','Real','Nota']];
   [...S.sessions].reverse().forEach(s=>{
@@ -1232,15 +1567,266 @@ function exportCSV(){
 }
 
 // ═══════════════════════════════════════════════════════
+//  DÍA PAGE — TIMELINE + HABIT TRACKER
+// ═══════════════════════════════════════════════════════
+var diaView='habit';       // 'habit' | 'timeline'
+var diaDate=new Date();    // date shown in timeline
+
+// Palette: cycle through accent colors per activity
+const ACT_COLORS=['#6c63ff','#ff5fa0','#2dd4c0','#f59e0b','#1db954','#ff4f6a','#a78bfa','#fb923c'];
+function actColor(actId){
+  const idx=S.activities.findIndex(a=>a.id===actId);
+  return ACT_COLORS[((idx>=0?idx:0))%ACT_COLORS.length];
+}
+
+function setDiaView(v){
+  diaView=v;
+  document.getElementById('dvtHabit').classList.toggle('active',v==='habit');
+  document.getElementById('dvtTimeline').classList.toggle('active',v==='timeline');
+  document.getElementById('diaHabitContent').style.display=v==='habit'?'':'none';
+  document.getElementById('diaTimelineContent').style.display=v==='timeline'?'':'none';
+  document.getElementById('diaDateNav').style.display=v==='timeline'?'flex':'none';
+  if(v==='timeline')renderTimeline();
+  else renderHabit();
+}
+
+function shiftDiaDate(d){
+  diaDate=new Date(diaDate);diaDate.setDate(diaDate.getDate()+d);
+  // don't go into future
+  if(diaDate>new Date())diaDate=new Date();
+  renderTimeline();
+}
+
+function renderDia(){
+  if(diaView==='habit')renderHabit();
+  else renderTimeline();
+}
+
+// ── HABIT TRACKER ──
+function renderHabit(){
+  const el=document.getElementById('diaHabitContent');
+  // build 7-day window ending today
+  const days=[];
+  for(let i=6;i>=0;i--){
+    const d=new Date();d.setDate(d.getDate()-i);
+    days.push(d);
+  }
+  const dayLabels=['L','M','X','J','V','S','D'];
+
+  // day labels header
+  let html=`<div class="habit-wrap">`;
+  html+=`<div class="habit-day-labels">`;
+  days.forEach(d=>{
+    const wd=d.getDay(); // 0=sun
+    const labels=['D','L','M','X','J','V','S'];
+    const isToday=d.toDateString()===new Date().toDateString();
+    html+=`<div class="habit-day-lbl" style="${isToday?'color:var(--accent);font-weight:700;':''}">${labels[wd]}</div>`;
+  });
+  html+=`</div>`;
+
+  // one row per activity that has any sessions
+  const actIds=[...new Set(S.sessions.map(s=>s.actId))];
+  // also include activities with no sessions yet
+  S.activities.forEach(a=>{if(!actIds.includes(a.id))actIds.push(a.id);});
+
+  actIds.forEach(actId=>{
+    const act=S.activities.find(a=>a.id===actId);
+    if(!act)return;
+    const color=actColor(actId);
+    html+=`<div class="habit-row">
+      <div class="habit-emoji">${act.emoji}</div>
+      <div class="habit-name">${esc(act.name)}</div>
+      <div class="habit-dots">`;
+    days.forEach(d=>{
+      const dStr=d.toDateString();
+      const daySessions=S.sessions.filter(s=>s.actId===actId&&new Date(s.startTime).toDateString()===dStr);
+      const totalSecs=daySessions.reduce((t,s)=>t+s.duration,0);
+      const isToday=dStr===new Date().toDateString();
+      if(totalSecs>0){
+        html+=`<div class="habit-dot done" style="background:${color};border-color:${color};" title="${fmtS(totalSecs)}">${totalSecs>=3600?Math.floor(totalSecs/3600)+'h':Math.floor(totalSecs/60)+'m'}</div>`;
+      } else {
+        html+=`<div class="habit-dot ${isToday?'':''}"></div>`;
+      }
+    });
+    html+=`</div></div>`;
+  });
+
+  html+=`</div>`;
+  el.innerHTML=html;
+}
+
+// ── TIMELINE ──
+// Three fixed blocks
+const TL_BLOCKS=[
+  {id:'night', title:'Noche · Descanso', startH:22, endH:31, color:'#6c63ff'}, // 22:00–07:00 (31=7+24)
+  {id:'work',  title:'Trabajo',          startH:7,  endH:16, color:'#2dd4c0'},
+  {id:'free',  title:'Tiempo libre',     startH:16, endH:22, color:'#ff5fa0'},
+];
+
+function sessionMinutes(s){
+  // returns {start: minutes-from-midnight, end: minutes-from-midnight}
+  const st=new Date(s.startTime), en=new Date(s.endTime);
+  return{start:st.getHours()*60+st.getMinutes(), end:en.getHours()*60+en.getMinutes(), s};
+}
+
+function assignLanes(sessions){
+  // greedy lane assignment — sessions sorted by start time
+  const sorted=[...sessions].sort((a,b)=>new Date(a.startTime)-new Date(b.startTime));
+  const lanes=[]; // lanes[i] = array of {start,end,s}
+  const result=[];
+  sorted.forEach(s=>{
+    const sm=sessionMinutes(s);
+    let placed=false;
+    for(let li=0;li<lanes.length;li++){
+      const lane=lanes[li];
+      // check no overlap with last item in lane
+      const last=lane[lane.length-1];
+      if(sm.start>=last.end){
+        lane.push(sm);result.push({...sm,lane:li});placed=true;break;
+      }
+    }
+    if(!placed){lanes.push([sm]);result.push({...sm,lane:lanes.length-1});}
+  });
+  return{items:result,laneCount:lanes.length};
+}
+
+function renderTimeline(){
+  const el=document.getElementById('diaTimelineContent');
+  const lbl=document.getElementById('diaDateLbl');
+  const isToday=diaDate.toDateString()===new Date().toDateString();
+  lbl.textContent=isToday?'Hoy':diaDate.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
+
+  const dStr=diaDate.toDateString();
+  // also grab sessions from previous day for night block (22:00-00:00)
+  const prevDate=new Date(diaDate);prevDate.setDate(prevDate.getDate()-1);
+  const prevStr=prevDate.toDateString();
+
+  const allSessions=S.sessions.filter(s=>{
+    const sd=new Date(s.startTime).toDateString();
+    return sd===dStr||sd===prevStr;
+  }).sort((a,b)=>new Date(a.startTime)-new Date(b.startTime));
+
+  if(!allSessions.length){
+    el.innerHTML=`<div class="tl-empty">// sin registros este día</div>`;
+    return;
+  }
+
+  let html='<div class="tl-page">';
+
+  TL_BLOCKS.forEach(blk=>{
+    // normalize hour range: night block spans midnight
+    // startH/endH in "adjusted" hours: night is 22–31 (i.e. 22,23,0,1..7)
+    function inBlock(s){
+      const h=new Date(s.startTime).getHours();
+      const d=new Date(s.startTime).toDateString();
+      if(blk.id==='night'){
+        // prev day 22:00+ or current day 00:00-07:00
+        if(d===prevStr&&h>=22)return true;
+        if(d===dStr&&h<7)return true;
+        return false;
+      }
+      return d===dStr&&h>=blk.startH&&h<blk.endH;
+    }
+
+    const blockSessions=allSessions.filter(s=>inBlock(s));
+    const blockTotal=blockSessions.reduce((t,s)=>t+s.duration,0);
+
+    html+=`<div class="tl-block-hdr">
+      <div class="tl-block-line" style="width:8px;height:1px;background:${blk.color};flex-shrink:0;"></div>
+      <div class="tl-block-title" style="color:${blk.color};">${blk.title}</div>
+      <div class="tl-block-hdr-line"></div>
+      ${blockTotal>0?`<div class="tl-block-total">${fmtS(blockTotal)}</div>`:''}
+    </div>`;
+
+    if(!blockSessions.length){
+      html+=`<div style="height:12px;border-left:2px solid ${blk.color}22;margin-left:4px;margin-bottom:6px;"></div>`;
+    } else {
+      // time range for this block in minutes
+      let blockStartMin, blockEndMin;
+      if(blk.id==='night'){blockStartMin=22*60;blockEndMin=31*60;} // 22:00–07:00 = 540min span
+      else{blockStartMin=blk.startH*60;blockEndMin=blk.endH*60;}
+      const blockSpan=blockEndMin-blockStartMin; // minutes total
+
+      // normalize session times to block-minutes
+      function toBlockMin(s){
+        const st=new Date(s.startTime),en=new Date(s.endTime);
+        let sm=st.getHours()*60+st.getMinutes();
+        let em=en.getHours()*60+en.getMinutes();
+        if(blk.id==='night'){
+          // prev day: keep as-is (22:xx → 22*60+xx)
+          // curr day: add 24*60 (0:xx → 24*60+0*60+xx)
+          if(new Date(s.startTime).toDateString()===dStr){sm+=24*60;em+=24*60;}
+          if(new Date(s.endTime).toDateString()===dStr){em=en.getHours()*60+en.getMinutes()+24*60;}
+        }
+        // clamp to block
+        sm=Math.max(sm,blockStartMin);
+        em=Math.min(em,blockEndMin);
+        return{start:sm-blockStartMin,end:Math.max(em-blockStartMin,sm-blockStartMin+1)};
+      }
+
+      const {items,laneCount}=assignLanes(blockSessions);
+
+      // build ruler ticks (every 30 min)
+      html+=`<div class="tl-ruler">`;
+      // tick marks
+      html+=`<div class="tl-ticks">`;
+      for(let m=0;m<=blockSpan;m+=30){
+        const pct=(m/blockSpan)*100;
+        const isHour=m%60===0;
+        html+=`<div class="tl-tick ${isHour?'hour':''}" style="left:${pct}%"></div>`;
+      }
+      html+=`</div>`;
+      // hour labels
+      html+=`<div class="tl-ruler-labels">`;
+      for(let m=0;m<blockSpan;m+=60){
+        const absMin=blockStartMin+m;
+        const h=Math.floor(absMin/60)%24;
+        const pct=(m/blockSpan)*100;
+        html+=`<div style="position:absolute;left:${pct}%;font-size:8px;color:var(--text3);font-family:var(--mono);">${String(h).padStart(2,'0')}h</div>`;
+      }
+      html+=`</div><div style="height:14px;"></div>`;
+
+      // lanes
+      html+=`<div class="tl-lanes">`;
+      for(let li=0;li<laneCount;li++){
+        html+=`<div class="tl-lane">`;
+        items.filter(it=>it.lane===li).forEach(it=>{
+          const bm=toBlockMin(it.s);
+          const left=(bm.start/blockSpan)*100;
+          const width=Math.max((( bm.end-bm.start)/blockSpan)*100,1.5);
+          const color=actColor(it.s.actId);
+          const showText=width>6;
+          html+=`<div class="tl-pill" 
+            style="left:${left}%;width:${width}%;background:${color}33;border:1.5px solid ${color};"
+            onclick="openDetail('${it.s.id}')">
+            ${showText?`<span class="tl-pill-emoji">${it.s.actEmoji}</span>`:''}
+            ${width>12?`<span class="tl-pill-name" style="color:${color};">${esc(it.s.actName)}</span>`:''}
+            ${width>20?`<span class="tl-pill-dur" style="color:${color};">${fmtS(it.s.duration)}</span>`:''}
+          </div>`;
+        });
+        html+=`</div>`;
+      }
+      html+=`</div></div>`; // .tl-lanes .tl-ruler
+    }
+  });
+
+  html+='</div>';
+  el.innerHTML=html;
+}
+
+// ═══════════════════════════════════════════════════════
 //  NAV + MODAL UTILS
 // ═══════════════════════════════════════════════════════
 function showPage(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
-  document.querySelectorAll('.nav-tab')[name==='tracker'?0:1].classList.add('active');
+  const tabIdx={tracker:0,dia:1,history:2};
+  const tabs=document.querySelectorAll('.nav-tab');
+  if(tabs[tabIdx[name]])tabs[tabIdx[name]].classList.add('active');
   document.getElementById('fab').style.display=name==='tracker'?'flex':'none';
   if(name==='history')renderHistory();
+  if(name==='dia')renderDia();
 }
 function openModal(id){document.getElementById(id).classList.add('show');}
 function closeModal(id){document.getElementById(id).classList.remove('show');activeDetailId=null;pendingActId=null;}
