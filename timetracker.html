@@ -370,6 +370,28 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .habit-dot.partial{background:rgba(108,99,255,.3);border-color:var(--accent);color:var(--accent);}
 .habit-day-labels{display:flex;gap:3px;margin-left:98px;margin-bottom:4px;}
 .habit-day-lbl{flex:1;text-align:center;font-size:8px;color:var(--text3);font-family:var(--mono);min-width:0;}
+
+/* Subtask status indicators */
+.st-check{width:15px;height:15px;border-radius:3px;border:1.5px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+.st-check.done{background:var(--green);border-color:var(--green);}
+.st-check.done::after{content:'✓';font-size:9px;color:#fff;font-weight:700;}
+.st-check.empty{background:transparent;}
+/* Progress bar square for "in progress" */
+.st-progress{width:15px;height:15px;border-radius:3px;border:1.5px solid var(--amber);flex-shrink:0;overflow:hidden;position:relative;background:transparent;}
+.st-progress-fill{position:absolute;top:0;left:0;bottom:0;background:var(--amber);opacity:.7;}
+
+/* Subtask activity card */
+.st-act-card{background:var(--s1);border-radius:10px;margin-bottom:8px;overflow:hidden;}
+.st-act-header{display:flex;align-items:center;gap:8px;padding:8px 12px;}
+.st-act-total{font-size:9px;font-family:var(--mono);color:var(--text3);}
+
+/* Sub-sections inside card */
+.st-section{border-top:1px solid var(--border);}
+.st-section-lbl{font-size:8px;letter-spacing:1.5px;text-transform:uppercase;font-family:var(--mono);padding:5px 12px 3px;opacity:.7;}
+.st-row{display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--border2);}
+.st-row:last-child{border-bottom:none;}
+.st-row-name{font-size:11px;flex:1;min-width:0;}
+.st-row-time{font-size:9px;font-family:var(--mono);color:var(--text3);flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -588,17 +610,25 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
     <div class="dfield"><div class="dlbl">Inicio</div><div class="dval" id="dtStart"></div></div>
     <div class="dfield"><div class="dlbl">Fin</div><div class="dval" id="dtEnd"></div></div>
     <div class="dfield" id="dtSessionRow" style="display:none"><div class="dlbl">Sesión</div><div class="dval" id="dtSession"></div></div>
-    <div class="dfield" id="dtLapRow" style="display:none"><div class="dlbl">Nombre de lap</div><div class="dval" id="dtLap" style="color:var(--teal)"></div></div>
+    <div class="dfield" id="dtLapRow">
+      <div class="dlbl">Lap</div>
+      <select id="dtLapSel" style="background:var(--s0);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:12px;padding:8px 10px;width:100%;outline:none;"></select>
+    </div>
     <div class="dfield" id="dtSubRow" style="display:none"><div class="dlbl">Subtarea</div><div class="dval" id="dtSub"></div></div>
     <div class="dfield" id="dtDevRow" style="display:none"><div class="dlbl">Real (desviación)</div><div class="dval" id="dtDev" style="color:var(--pink)"></div></div>
-    <div class="dfield">
-      <div class="dlbl">Ajustar duración (min)</div>
-      <input type="number" id="dtDurEdit" placeholder="minutos" min="1" style="font-family:var(--mono);">
+    <div class="dfield" id="dtDurRow">
+      <div class="dlbl">Ajustar duración</div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input type="number" id="dtDurH" placeholder="0" min="0" style="width:56px;font-family:var(--mono);text-align:center;">
+        <span style="font-size:10px;color:var(--text3);">h</span>
+        <input type="number" id="dtDurM" placeholder="0" min="0" max="59" style="width:56px;font-family:var(--mono);text-align:center;">
+        <span style="font-size:10px;color:var(--text3);">min</span>
+      </div>
     </div>
     <div class="dfield"><div class="dlbl">Nota</div><textarea id="dtNote" placeholder="Agrega una nota..."></textarea></div>
     <button class="mbtn" onclick="saveDetailNote()">Guardar cambios</button>
     <div class="detail-actions">
-      <button class="det-btn del" onclick="deleteSession()">🗑 Eliminar registro</button>
+      <button class="det-btn del" onclick="deleteSession()">🗑 Eliminar este registro</button>
     </div>
     <button class="mcancel" onclick="closeModal('detailModal')">Cerrar</button>
   </div>
@@ -1974,7 +2004,11 @@ function renderHistory(){
           <div class="log-info">
             <div class="log-label">${fmtTime(s.startTime)} → ${fmtTime(s.endTime)}</div>
             ${s.sessionName?`<div class="log-session">📌 ${esc(s.sessionName)}</div>`:''}
-            ${s.lapName?`<div class="log-session" style="color:var(--teal)">🏷 ${esc(s.lapName)}</div>`:''}
+            ${s.lapName
+                ? `<div class="log-session" style="color:var(--teal)">🏷 ${esc(s.lapName)}</div>`
+                : (laps.some(l=>l.lapName)
+                    ? `<div class="log-session" style="color:var(--text3);font-style:italic;">sin lap (residual)</div>`
+                    : '')}
             ${s.subtaskName?`<div class="log-subtask">↳ ${esc(s.subtaskName)}</div>`:''}
             ${s.realActId?`<div class="log-deviation">Real: ${esc(s.realActName||'?')}</div>`:''}
             ${s.note?`<div class="log-note-prev">💬 ${esc(s.note)}</div>`:''}
@@ -2019,27 +2053,63 @@ function openDetail(id){
   const devr=document.getElementById('dtDevRow');
   if(s.realActName){devr.style.display='';document.getElementById('dtDev').textContent=`Real: ${s.realActName}`;}else devr.style.display='none';
   document.getElementById('dtNote').value=s.note||'';
-  document.getElementById('dtDurEdit').value=Math.round(s.duration/60);
+  // populate h/m fields
+  const totalSecs=s.duration;
+  const hh=Math.floor(totalSecs/3600);
+  const mm=Math.floor((totalSecs%3600)/60);
+  document.getElementById('dtDurH').value=hh||'';
+  document.getElementById('dtDurM').value=mm||'';
+  document.getElementById('dtDurRow').style.display=''; // always visible
+  // Build lap selector — all laps in same group + "Sin lap" option
+  const grpSessions=S.sessions.filter(x=>x.groupId===s.groupId).sort((a,b)=>new Date(a.startTime)-new Date(b.startTime));
+  const lapSel=document.getElementById('dtLapSel');
+  lapSel.innerHTML='';
+  // "Sin lap" option always present
+  const noLapOpt=document.createElement('option');
+  noLapOpt.value='';noLapOpt.textContent='Sin lap';
+  noLapOpt.style.color='var(--text3)';
+  lapSel.appendChild(noLapOpt);
+  grpSessions.forEach((gs,i)=>{
+    if(!gs.lapName)return; // skip unlabeled — already covered by sin lap
+    const opt=document.createElement('option');
+    opt.value=gs.id;
+    opt.textContent=`L${i+1} · ${gs.lapName}`;
+    lapSel.appendChild(opt);
+  });
+  // select the current session's lap
+  lapSel.value=s.lapName?s.id:'';
+  // on change: switch which session we're editing
+  lapSel.onchange=function(){
+    if(!this.value){
+      // find the unlabeled session in this group
+      const unlabeled=grpSessions.find(gs=>!gs.lapName);
+      if(unlabeled) openDetail(unlabeled.id);
+    } else {
+      openDetail(this.value);
+    }
+  };
   openModal('detailModal');
 }
 function saveDetailNote(){
   const s=S.sessions.find(x=>x.id===activeDetailId);if(!s)return;
   s.note=document.getElementById('dtNote').value.trim();
-  // adjust duration if changed
-  const newMins=parseInt(document.getElementById('dtDurEdit').value);
-  if(newMins>0&&newMins!==Math.round(s.duration/60)){
-    const oldDur=s.duration;
-    const newDur=newMins*60;
-    const diff=newDur-oldDur;
-    s.duration=newDur;
-    // update endTime to match
-    s.endTime=new Date(new Date(s.startTime).getTime()+newDur*1000).toISOString();
-    // adjust weekTotal for the activity
-    const act=S.activities.find(a=>a.id===s.actId);
-    if(act) act.weekTotal=Math.max(0,(act.weekTotal||0)+diff);
+  // adjust duration from h/m fields
+  const durRow=document.getElementById('dtDurRow');
+  if(durRow){
+    const h=parseInt(document.getElementById('dtDurH').value)||0;
+    const m=parseInt(document.getElementById('dtDurM').value)||0;
+    const newDur=h*3600+m*60;
+    if(newDur>0&&newDur!==s.duration){
+      const diff=newDur-s.duration;
+      s.duration=newDur;
+      s.endTime=new Date(new Date(s.startTime).getTime()+newDur*1000).toISOString();
+      const act=S.activities.find(a=>a.id===s.actId);
+      if(act) act.weekTotal=Math.max(0,(act.weekTotal||0)+diff);
+    }
   }
   save();renderHistory();renderWeekGrid();closeModal('detailModal');
 }
+
 function deleteSession(){
   const s=S.sessions.find(x=>x.id===activeDetailId);if(!s)return;
   if(!confirm('¿Eliminar este registro?'))return;
@@ -2431,68 +2501,99 @@ function renderHabit(){
 
   html+=`</div>`;
 
-  // ── Subtask summary for today — grouped by activity ──
+  // ── Subtask summary — grouped by actId, merged across sessions ──
   const today2=new Date().toDateString();
   const todayPlans=S.planned.filter(p=>new Date(p.addedAt).toDateString()===today2);
 
   if(todayPlans.length){
-    html+=`<div style="padding:14px 0 8px;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);">subtareas hoy</div>`;
+    html+=`<div style="padding:14px 16px 8px;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);">subtareas hoy</div>`;
 
+    // Group by actId, merge same-name subtasks across plans
+    const actMap={};
     todayPlans.forEach(p=>{
-      const color=actColor(p.actId);
-      const done=p.subtasks.filter(s=>s.done);
-      const inProg=p.subtasks.filter(s=>!s.done&&subtaskSpent(s.id)>2);
-      const notStarted=p.subtasks.filter(s=>!s.done&&subtaskSpent(s.id)<=2);
-      const noSubT=noSubSpent(p.actId,p.id);
-      const hasAnything=p.subtasks.length>0||noSubT>2;
-      if(!hasAnything)return;
+      if(!actMap[p.actId]) actMap[p.actId]={actId:p.actId,actName:p.actName,actEmoji:p.actEmoji,subs:{},noSubT:0};
+      const g=actMap[p.actId];
+      g.noSubT+=noSubSpent(p.actId,p.id);
+      p.subtasks.forEach(st=>{
+        const key=st.text.trim().toLowerCase();
+        if(!g.subs[key]) g.subs[key]={text:st.text,done:false,time:0};
+        g.subs[key].time+=subtaskSpent(st.id);
+        if(st.done) g.subs[key].done=true;
+      });
+    });
 
-      // activity card header
-      html+=`<div style="background:var(--s1);border:1px solid ${color}44;border-radius:10px;margin-bottom:8px;overflow:hidden;">
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);">
-          <span style="font-size:16px;">${p.actEmoji}</span>
-          <span style="font-size:13px;font-weight:700;flex:1;">${esc(p.actName)}</span>
-          <span style="font-size:10px;font-family:var(--mono);color:var(--text3);">${fmtS(done.reduce((t,s)=>t+subtaskSpent(s.id),0)+inProg.reduce((t,s)=>t+subtaskSpent(s.id),0)+noSubT)}</span>
+    Object.values(actMap).forEach(g=>{
+      const color=actColor(g.actId);
+      const subs=Object.values(g.subs);
+      const hasAny=subs.length>0||g.noSubT>2;
+      if(!hasAny)return;
+
+      const doneList=subs.filter(s=>s.done);
+      const inProgList=subs.filter(s=>!s.done&&s.time>2);
+      const pendingList=subs.filter(s=>!s.done&&s.time<=2);
+      const totalT=subs.reduce((t,s)=>t+s.time,0)+g.noSubT;
+
+      // Card
+      html+=`<div class="st-act-card" style="border:1px solid ${color}44;margin:0 16px 10px;">
+        <div class="st-act-header" style="border-bottom:1px solid var(--border);">
+          <span style="font-size:16px;">${g.actEmoji}</span>
+          <span style="font-size:13px;font-weight:700;flex:1;">${esc(g.actName)}</span>
+          <span class="st-act-total">${fmtS(totalT)}</span>
         </div>`;
 
-      // sin subtarea row
-      if(noSubT>2){
-        html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border2);">
-          <span style="font-size:10px;color:var(--text3);">○</span>
-          <span style="font-size:11px;color:var(--text3);font-style:italic;flex:1;">Sin subtarea</span>
-          <span style="font-size:9px;font-family:var(--mono);color:var(--text3);">${fmtS(noSubT)}</span>
+      // Sin subtarea
+      if(g.noSubT>2){
+        html+=`<div class="st-row">
+          <div class="st-check empty"></div>
+          <span class="st-row-name" style="color:var(--text3);font-style:italic;">Sin subtarea</span>
+          <span class="st-row-time">${fmtS(g.noSubT)}</span>
         </div>`;
       }
 
-      // completed
-      done.forEach(s=>{
-        const t=subtaskSpent(s.id);
-        html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border2);">
-          <span style="font-size:10px;color:var(--green);">✓</span>
-          <span style="font-size:11px;color:var(--text3);text-decoration:line-through;flex:1;">${esc(s.text)}</span>
-          ${t>0?`<span style="font-size:9px;font-family:var(--mono);color:var(--text3);">${fmtS(t)}</span>`:''}
-        </div>`;
-      });
+      // ✓ Completadas sub-card
+      if(doneList.length){
+        html+=`<div class="st-section">
+          <div class="st-section-lbl" style="color:var(--green);">Completadas</div>`;
+        doneList.forEach(s=>{
+          html+=`<div class="st-row">
+            <div class="st-check done"></div>
+            <span class="st-row-name">${esc(s.text)}</span>
+            ${s.time>0?`<span class="st-row-time">${fmtS(s.time)}</span>`:''}
+          </div>`;
+        });
+        html+=`</div>`;
+      }
 
-      // in progress
-      inProg.forEach(s=>{
-        const t=subtaskSpent(s.id);
-        html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border2);">
-          <span style="font-size:10px;color:var(--amber);">◑</span>
-          <span style="font-size:11px;color:var(--text2);flex:1;">${esc(s.text)}</span>
-          <span style="font-size:9px;font-family:var(--mono);color:var(--amber);">${fmtS(t)}</span>
-        </div>`;
-      });
+      // ◧ En progreso sub-card — partial fill square left→right
+      if(inProgList.length){
+        html+=`<div class="st-section">
+          <div class="st-section-lbl" style="color:var(--amber);">En progreso</div>`;
+        inProgList.forEach(s=>{
+          // fill 40-80% to convey "partial" without implying how much left
+          const fillPct=Math.min(80,Math.max(30,Math.round(s.time/60)));
+          html+=`<div class="st-row">
+            <div class="st-progress"><div class="st-progress-fill" style="width:${fillPct}%;"></div></div>
+            <span class="st-row-name">${esc(s.text)}</span>
+            <span class="st-row-time" style="color:var(--amber);">${fmtS(s.time)}</span>
+          </div>`;
+        });
+        html+=`</div>`;
+      }
 
-      // not started
-      notStarted.forEach(s=>{
-        html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border2);">
-          <span style="font-size:10px;color:var(--text3);">○</span>
-          <span style="font-size:11px;color:var(--text3);flex:1;">${esc(s.text)}</span>
-        </div>`;
-      });
+      // ○ Pendientes sub-card
+      if(pendingList.length){
+        html+=`<div class="st-section">
+          <div class="st-section-lbl">Pendientes</div>`;
+        pendingList.forEach(s=>{
+          html+=`<div class="st-row">
+            <div class="st-check empty"></div>
+            <span class="st-row-name" style="color:var(--text3);">${esc(s.text)}</span>
+          </div>`;
+        });
+        html+=`</div>`;
+      }
 
-      html+=`</div>`; // activity card
+      html+=`</div>`; // st-act-card
     });
   }
 
