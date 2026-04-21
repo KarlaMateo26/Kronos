@@ -282,6 +282,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .dfield{margin-bottom:10px;}
 .dlbl{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);margin-bottom:3px;}
 .dval{font-size:12px;font-family:var(--mono);color:var(--text);background:var(--s0);border-radius:8px;padding:8px 11px;}
+.detail-actions{display:flex;gap:8px;margin-top:4px;}
+.det-btn{flex:1;padding:10px;border-radius:10px;border:none;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;touch-action:manipulation;transition:all .15s;}
+.det-btn:active{transform:scale(.96);}
+.det-btn.edit{background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent);}
+.det-btn.del{background:var(--red-dim);color:var(--red);border:1px solid var(--red);}
 
 /* ─── DÍA PAGE ─── */
 .dia-view-toggle{display:flex;gap:4px;padding:10px 16px 0;}
@@ -539,8 +544,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
     <div class="dfield" id="dtLapRow" style="display:none"><div class="dlbl">Nombre de lap</div><div class="dval" id="dtLap" style="color:var(--teal)"></div></div>
     <div class="dfield" id="dtSubRow" style="display:none"><div class="dlbl">Subtarea</div><div class="dval" id="dtSub"></div></div>
     <div class="dfield" id="dtDevRow" style="display:none"><div class="dlbl">Real (desviación)</div><div class="dval" id="dtDev" style="color:var(--pink)"></div></div>
+    <div class="dfield">
+      <div class="dlbl">Ajustar duración (min)</div>
+      <input type="number" id="dtDurEdit" placeholder="minutos" min="1" style="font-family:var(--mono);">
+    </div>
     <div class="dfield"><div class="dlbl">Nota</div><textarea id="dtNote" placeholder="Agrega una nota..."></textarea></div>
-    <button class="mbtn" onclick="saveDetailNote()">Guardar nota</button>
+    <button class="mbtn" onclick="saveDetailNote()">Guardar cambios</button>
+    <div class="detail-actions">
+      <button class="det-btn del" onclick="deleteSession()">🗑 Eliminar registro</button>
+    </div>
     <button class="mcancel" onclick="closeModal('detailModal')">Cerrar</button>
   </div>
 </div>
@@ -681,8 +693,11 @@ function openAddPlanned(actId){
 
 function confirmAddPlanned(){
   const act=S.activities.find(a=>a.id===pendingActId);if(!act)return;
-  // check not already planned
-  if(S.planned.find(p=>p.actId===pendingActId&&!p.done)){closeModal('addPlannedModal');renderAll();return;}
+  // block only if already planned TODAY and not done
+  const today=new Date().toDateString();
+  if(S.planned.find(p=>p.actId===pendingActId&&!p.done&&new Date(p.addedAt).toDateString()===today)){
+    closeModal('addPlannedModal');renderAll();return;
+  }
   const h=parseInt(document.getElementById('apHours').value)||0;
   const m=parseInt(document.getElementById('apMins').value)||0;
   const ideal=(h*3600+m*60)||0;
@@ -1341,12 +1356,35 @@ function openDetail(id){
   const devr=document.getElementById('dtDevRow');
   if(s.realActName){devr.style.display='';document.getElementById('dtDev').textContent=`Real: ${s.realActName}`;}else devr.style.display='none';
   document.getElementById('dtNote').value=s.note||'';
+  document.getElementById('dtDurEdit').value=Math.round(s.duration/60);
   openModal('detailModal');
 }
 function saveDetailNote(){
   const s=S.sessions.find(x=>x.id===activeDetailId);if(!s)return;
   s.note=document.getElementById('dtNote').value.trim();
-  save();renderHistory();closeModal('detailModal');
+  // adjust duration if changed
+  const newMins=parseInt(document.getElementById('dtDurEdit').value);
+  if(newMins>0&&newMins!==Math.round(s.duration/60)){
+    const oldDur=s.duration;
+    const newDur=newMins*60;
+    const diff=newDur-oldDur;
+    s.duration=newDur;
+    // update endTime to match
+    s.endTime=new Date(new Date(s.startTime).getTime()+newDur*1000).toISOString();
+    // adjust weekTotal for the activity
+    const act=S.activities.find(a=>a.id===s.actId);
+    if(act) act.weekTotal=Math.max(0,(act.weekTotal||0)+diff);
+  }
+  save();renderHistory();renderWeekGrid();closeModal('detailModal');
+}
+function deleteSession(){
+  const s=S.sessions.find(x=>x.id===activeDetailId);if(!s)return;
+  if(!confirm('¿Eliminar este registro?'))return;
+  // subtract from weekTotal
+  const act=S.activities.find(a=>a.id===s.actId);
+  if(act) act.weekTotal=Math.max(0,(act.weekTotal||0)-s.duration);
+  S.sessions=S.sessions.filter(x=>x.id!==activeDetailId);
+  save();renderHistory();renderWeekGrid();closeModal('detailModal');
 }
 
 // ═══════════════════════════════════════════════════════
