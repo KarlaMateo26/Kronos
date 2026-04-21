@@ -53,6 +53,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 
 .planned-card{background:var(--s1);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .2s;min-width:0;}
 .planned-card.done-card{opacity:.5;}
+.planned-card.pc-auto{opacity:.7;border-style:dashed;}
+.planned-card.pc-auto .pc-name{color:var(--text3);}
 .planned-card.pc-running{border-color:#1db954;}
 
 /* compact single-row header */
@@ -151,6 +153,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .rc-session{font-size:10px;color:var(--accent);font-family:var(--mono);cursor:pointer;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
 .rc-session.no-name{color:var(--text3);}
 .rc-dev-select{background:transparent;border:none;color:var(--text3);font-family:var(--mono);font-size:9px;padding:0;outline:none;cursor:pointer;text-align:right;max-width:100%;}
+.rc-sub-select{background:transparent;border:none;color:var(--text3);font-family:var(--mono);font-size:9px;padding:0;outline:none;cursor:pointer;max-width:100%;text-align:right;margin-bottom:1px;}
+.rc-sub-select.assigned{color:var(--teal);}
+.rc-st-check{width:13px;height:13px;border:1.5px solid var(--border2);border-radius:3px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;touch-action:manipulation;}
+.rc-st-check:hover{border-color:var(--green);}
+.rc-st-check.done{background:var(--green);border-color:var(--green);}
+.rc-st-check.done::after{content:'✓';font-size:8px;color:#fff;}
 .rc-dev-select.deviated{color:var(--pink);}
 
 /* ── timers row: focus | break stacked ── */
@@ -287,6 +295,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .det-btn:active{transform:scale(.96);}
 .det-btn.edit{background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent);}
 .det-btn.del{background:var(--red-dim);color:var(--red);border:1px solid var(--red);}
+.lap-sub-opt{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--s0);border:1px solid var(--border);border-radius:9px;cursor:pointer;touch-action:manipulation;transition:all .15s;font-size:13px;}
+.lap-sub-opt:active{transform:scale(.97);}
+.lap-sub-opt.sel{border-color:var(--accent);background:var(--accent-dim);}
+.lap-sub-opt-none{color:var(--text3);}
 
 /* ─── DÍA PAGE ─── */
 .dia-view-toggle{display:flex;gap:4px;padding:10px 16px 0;}
@@ -301,7 +313,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 
 /* ── TIMELINE ── */
 .tl-empty{text-align:center;color:var(--text3);font-size:12px;padding:30px 16px;font-family:var(--mono);}
-.tl-page{padding:8px 16px 20px;overflow-x:hidden;}
+.tl-page{padding:8px 0 20px;}
+.tl-zoom-bar{display:flex;gap:4px;padding:6px 16px;align-items:center;}
+.tl-zoom-btn{background:var(--s1);border:1px solid var(--border);border-radius:6px;color:var(--text3);font-family:var(--mono);font-size:9px;padding:4px 8px;cursor:pointer;touch-action:manipulation;transition:all .15s;}
+.tl-zoom-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.tl-scroll-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 16px 8px;}
+.tl-scroll-wrap::-webkit-scrollbar{height:3px;}
+.tl-scroll-wrap::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+.tl-ruler-wrap{position:relative;} /* dynamic width set inline */
 
 /* block header */
 .tl-block-hdr{display:flex;align-items:center;gap:8px;padding:10px 0 6px;}
@@ -479,6 +498,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   </div>
 </div>
 
+<!-- ── PENDING SUBTASKS MODAL ── -->
+<div class="overlay" id="pendingSubModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" style="font-size:14px;">Subtareas pendientes</div>
+    <p style="font-size:11px;color:var(--text3);text-align:center;margin-bottom:12px;line-height:1.5;">¿Guardar estas tareas para la próxima sesión?</p>
+    <div id="pendingSubList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;"></div>
+    <button class="mbtn" onclick="confirmPendingDone(true)">✓ Guardar para después · cerrar</button>
+    <button class="mbtn" style="background:var(--red-dim);color:var(--red);border:1px solid var(--red);margin-top:6px;" onclick="confirmPendingDone(false)">Cerrar sin guardar</button>
+    <button class="mcancel" onclick="closeModal('pendingSubModal')">Cancelar</button>
+  </div>
+</div>
+
 <!-- ── SLEEP TIME MODAL ── -->
 <div class="overlay" id="sleepModal">
   <div class="modal">
@@ -538,11 +570,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 <div class="overlay" id="lapNameModal">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">Guardar lap</div>
-    <p style="font-size:11px;color:var(--text3);text-align:center;margin-bottom:12px;font-family:var(--mono);">Nombre para este lap específico (opcional)</p>
-    <input type="text" id="lapNameInput" placeholder="Ej: Introducción, Revisión, Bloque 1..." maxlength="50">
+    <div class="modal-title" id="lapModalTitle">Guardar lap</div>
+    <div style="font-size:10px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;font-family:var(--mono);margin-bottom:6px;">Nombre del lap (opcional)</div>
+    <input type="text" id="lapNameInput" placeholder="Ej: Revisión, Bloque 1..." maxlength="50">
     <button class="mbtn" onclick="confirmSaveLap()">💾 Guardar lap</button>
-    <button class="mcancel" onclick="closeModal('lapNameModal')">Guardar sin nombre</button>
+    <button class="mcancel" onclick="closeModal('lapNameModal')">Cancelar</button>
   </div>
 </div>
 
@@ -860,25 +892,85 @@ function openAddPlanned(actId){
 
 function confirmAddPlanned(){
   const act=S.activities.find(a=>a.id===pendingActId);if(!act)return;
-  // block only if already planned TODAY and not done
   const today=new Date().toDateString();
-  if(S.planned.find(p=>p.actId===pendingActId&&!p.done&&new Date(p.addedAt).toDateString()===today)){
+  // If auto-entry exists, upgrade it to manual (remove auto flag)
+  const existing=S.planned.find(p=>p.actId===pendingActId&&!p.done&&new Date(p.addedAt).toDateString()===today);
+  if(existing){
+    if(existing.auto){
+      // upgrade: apply new ideal time and note, remove auto flag
+      const h=parseInt(document.getElementById('apHours').value)||0;
+      const m=parseInt(document.getElementById('apMins').value)||0;
+      existing.idealSecs=(h*3600+m*60)||0;
+      existing.note=document.getElementById('apNote').value.trim();
+      delete existing.auto;
+      save();closeModal('addPlannedModal');renderAll();return;
+    }
     closeModal('addPlannedModal');renderAll();return;
   }
   const h=parseInt(document.getElementById('apHours').value)||0;
   const m=parseInt(document.getElementById('apMins').value)||0;
   const ideal=(h*3600+m*60)||0;
+  const pending=S.activities.find(a=>a.id===act.id)?.pendingSubtasks||[];
   S.planned.push({
     id:genId(),actId:act.id,actName:act.name,actEmoji:act.emoji,
     idealSecs:ideal,note:document.getElementById('apNote').value.trim(),
-    subtasks:[],done:false,addedAt:new Date().toISOString()
+    subtasks:pending.map(ps=>({id:ps.id,text:ps.text,done:false})),
+    done:false,addedAt:new Date().toISOString()
   });
+  // clear pending after loading
+  const actRef=S.activities.find(a=>a.id===act.id);
+  if(actRef) actRef.pendingSubtasks=[];
   save();closeModal('addPlannedModal');renderAll();
 }
 
 function togglePlannedDone(pid){
   const p=S.planned.find(x=>x.id===pid);if(!p)return;
-  p.done=!p.done;save();renderAll();
+  if(p.done){
+    // reopening
+    p.done=false;save();renderAll();return;
+  }
+  // Closing: check for pending subtasks
+  const pending=p.subtasks.filter(st=>!st.done);
+  if(pending.length===0){
+    p.done=true;save();renderAll();return;
+  }
+  // Ask about pending subtasks
+  _pendingDonePid=pid;
+  const modal=document.getElementById('pendingSubModal');
+  const list=document.getElementById('pendingSubList');
+  list.innerHTML=pending.map(st=>`
+    <div class="subtask-item">
+      <input type="checkbox" class="pst-cb" id="pst_${st.id}" checked style="width:14px;height:14px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;">
+      <label for="pst_${st.id}" class="subtask-name" style="cursor:pointer;">${esc(st.text)}</label>
+    </div>`).join('');
+  openModal('pendingSubModal');
+}
+
+var _pendingDonePid=null;
+function confirmPendingDone(saveForNext){
+  const p=S.planned.find(x=>x.id===_pendingDonePid);if(!p)return;
+  if(saveForNext){
+    // keep checked subtasks for next session (unmark done on unchecked)
+    const cbs=document.querySelectorAll('.pst-cb');
+    cbs.forEach(cb=>{
+      const sid=cb.id.replace('pst_','');
+      const st=p.subtasks.find(s=>s.id===sid);
+      if(st&&!cb.checked) st.keepNext=true; // mark to carry over
+    });
+    // Store pending subtasks on the activity for next "Today"
+    const toCarry=p.subtasks.filter(st=>!st.done);
+    const act=S.activities.find(a=>a.id===p.actId);
+    if(act){
+      if(!act.pendingSubtasks) act.pendingSubtasks=[];
+      toCarry.forEach(st=>{
+        if(!act.pendingSubtasks.find(ps=>ps.id===st.id)){
+          act.pendingSubtasks.push({id:st.id,text:st.text});
+        }
+      });
+    }
+  }
+  p.done=true;
+  save();closeModal('pendingSubModal');renderAll();
 }
 
 function removePlanned(pid){
@@ -889,12 +981,44 @@ function removePlanned(pid){
 function addSubtask(pid,text){
   const p=S.planned.find(x=>x.id===pid);if(!p||!text.trim())return;
   p.subtasks.push({id:genId(),text:text.trim(),done:false});
-  save();renderPlanned();
+  save();renderPlanned();renderRunning(); // update dropdowns in active cards
 }
 function toggleSubtask(pid,sid){
   const p=S.planned.find(x=>x.id===pid);if(!p)return;
   const st=p.subtasks.find(s=>s.id===sid);if(!st)return;
-  st.done=!st.done;save();renderPlanned();
+  st.done=!st.done;save();renderPlanned();renderRunning();
+}
+
+// time spent on activity with NO subtask assigned
+function noSubSpent(actId, plannedId){
+  const fromSessions=S.sessions.filter(s=>
+    s.actId===actId && !s.subtaskId && (plannedId?s.plannedId===plannedId:true)
+  ).reduce((t,s)=>t+s.duration,0);
+  let live=0;
+  for(const ctx of Object.values(S.running)){
+    if(ctx.actId!==actId) continue;
+    // frozen time accumulated while no subtask was active
+    const frozen=(ctx.subTotals&&ctx.subTotals['__none__'])||0;
+    // live time only if CURRENTLY running with no subtask AND not paused
+    const isCurrent=(!ctx.subtaskId)&&(!ctx.paused);
+    const currentSeg=isCurrent?elapsed(ctx.startTime):0;
+    live+=frozen+currentSeg;
+  }
+  return fromSessions+live;
+}
+
+// spent time for a specific subtask
+function subtaskSpent(subtaskId){
+  if(!subtaskId) return 0;
+  const fromSessions=S.sessions.filter(s=>s.subtaskId===subtaskId).reduce((t,s)=>t+s.duration,0);
+  let live=0;
+  for(const ctx of Object.values(S.running)){
+    const frozen=(ctx.subTotals&&ctx.subTotals[subtaskId])||0;
+    const isCurrent=ctx.subtaskId===subtaskId&&!ctx.paused;
+    const currentSeg=isCurrent?elapsed(ctx.startTime):0;
+    live+=frozen+currentSeg;
+  }
+  return fromSessions+live;
 }
 
 // spent time for a planned item
@@ -930,12 +1054,27 @@ function startActivity(actId, plannedId, subtaskId){
     // already running this slot — ignore
     return;
   }
+  // Auto-create a planned entry if none exists, so subtask tracking works uniformly
+  let resolvedPlannedId=plannedId||null;
+  if(!resolvedPlannedId){
+    const today=new Date().toDateString();
+    let autoplan=S.planned.find(p=>p.actId===actId&&new Date(p.addedAt).toDateString()===today&&!p.done);
+    if(!autoplan){
+      autoplan={id:genId(),actId:act.id,actName:act.name,actEmoji:act.emoji,
+        idealSecs:0,note:'',subtasks:[],done:false,
+        addedAt:new Date().toISOString(),auto:true}; // auto:true = not manually planned
+      S.planned.push(autoplan);
+    }
+    resolvedPlannedId=autoplan.id;
+  }
+
   S.running[rKey]={
     rKey,actId,actName:act.name,actEmoji:act.emoji,
-    plannedId:plannedId||null,subtaskId:subtaskId||null,
+    plannedId:resolvedPlannedId,subtaskId:subtaskId||null,
     sessionName:'',startTime:new Date().toISOString(),
     lapTotal:0,lapCount:0,paused:false,pausedAt:null,
     breakStart:null,breakTotal:0,realActId:null,
+    subTotals:{},subSwitches:[],
     insertOrder:Date.now()
   };
   save();startTick(rKey);renderAll();
@@ -955,11 +1094,15 @@ function stopTick(rKey){clearInterval(timers[rKey]);delete timers[rKey];}
 
 function pauseLap(rKey){
   const ctx=S.running[rKey];if(!ctx||ctx.paused)return;
-  // accumulate the current segment into lapTotal BEFORE pausing so display keeps the value
-  ctx.lapTotal=(ctx.lapTotal||0)+elapsed(ctx.startTime);
-  ctx.startTime=new Date().toISOString(); // reset start (lapTotal now holds it all)
+  const seg=elapsed(ctx.startTime);
+  // accumulate into lapTotal
+  ctx.lapTotal=(ctx.lapTotal||0)+seg;
+  // also freeze into subTotals for current subtask
+  if(!ctx.subTotals) ctx.subTotals={};
+  const key=ctx.subtaskId||'__none__';
+  ctx.subTotals[key]=(ctx.subTotals[key]||0)+seg;
+  ctx.startTime=new Date().toISOString();
   ctx.paused=true;ctx.pausedAt=new Date().toISOString();
-  // if break running, stop it
   if(ctx.breakStart){ctx.breakTotal+=(elapsed(ctx.breakStart));ctx.breakStart=null;}
   save();renderAll();
 }
@@ -967,13 +1110,15 @@ function pauseLap(rKey){
 function resumeLap(rKey){
   const ctx=S.running[rKey];if(!ctx||!ctx.paused)return;
   ctx.paused=false;ctx.pausedAt=null;
+  ctx.startTime=new Date().toISOString(); // fresh start — lapTotal already holds accumulated time
   save();startTick(rKey);renderAll();
 }
 
 function saveLap(rKey){
-  // Open modal to name the lap before committing
   pendingSessKey=rKey;
+  const ctx=S.running[rKey];if(!ctx)return;
   document.getElementById('lapNameInput').value='';
+  document.getElementById('lapModalTitle').textContent=ctx.actEmoji+' '+ctx.actName+' · guardar lap';
   openModal('lapNameModal');
 }
 
@@ -981,20 +1126,45 @@ function confirmSaveLap(){
   const rKey=pendingSessKey;if(!rKey)return;
   const lapName=document.getElementById('lapNameInput').value.trim();
   closeModal('lapNameModal');
-  _doSaveLap(rKey,lapName);
+  _doSaveLap(rKey,lapName,undefined);
 }
 
-function _doSaveLap(rKey,lapName){
+function _doSaveLap(rKey,lapName,overrideSubId){
   const ctx=S.running[rKey];if(!ctx)return;
-  const liveStart=ctx.startTime;
   const liveEnd=new Date().toISOString();
   const liveSecs=ctx.paused?0:elapsed(ctx.startTime);
   const totalLapSecs=(ctx.lapTotal||0)+liveSecs;
-  if(totalLapSecs>1) _commitLap(ctx,liveStart,liveEnd,totalLapSecs,lapName);
+  if(totalLapSecs<2){
+    // reset anyway
+    ctx.startTime=new Date().toISOString();
+    ctx.lapTotal=0;ctx.subTotals={};ctx.subSwitches=[];
+    ctx.lapCount=(ctx.lapCount||0)+1;ctx.paused=false;ctx.pausedAt=null;
+    save();startTick(rKey);renderAll();return;
+  }
+  // Flush current live segment into subTotals before committing
+  if(!ctx.subTotals) ctx.subTotals={};
+  const key=ctx.subtaskId||'__none__';
+  ctx.subTotals[key]=(ctx.subTotals[key]||0)+liveSecs;
+
+  // Commit one session per subtask bucket in this lap
+  const buckets=Object.entries(ctx.subTotals).filter(([,v])=>v>1);
+  if(buckets.length===0){
+    // no subtasks — single session
+    _commitLap(ctx,ctx.startTime,liveEnd,totalLapSecs,lapName);
+  } else {
+    // one session per subtask (preserving subtask attribution)
+    buckets.forEach(([stKey,dur])=>{
+      const stId=stKey==='__none__'?null:stKey;
+      const origSub=ctx.subtaskId;
+      ctx.subtaskId=stId;
+      _commitLap(ctx,ctx.startTime,liveEnd,dur,lapName);
+      ctx.subtaskId=origSub;
+    });
+  }
   // reset lap
   ctx.startTime=new Date().toISOString();
-  ctx.lapTotal=0;ctx.lapCount=(ctx.lapCount||0)+1;
-  ctx.paused=false;ctx.pausedAt=null;
+  ctx.lapTotal=0;ctx.subTotals={};ctx.subSwitches=[];
+  ctx.lapCount=(ctx.lapCount||0)+1;ctx.paused=false;ctx.pausedAt=null;
   save();startTick(rKey);renderAll();
 }
 
@@ -1062,6 +1232,125 @@ function confirmSessName(){
   save();closeModal('sessNameModal');renderRunning();
 }
 
+// subtask assignment from running card
+function setRunSubtask(rKey,subtaskId){
+  const ctx=S.running[rKey];if(!ctx)return;
+
+  if(subtaskId==='__new__'){
+    // show inline input row below this card
+    showNewSubInput(rKey);
+    // reset select back to current value
+    const sel=document.querySelector(`#rc_${rKey} .rc-sub-select`);
+    if(sel) sel.value=ctx.subtaskId||'';;
+    return;
+  }
+
+  // Freeze current live segment into subTotals before switching
+  if(ctx.subtaskId !== (subtaskId||null)){
+    if(!ctx.subTotals) ctx.subTotals={};
+    const key=ctx.subtaskId||'__none__';
+    const liveSeg=ctx.paused?0:elapsed(ctx.startTime);
+    ctx.subTotals[key]=(ctx.subTotals[key]||0)+liveSeg;
+    // reset startTime so new subtask starts fresh from now
+    if(!ctx.paused) ctx.startTime=new Date().toISOString();
+  }
+
+  ctx.subtaskId=subtaskId||null;
+  if(subtaskId){
+    const plan=S.planned.find(p=>p.subtasks&&p.subtasks.some(s=>s.id===subtaskId));
+    if(plan&&!ctx.plannedId) ctx.plannedId=plan.id;
+  }
+  save();renderRunning();
+}
+
+function showNewSubInput(rKey){
+  // Remove any existing input row
+  const existing=document.getElementById('ns_row_'+rKey);
+  if(existing){existing.remove();return;}
+  const card=document.getElementById('rc_'+rKey);
+  if(!card)return;
+  const row=document.createElement('div');
+  row.id='ns_row_'+rKey;
+  row.style.cssText='display:flex;gap:5px;padding:0 10px 8px;';
+  row.innerHTML=`
+    <input id="ns_inp_${rKey}" type="text" placeholder="Nombre de la subtarea..."
+      style="flex:1;background:var(--s0);border:1px solid var(--teal);border-radius:7px;padding:6px 10px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none;"
+      inputmode="text" enterkeyhint="done"
+      onkeydown="if(event.key==='Enter'){confirmNewSub('${rKey}');}"
+      onkeyup="if(event.key==='Enter'){confirmNewSub('${rKey}');}">
+    <button onclick="confirmNewSub('${rKey}')"
+      style="background:var(--teal);color:#fff;border:none;border-radius:7px;padding:6px 10px;font-size:12px;cursor:pointer;touch-action:manipulation;white-space:nowrap;">+</button>
+    <button onclick="document.getElementById('ns_row_${rKey}')&&document.getElementById('ns_row_${rKey}').remove()"
+      style="background:transparent;color:var(--text3);border:none;padding:6px;font-size:14px;cursor:pointer;touch-action:manipulation;">✕</button>
+  `;
+  card.appendChild(row);
+  setTimeout(()=>document.getElementById('ns_inp_'+rKey)?.focus(),50);
+}
+
+function confirmNewSub(rKey){
+  const inp=document.getElementById('ns_inp_'+rKey);
+  if(!inp)return;
+  const txt=inp.value.trim();
+  if(!txt)return;
+  const ctx=S.running[rKey];if(!ctx)return;
+  const today=new Date().toDateString();
+  let plan=S.planned.find(p=>
+    p.actId===ctx.actId&&
+    new Date(p.addedAt).toDateString()===today&&
+    !p.done
+  );
+  if(!plan){
+    plan={id:genId(),actId:ctx.actId,actName:ctx.actName,actEmoji:ctx.actEmoji,
+      idealSecs:0,note:'',subtasks:[],done:false,addedAt:new Date().toISOString()};
+    S.planned.push(plan);
+  }
+  const newSt={id:genId(),text:txt,done:false,unplanned:true};
+  plan.subtasks.push(newSt);
+  ctx.subtaskId=newSt.id;
+  if(!ctx.plannedId) ctx.plannedId=plan.id;
+  // remove input row
+  document.getElementById('ns_row_'+rKey)?.remove();
+  save();renderPlanned();renderRunning();
+}
+
+// toggle subtask by explicit id (for unplanned cards)
+function toggleSubtaskByIdFromCard(rKey,subtaskId){
+  // find plan containing this subtask
+  const plan=S.planned.find(p=>p.subtasks&&p.subtasks.some(s=>s.id===subtaskId));
+  if(plan){
+    const st=plan.subtasks.find(s=>s.id===subtaskId);
+    if(st){st.done=!st.done;save();renderPlanned();renderRunning();return;}
+  }
+}
+
+// add subtask directly to a running (unplanned) session
+function addSubtaskToRunning(rKey,text){
+  if(!text||!text.trim())return;
+  const ctx=S.running[rKey];if(!ctx)return;
+  // find or create a planned entry for this activity today
+  const today=new Date().toDateString();
+  let plan=S.planned.find(p=>p.actId===ctx.actId&&new Date(p.addedAt).toDateString()===today&&!p.done);
+  if(!plan){
+    plan={id:genId(),actId:ctx.actId,actName:ctx.actName,actEmoji:ctx.actEmoji,
+      idealSecs:0,note:'',subtasks:[],done:false,addedAt:new Date().toISOString()};
+    S.planned.push(plan);
+  }
+  const newSt={id:genId(),text:text.trim(),done:false,unplanned:true};
+  plan.subtasks.push(newSt);
+  // auto-assign to current running session
+  setRunSubtask(rKey,newSt.id);
+}
+
+function toggleSubtaskFromCard(rKey){
+  const ctx=S.running[rKey];if(!ctx||!ctx.subtaskId)return;
+  const plan=S.planned.find(p=>p.subtasks&&p.subtasks.some(s=>s.id===ctx.subtaskId));
+  if(!plan)return;
+  const st=plan.subtasks.find(s=>s.id===ctx.subtaskId);
+  if(!st)return;
+  st.done=!st.done;
+  save();renderPlanned();renderRunning();
+}
+
 // deviation
 function setDeviation(rKey,realActId){
   const ctx=S.running[rKey];if(!ctx)return;
@@ -1082,9 +1371,17 @@ function renderWeekBadge(){
 }
 
 // ── PLANNED ──
+// Track which planned cards are expanded — persist across re-renders
+var _expandedPlans=new Set();
+
 function renderPlanned(){
   const list=document.getElementById('plannedList');
-  const todayPlanned=S.planned.filter(p=>new Date(p.addedAt).toDateString()===new Date().toDateString());
+  // Save currently expanded state before re-render
+  document.querySelectorAll('.planned-card.pc-expanded').forEach(el=>{
+    const pid=el.id.replace('pc_','');
+    _expandedPlans.add(pid);
+  });
+  const todayPlanned=S.planned.filter(p=>new Date(p.addedAt).toDateString()===new Date().toDateString()&&!p.done);
   document.getElementById('plannedCount').textContent=todayPlanned.length?`(${todayPlanned.length})`:'';
   list.classList.toggle('solo-plan', todayPlanned.length<=1);
   if(!todayPlanned.length){list.innerHTML='<div class="empty-planned">// Añade actividades con el botón "Today" ↓</div>';return;}
@@ -1134,12 +1431,13 @@ function renderPlanned(){
 
     const subCount=p.subtasks.length;
     const doneCount=p.subtasks.filter(s=>s.done).length;
-    const subLabel=subCount?`${doneCount}/${subCount} subtareas`:'+ subtareas';
-    return`<div class="planned-card ${p.done?'done-card':''} ${isRunning?'pc-running':''}" id="pc_${p.id}">
+    const pendingCount=subCount-doneCount;
+    const subLabel=subCount?(pendingCount>0?`${pendingCount} pendiente${pendingCount>1?'s':''}${doneCount>0?' · '+doneCount+' ✓':''}`:`✓ Todo listo`):'+ subtareas';
+    return`<div class="planned-card ${p.done?'done-card':''} ${isRunning?'pc-running':''} ${p.auto?'pc-auto':''}" id="pc_${p.id}">
       <div class="pc-header">
         <div class="pc-emoji">${p.actEmoji}</div>
         <div class="pc-info">
-          <div class="pc-name">${esc(p.actName)}</div>
+          <div class="pc-name">${esc(p.actName)}${p.auto?` <span style="font-size:9px;color:var(--text3);font-family:var(--mono);font-style:italic;">new</span>`:''}</div>
           <div class="pc-meta">${metaBadges}</div>
         </div>
         <div class="pc-icon-btns">
@@ -1157,14 +1455,49 @@ function renderPlanned(){
         <span class="pc-expand-icon">▼</span>
       </div>
       <div class="subtasks-wrap" id="sw_${p.id}">
-        ${p.subtasks.map(st=>`
-        <div class="subtask-item">
-          <div class="subtask-check ${st.done?'done':''}" onclick="toggleSubtask('${p.id}','${st.id}')"></div>
-          <span class="subtask-name ${st.done?'done-text':''}">${esc(st.text)}</span>
-          <button class="subtask-play" onclick="startActivity('${p.actId}','${p.id}','${st.id}')">
-            <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          </button>
-        </div>`).join('')}
+        ${(()=>{
+          // Only show PENDING subtasks (not done) in planned view
+          const planned=p.subtasks.filter(st=>!st.unplanned&&!st.done);
+          const added=p.subtasks.filter(st=>st.unplanned&&!st.done);
+          let html='';
+          const noSubT=noSubSpent(p.actId, p.id);
+          if(noSubT>0||true){ // always show so user sees the bucket
+            html+=`<div class="subtask-item" style="opacity:${noSubT>0?1:0.35};">
+              <div class="subtask-check" style="border-style:dashed;cursor:default;"></div>
+              <span class="subtask-name" style="color:var(--text3);font-style:italic;">Sin subtarea</span>
+              ${noSubT>0?`<span style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-right:4px;" id="nst_${p.id}">${fmtS(noSubT)}</span>`:`<span style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-right:4px;" id="nst_${p.id}">0s</span>`}
+              <button class="subtask-play" onclick="startActivity('${p.actId}','${p.id}',null)" style="opacity:0.5;">
+                <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </button>
+            </div>`;
+          }
+          planned.forEach(st=>{
+            const t=subtaskSpent(st.id);
+            html+=`<div class="subtask-item">
+              <div class="subtask-check ${st.done?'done':''}" onclick="toggleSubtask('${p.id}','${st.id}')"></div>
+              <span class="subtask-name ${st.done?'done-text':''}">${esc(st.text)}</span>
+              <span style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-right:4px;" id="st_t_${st.id}">${t>0?fmtS(t):'0s'}</span>
+              <button class="subtask-play" onclick="startActivity('${p.actId}','${p.id}','${st.id}')">
+                <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              </button>
+            </div>`;
+          });
+          if(added.length){
+            html+=`<div style="font-size:8px;color:var(--text3);font-family:var(--mono);padding:4px 10px 2px;letter-spacing:1px;text-transform:uppercase;">Agregadas</div>`;
+            added.forEach(st=>{
+              const t=subtaskSpent(st.id);
+              html+=`<div class="subtask-item">
+                <div class="subtask-check ${st.done?'done':''}" onclick="toggleSubtask('${p.id}','${st.id}')"></div>
+                <span class="subtask-name ${st.done?'done-text':''}" style="color:var(--teal);">${esc(st.text)}</span>
+                ${t>0?`<span style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-right:4px;">${fmtS(t)}</span>`:''}
+                <button class="subtask-play" onclick="startActivity('${p.actId}','${p.id}','${st.id}')">
+                  <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                </button>
+              </div>`;
+            });
+          }
+          return html;
+        })()}
         <div class="add-sub-row">
           <input class="add-sub-input" placeholder="+ Nueva subtarea..." id="sub_${p.id}"
             onkeydown="if(event.key==='Enter'){addSubtask('${p.id}',this.value);this.value='';}">
@@ -1172,15 +1505,119 @@ function renderPlanned(){
       </div>
     </div>`;
   }).join('');
+  // ── Clean up any stale unplanned section (no longer used) ──
+  const prevSec=document.getElementById('unplannedSection');
+  if(prevSec) prevSec.remove();
+  const prevList2=document.getElementById('unplannedList');
+  if(prevList2) prevList2.remove();
+
+  const unplannedRunning=[]; // all activities now auto-create planned entries
+  if(unplannedRunning.length){
+    const secWrap=document.createElement('div');
+    secWrap.id='unplannedSection';
+
+    const secLabel=document.createElement('div');
+    secLabel.className='sec-lbl';
+    secLabel.style.paddingTop='12px';
+    secLabel.innerHTML='no planeadas';
+    secWrap.appendChild(secLabel);
+
+    const upList=document.createElement('div');
+    upList.className='planned-list';
+    upList.id='unplannedList';
+    upList.classList.toggle('solo-plan', unplannedRunning.length<=1);
+
+    unplannedRunning.forEach(ctx=>{
+      // Get all subtasks associated with this activity (from subTotals + sessions)
+      const subMap={}; // id -> {text, done}
+      // from subTotals keys
+      if(ctx.subTotals){
+        Object.keys(ctx.subTotals).filter(k=>k!=='__none__').forEach(sid=>{
+          subMap[sid]=subMap[sid]||{text:sid,done:false};
+        });
+      }
+      // from current subtaskId
+      if(ctx.subtaskId) subMap[ctx.subtaskId]=subMap[ctx.subtaskId]||{text:ctx.subtaskId,done:false};
+      // from today's sessions
+      S.sessions.filter(s=>s.actId===ctx.actId&&s.subtaskId&&new Date(s.startTime).toDateString()===new Date().toDateString())
+        .forEach(s=>{
+          subMap[s.subtaskId]={text:s.subtaskName||s.subtaskId,done:false};
+        });
+      // resolve names from planned items
+      S.planned.forEach(p=>{
+        (p.subtasks||[]).forEach(st=>{
+          if(subMap[st.id]) subMap[st.id]={text:st.text,done:st.done};
+        });
+      });
+
+      const noSubT=noSubSpent(ctx.actId,null);
+      const subItems=Object.entries(subMap).map(([sid,st])=>{
+        const t=subtaskSpent(sid);
+        return`<div class="subtask-item">
+          <div class="subtask-check ${st.done?'done':''}" onclick="toggleSubtaskByIdFromCard('${ctx.rKey}','${sid}')"></div>
+          <span class="subtask-name ${st.done?'done-text':''}" style="${st.done?'':'color:var(--teal)'};">${esc(st.text)}</span>
+          <span style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-right:4px;" id="st_t_${sid}">${fmtS(t)}</span>
+        </div>`;
+      }).join('');
+
+      const hasAnySubs=Object.keys(subMap).length>0;
+      const spent=noSubT+(Object.keys(subMap).reduce((t,sid)=>t+subtaskSpent(sid),0));
+      const isExpanded=_expandedPlans.has('up_'+ctx.rKey);
+
+      const card=document.createElement('div');
+      card.className='planned-card pc-running'+(isExpanded?' pc-expanded':'');
+      card.id='upc_'+ctx.rKey;
+      card.innerHTML=`
+        <div class="pc-header">
+          <div class="pc-emoji">${ctx.actEmoji}</div>
+          <div class="pc-info">
+            <div class="pc-name">${esc(ctx.actName)}</div>
+            ${spent>0?`<div class="pc-meta"><span class="pc-spent">${fmtS(spent)}</span></div>`:''}
+          </div>
+        </div>
+        <div class="pc-expand-row" onclick="togglePcExpand('up_${ctx.rKey}')">
+          <span class="pc-expand-lbl">${hasAnySubs?Object.keys(subMap).length+' subtarea(s)':'+ subtareas'}</span>
+          <span class="pc-expand-icon">▼</span>
+        </div>
+        <div class="subtasks-wrap${isExpanded?' open':''}" id="sw_up_${ctx.rKey}">
+          <div class="subtask-item" style="opacity:${noSubT>0?1:0.4};">
+            <div class="subtask-check" style="border-style:dashed;cursor:default;"></div>
+            <span class="subtask-name" style="color:var(--text3);font-style:italic;">Sin subtarea</span>
+            <span style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-right:4px;" id="nst_${ctx.rKey}">${fmtS(noSubT)}</span>
+          </div>
+          ${subItems}
+          <div class="add-sub-row">
+            <input class="add-sub-input" placeholder="+ Nueva subtarea..." id="sub_up_${ctx.rKey}"
+              inputmode="text" enterkeyhint="done"
+              onkeydown="if(event.key==='Enter'){addSubtaskToRunning('${ctx.rKey}',this.value);this.value='';this.blur();}"
+              onkeyup="if(event.key==='Enter'){addSubtaskToRunning('${ctx.rKey}',this.value);this.value='';this.blur();}">
+            <button class="add-sub-btn" onclick="var el=document.getElementById('sub_up_${ctx.rKey}');addSubtaskToRunning('${ctx.rKey}',el.value);el.value='';">+</button>
+          </div>
+        </div>`;
+      upList.appendChild(card);
+    });
+    secWrap.appendChild(upList);
+    list.parentNode.insertBefore(secWrap, list.nextSibling);
+  }
+
+  // Restore expanded state
+  _expandedPlans.forEach(pid=>{
+    const card=document.getElementById('pc_'+pid);
+    const wrap=document.getElementById('sw_'+pid);
+    if(card&&wrap){card.classList.add('pc-expanded');wrap.classList.add('open');}
+  });
 }
 
 // ── PLANNED EXPAND ──
 function togglePcExpand(pid){
-  const card=document.getElementById('pc_'+pid);
+  // support both planned (pc_) and unplanned (upc_) cards
+  const card=document.getElementById('pc_'+pid)||document.getElementById('upc_'+pid);
   const wrap=document.getElementById('sw_'+pid);
   if(!card||!wrap)return;
   const open=card.classList.toggle('pc-expanded');
   wrap.classList.toggle('open',open);
+  if(open) _expandedPlans.add(pid);
+  else _expandedPlans.delete(pid);
 }
 
 // ── RUNNING ──
@@ -1226,19 +1663,43 @@ function buildRunCard(rKey,isTop){
     : 'same';
 
   return`<div class="run-card ${isBreaking?'break-mode':''}${isTop&&!isBreaking?' top-card':''}" id="rc_${rKey}">
-    <!-- TOP ROW: emoji + name/subtask | session + real -->
+    <!-- TOP ROW: emoji + name | subtask + real -->
     <div class="rc-top">
       <div class="rc-emoji">${ctx.actEmoji}</div>
       <div class="rc-left">
         <div class="rc-name-row">
           <span class="rc-name">${esc(ctx.actName)}</span>
-          ${subtask?`<span class="rc-subtask">${esc(subtask.text)}</span>`:''}
         </div>
       </div>
       <div class="rc-right">
-        <span class="rc-session ${ctx.sessionName?'':'no-name'}" onclick="openSessName('${rKey}')">
-          ${ctx.sessionName?esc(ctx.sessionName):'✏️ sesión'}
-        </span>
+        ${(()=>{
+          const today=new Date().toDateString();
+          const relPlanned=S.planned.filter(p=>
+            p.actId===ctx.actId &&
+            new Date(p.addedAt).toDateString()===today &&
+            !p.done
+          );
+          const allSubs=[];
+          relPlanned.forEach(p=>p.subtasks.forEach(st=>{
+            allSubs.push({id:st.id,text:st.text,done:st.done});
+          }));
+          // Always show dropdown — even if no planned subtasks (can add new ones)
+          const subOpts=allSubs.map(st=>
+            `<option value="${st.id}" ${st.id===ctx.subtaskId?'selected':''}>${esc(st.text)}</option>`
+          ).join('');
+          const hasAssigned=!!ctx.subtaskId;
+          const assignedSt=hasAssigned?allSubs.find(s=>s.id===ctx.subtaskId):null;
+          return`<div style="display:flex;align-items:center;gap:3px;justify-content:flex-end;">
+            <select class="rc-sub-select ${hasAssigned?'assigned':''}" onchange="setRunSubtask('${rKey}',this.value)">
+              <option value="">▾</option>
+              ${subOpts}
+              <option value="__new__">+ Nueva...</option>
+            </select>
+            ${hasAssigned?`<div class="rc-st-check ${assignedSt&&assignedSt.done?'done':''}"
+              onclick="toggleSubtaskFromCard('${rKey}')"
+              title="Marcar como lista"></div>`:''}
+          </div>`;
+        })()}
         <select class="rc-dev-select ${ctx.realActId?'deviated':''}" onchange="setDeviation('${rKey}',this.value)">
           <option value="">same</option>
           ${deviationOpts}
@@ -1300,15 +1761,50 @@ function updateRunCard(rKey){
     }
   }
 
-  // update planned progress bar live
-  if(ctx.plannedId){
-    const p=S.planned.find(x=>x.id===ctx.plannedId);
-    if(p&&p.idealSecs){
-      const spent=plannedSpent(p.id);
-      const pct=Math.min((spent/p.idealSecs)*100,100);
-      const bar=document.querySelector(`#plannedList .pc-progress-fill`);
+  // update planned progress + subtask times live
+  const today=new Date().toDateString();
+  const relPlan=ctx.plannedId
+    ? S.planned.find(x=>x.id===ctx.plannedId)
+    : S.planned.find(x=>x.actId===ctx.actId&&new Date(x.addedAt).toDateString()===today&&!x.done);
+  if(relPlan){
+    // progress bar
+    if(relPlan.idealSecs){
+      const spent=plannedSpent(relPlan.id);
+      const pct=Math.min((spent/relPlan.idealSecs)*100,100);
+      const bar=document.querySelector(`#pc_${relPlan.id} .pc-progress-fill`);
       if(bar) bar.style.width=pct+'%';
+      const rem=relPlan.idealSecs-spent;
+      const remEl=document.querySelector(`#pc_${relPlan.id} .pc-remaining`);
+      if(remEl){
+        remEl.textContent=(rem<0?'+':'-')+fmtS(Math.abs(rem));
+        remEl.className='pc-remaining '+(rem<0?'over':'under');
+      }
+      const spEl=document.querySelector(`#pc_${relPlan.id} .pc-spent`);
+      if(spEl) spEl.textContent=fmtS(spent);
     }
+    // subtask times (only if expanded)
+    const wrap=document.getElementById('sw_'+relPlan.id);
+    if(wrap&&wrap.classList.contains('open')){
+      const nstEl=document.getElementById('nst_'+relPlan.id);
+      if(nstEl) nstEl.textContent=fmtS(noSubSpent(relPlan.actId,relPlan.id));
+      relPlan.subtasks.forEach(st=>{
+        const stEl=document.getElementById('st_t_'+st.id);
+        if(stEl) stEl.textContent=fmtS(subtaskSpent(st.id));
+      });
+    }
+  }
+  // update unplanned card subtask times if expanded
+  const upWrap=document.getElementById('sw_up_'+rKey);
+  if(upWrap&&upWrap.classList.contains('open')){
+    const nstEl2=document.getElementById('nst_'+rKey);
+    if(nstEl2) nstEl2.textContent=fmtS(noSubSpent(ctx.actId,null));
+    const allSubIds=new Set();
+    if(ctx.subTotals) Object.keys(ctx.subTotals).filter(k=>k!=='__none__').forEach(k=>allSubIds.add(k));
+    if(ctx.subtaskId) allSubIds.add(ctx.subtaskId);
+    allSubIds.forEach(sid=>{
+      const stEl=document.getElementById('st_t_'+sid);
+      if(stEl) stEl.textContent=fmtS(subtaskSpent(sid));
+    });
   }
 }
 
@@ -1934,16 +2430,98 @@ function renderHabit(){
   });
 
   html+=`</div>`;
+
+  // ── Subtask summary for today — grouped by activity ──
+  const today2=new Date().toDateString();
+  const todayPlans=S.planned.filter(p=>new Date(p.addedAt).toDateString()===today2);
+
+  if(todayPlans.length){
+    html+=`<div style="padding:14px 0 8px;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);">subtareas hoy</div>`;
+
+    todayPlans.forEach(p=>{
+      const color=actColor(p.actId);
+      const done=p.subtasks.filter(s=>s.done);
+      const inProg=p.subtasks.filter(s=>!s.done&&subtaskSpent(s.id)>2);
+      const notStarted=p.subtasks.filter(s=>!s.done&&subtaskSpent(s.id)<=2);
+      const noSubT=noSubSpent(p.actId,p.id);
+      const hasAnything=p.subtasks.length>0||noSubT>2;
+      if(!hasAnything)return;
+
+      // activity card header
+      html+=`<div style="background:var(--s1);border:1px solid ${color}44;border-radius:10px;margin-bottom:8px;overflow:hidden;">
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);">
+          <span style="font-size:16px;">${p.actEmoji}</span>
+          <span style="font-size:13px;font-weight:700;flex:1;">${esc(p.actName)}</span>
+          <span style="font-size:10px;font-family:var(--mono);color:var(--text3);">${fmtS(done.reduce((t,s)=>t+subtaskSpent(s.id),0)+inProg.reduce((t,s)=>t+subtaskSpent(s.id),0)+noSubT)}</span>
+        </div>`;
+
+      // sin subtarea row
+      if(noSubT>2){
+        html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border2);">
+          <span style="font-size:10px;color:var(--text3);">○</span>
+          <span style="font-size:11px;color:var(--text3);font-style:italic;flex:1;">Sin subtarea</span>
+          <span style="font-size:9px;font-family:var(--mono);color:var(--text3);">${fmtS(noSubT)}</span>
+        </div>`;
+      }
+
+      // completed
+      done.forEach(s=>{
+        const t=subtaskSpent(s.id);
+        html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border2);">
+          <span style="font-size:10px;color:var(--green);">✓</span>
+          <span style="font-size:11px;color:var(--text3);text-decoration:line-through;flex:1;">${esc(s.text)}</span>
+          ${t>0?`<span style="font-size:9px;font-family:var(--mono);color:var(--text3);">${fmtS(t)}</span>`:''}
+        </div>`;
+      });
+
+      // in progress
+      inProg.forEach(s=>{
+        const t=subtaskSpent(s.id);
+        html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border2);">
+          <span style="font-size:10px;color:var(--amber);">◑</span>
+          <span style="font-size:11px;color:var(--text2);flex:1;">${esc(s.text)}</span>
+          <span style="font-size:9px;font-family:var(--mono);color:var(--amber);">${fmtS(t)}</span>
+        </div>`;
+      });
+
+      // not started
+      notStarted.forEach(s=>{
+        html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border2);">
+          <span style="font-size:10px;color:var(--text3);">○</span>
+          <span style="font-size:11px;color:var(--text3);flex:1;">${esc(s.text)}</span>
+        </div>`;
+      });
+
+      html+=`</div>`; // activity card
+    });
+  }
+
+
   el.innerHTML=html;
 }
 
+
 // ── TIMELINE ──
 // Three fixed blocks
-const TL_BLOCKS=[
-  {id:'night', title:'Noche · Descanso', startH:22, endH:31, color:'#6c63ff'}, // 22:00–07:00 (31=7+24)
+const TL_BLOCKS_DEF=[
+  {id:'night', title:'Noche · Descanso', startH:22, endH:31, color:'#6c63ff'},
   {id:'work',  title:'Trabajo',          startH:7,  endH:16, color:'#2dd4c0'},
   {id:'free',  title:'Tiempo libre',     startH:16, endH:22, color:'#ff5fa0'},
 ];
+
+function getTLBlocks(){
+  // Reorder blocks so current block is first
+  const h=new Date().getHours();
+  let curIdx=0;
+  if(h>=7&&h<16) curIdx=1;       // work
+  else if(h>=16&&h<22) curIdx=2; // free
+  else curIdx=0;                 // night
+  const reordered=[];
+  for(let i=0;i<TL_BLOCKS_DEF.length;i++){
+    reordered.push(TL_BLOCKS_DEF[(curIdx+i)%TL_BLOCKS_DEF.length]);
+  }
+  return reordered;
+}
 
 function sessionMinutes(s){
   // returns {start: minutes-from-midnight, end: minutes-from-midnight}
@@ -1972,6 +2550,24 @@ function assignLanes(sessions){
   return{items:result,laneCount:lanes.length};
 }
 
+// Zoom levels: minutes per pixel (lower = more zoomed in)
+var _tlZoom=3; // default: full block view
+const TL_ZOOMS=[{label:'bloque',mpp:null},{label:'3h',mpp:180},{label:'1h',mpp:60},{label:'30m',mpp:30}];
+
+function setTlZoom(idx){
+  _tlZoom=idx;
+  renderTimeline();
+  if(idx>0) setTimeout(scrollToNow,100);
+}
+
+function scrollToNow(){
+  // scroll to now line in the current block
+  const nowLine=document.getElementById('tl-now-line');
+  if(nowLine){
+    nowLine.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
+  }
+}
+
 function renderTimeline(){
   const el=document.getElementById('diaTimelineContent');
   const lbl=document.getElementById('diaDateLbl');
@@ -1979,30 +2575,51 @@ function renderTimeline(){
   lbl.textContent=isToday?'Hoy':diaDate.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
 
   const dStr=diaDate.toDateString();
-  // also grab sessions from previous day for night block (22:00-00:00)
   const prevDate=new Date(diaDate);prevDate.setDate(prevDate.getDate()-1);
   const prevStr=prevDate.toDateString();
 
-  const allSessions=S.sessions.filter(s=>{
+  // Merge sessions by actId: group laps of same activity into continuous blocks
+  const rawSessions=S.sessions.filter(s=>{
     const sd=new Date(s.startTime).toDateString();
     return sd===dStr||sd===prevStr;
   }).sort((a,b)=>new Date(a.startTime)-new Date(b.startTime));
 
-  if(!allSessions.length){
+  if(!rawSessions.length){
     el.innerHTML=`<div class="tl-empty">// sin registros este día</div>`;
     return;
   }
 
-  let html='<div class="tl-page">';
+  // Merge consecutive sessions of same actId within 5min gap into one visual block
+  function mergeAct(sessions){
+    const merged=[];
+    sessions.forEach(s=>{
+      const last=merged[merged.length-1];
+      const gap=last?Math.floor((new Date(s.startTime)-new Date(last.endTime))/60000):999;
+      if(last&&last.actId===s.actId&&gap<5){
+        last.endTime=s.endTime;
+        last.duration+=s.duration;
+      } else {
+        merged.push({...s});
+      }
+    });
+    return merged;
+  }
+  const allSessions=mergeAct(rawSessions);
 
+  // Zoom bar HTML
+  let html=`<div class="tl-zoom-bar">`;
+  TL_ZOOMS.forEach((z,i)=>{
+    html+=`<button class="tl-zoom-btn ${_tlZoom===i?'active':''}" onclick="setTlZoom(${i})">${z.label}</button>`;
+  });
+  html+=`<button class="tl-zoom-btn" onclick="scrollToNow()" style="margin-left:auto;">⬤ ahora</button>`;
+  html+=`</div><div class="tl-page">`;
+
+  const TL_BLOCKS=getTLBlocks();
   TL_BLOCKS.forEach(blk=>{
-    // normalize hour range: night block spans midnight
-    // startH/endH in "adjusted" hours: night is 22–31 (i.e. 22,23,0,1..7)
     function inBlock(s){
       const h=new Date(s.startTime).getHours();
       const d=new Date(s.startTime).toDateString();
       if(blk.id==='night'){
-        // prev day 22:00+ or current day 00:00-07:00
         if(d===prevStr&&h>=22)return true;
         if(d===dStr&&h<7)return true;
         return false;
@@ -2011,9 +2628,9 @@ function renderTimeline(){
     }
 
     const blockSessions=allSessions.filter(s=>inBlock(s));
-    const blockTotal=blockSessions.reduce((t,s)=>t+s.duration,0);
+    const blockTotal=rawSessions.filter(s=>inBlock(s)).reduce((t,s)=>t+s.duration,0);
 
-    html+=`<div class="tl-block-hdr">
+    html+=`<div class="tl-block-hdr" style="padding:0 16px;">
       <div class="tl-block-line" style="width:8px;height:1px;background:${blk.color};flex-shrink:0;"></div>
       <div class="tl-block-title" style="color:${blk.color};">${blk.title}</div>
       <div class="tl-block-hdr-line"></div>
@@ -2021,74 +2638,111 @@ function renderTimeline(){
     </div>`;
 
     if(!blockSessions.length){
-      html+=`<div style="height:12px;border-left:2px solid ${blk.color}22;margin-left:4px;margin-bottom:6px;"></div>`;
+      html+=`<div style="height:10px;margin:0 16px 6px;border-left:2px solid ${blk.color}22;"></div>`;
     } else {
-      // time range for this block in minutes
       let blockStartMin, blockEndMin;
-      if(blk.id==='night'){blockStartMin=22*60;blockEndMin=31*60;} // 22:00–07:00 = 540min span
+      if(blk.id==='night'){blockStartMin=22*60;blockEndMin=31*60;}
       else{blockStartMin=blk.startH*60;blockEndMin=blk.endH*60;}
-      const blockSpan=blockEndMin-blockStartMin; // minutes total
+      const blockSpanMins=blockEndMin-blockStartMin;
 
-      // normalize session times to block-minutes
-      function toBlockMin(s){
+      // Determine pixel width based on zoom
+      const zoomObj=TL_ZOOMS[_tlZoom];
+      const containerW=Math.max(window.innerWidth-32,300);
+      let totalPx;
+      if(!zoomObj.mpp){
+        totalPx=containerW; // fit to screen
+      } else {
+        totalPx=Math.round(blockSpanMins/zoomObj.mpp*containerW);
+      }
+      const pxPerMin=totalPx/blockSpanMins;
+
+      function toBlockPx(s){
         const st=new Date(s.startTime),en=new Date(s.endTime);
         let sm=st.getHours()*60+st.getMinutes();
         let em=en.getHours()*60+en.getMinutes();
         if(blk.id==='night'){
-          // prev day: keep as-is (22:xx → 22*60+xx)
-          // curr day: add 24*60 (0:xx → 24*60+0*60+xx)
-          if(new Date(s.startTime).toDateString()===dStr){sm+=24*60;em+=24*60;}
-          if(new Date(s.endTime).toDateString()===dStr){em=en.getHours()*60+en.getMinutes()+24*60;}
+          if(new Date(s.startTime).toDateString()===dStr){sm+=24*60;}
+          if(new Date(s.endTime).toDateString()===dStr){em+=24*60;}
         }
-        // clamp to block
         sm=Math.max(sm,blockStartMin);
         em=Math.min(em,blockEndMin);
-        return{start:sm-blockStartMin,end:Math.max(em-blockStartMin,sm-blockStartMin+1)};
+        const left=Math.round((sm-blockStartMin)*pxPerMin);
+        const width=Math.max(Math.round((em-sm)*pxPerMin),4);
+        return{left,width};
       }
 
       const {items,laneCount}=assignLanes(blockSessions);
 
-      // build ruler ticks (every 30 min)
-      html+=`<div class="tl-ruler">`;
-      // tick marks
+      // Find longest pill per actId for emoji display
+      const longestByAct={};
+      items.forEach(it=>{
+        const pw=toBlockPx(it.s).width;
+        if(!longestByAct[it.s.actId]||pw>longestByAct[it.s.actId].width){
+          longestByAct[it.s.actId]={id:it.s.id,width:pw};
+        }
+      });
+
+      html+=`<div class="tl-scroll-wrap" id="tlsw_${blk.id}"><div class="tl-ruler-wrap" style="width:${totalPx}px;min-width:100%;position:relative;">`;
+
+      // Ticks every 30min or 10min depending on zoom
+      const tickEvery=zoomObj.mpp?Math.max(10,Math.round(30/Math.max(1,blockSpanMins/zoomObj.mpp))):30;
       html+=`<div class="tl-ticks">`;
-      for(let m=0;m<=blockSpan;m+=30){
-        const pct=(m/blockSpan)*100;
+      for(let m=0;m<=blockSpanMins;m+=tickEvery){
+        const px=Math.round(m*pxPerMin);
         const isHour=m%60===0;
-        html+=`<div class="tl-tick ${isHour?'hour':''}" style="left:${pct}%"></div>`;
+        html+=`<div class="tl-tick ${isHour?'hour':''}" style="left:${px}px"></div>`;
       }
       html+=`</div>`;
-      // hour labels
-      html+=`<div class="tl-ruler-labels">`;
-      for(let m=0;m<blockSpan;m+=60){
+
+      // Hour labels
+      html+=`<div class="tl-ruler-labels" style="position:relative;height:14px;">`;
+      for(let m=0;m<blockSpanMins;m+=60){
         const absMin=blockStartMin+m;
         const h=Math.floor(absMin/60)%24;
-        const pct=(m/blockSpan)*100;
-        html+=`<div style="position:absolute;left:${pct}%;font-size:8px;color:var(--text3);font-family:var(--mono);">${String(h).padStart(2,'0')}h</div>`;
+        const px=Math.round(m*pxPerMin);
+        html+=`<div style="position:absolute;left:${px}px;font-size:8px;color:var(--text3);font-family:var(--mono);">${String(h).padStart(2,'0')}h</div>`;
       }
-      html+=`</div><div style="height:14px;"></div>`;
+      html+=`</div>`;
 
-      // lanes
+      // Lanes
       html+=`<div class="tl-lanes">`;
       for(let li=0;li<laneCount;li++){
-        html+=`<div class="tl-lane">`;
+        html+=`<div class="tl-lane" style="position:relative;height:28px;">`;
         items.filter(it=>it.lane===li).forEach(it=>{
-          const bm=toBlockMin(it.s);
-          const left=(bm.start/blockSpan)*100;
-          const width=Math.max((( bm.end-bm.start)/blockSpan)*100,1.5);
+          const {left,width}=toBlockPx(it.s);
           const color=actColor(it.s.actId);
-          const showText=width>6;
-          html+=`<div class="tl-pill" 
-            style="left:${left}%;width:${width}%;background:${color}33;border:1.5px solid ${color};"
+          const isLongest=longestByAct[it.s.actId]?.id===it.s.id;
+          const showEmoji=width>18; // always show emoji if there's room
+          const showName=width>60;
+          const showDur=width>90;
+          html+=`<div class="tl-pill"
+            style="position:absolute;left:${left}px;width:${width}px;background:${color}33;border:1.5px solid ${color};"
             onclick="openDetail('${it.s.id}')">
-            ${showText?`<span class="tl-pill-emoji">${it.s.actEmoji}</span>`:''}
-            ${width>12?`<span class="tl-pill-name" style="color:${color};">${esc(it.s.actName)}</span>`:''}
-            ${width>20?`<span class="tl-pill-dur" style="color:${color};">${fmtS(it.s.duration)}</span>`:''}
+            ${showEmoji?`<span class="tl-pill-emoji">${it.s.actEmoji}</span>`:''}
+            ${showName?`<span class="tl-pill-name" style="color:${color};">${esc(it.s.actName)}</span>`:''}
+            ${showDur?`<span class="tl-pill-dur" style="color:${color};">${fmtS(it.s.duration)}</span>`:''}
           </div>`;
         });
         html+=`</div>`;
       }
-      html+=`</div></div>`; // .tl-lanes .tl-ruler
+      // Red "now" line — only in the block that contains the current time
+      const nowH=new Date().getHours(), nowM=new Date().getMinutes();
+      const nowMin=nowH*60+nowM;
+      let nowInBlock=false;
+      if(blk.id==='night'){
+        nowInBlock=(nowH>=22)||(nowH<7);
+      } else {
+        nowInBlock=nowH>=blk.startH&&nowH<blk.endH;
+      }
+      if(nowInBlock&&diaDate.toDateString()===new Date().toDateString()){
+        let nowBlockMin=nowMin;
+        if(blk.id==='night'&&nowH<7) nowBlockMin=nowMin+24*60;
+        const nowPx=Math.round((nowBlockMin-blockStartMin)*pxPerMin);
+        html+=`<div id="tl-now-line" style="position:absolute;left:${nowPx}px;top:0;bottom:0;width:2px;background:var(--red);opacity:.8;pointer-events:none;z-index:10;">
+          <div style="position:absolute;top:-4px;left:-4px;width:10px;height:10px;background:var(--red);border-radius:50%;"></div>
+        </div>`;
+      }
+      html+=`</div></div></div>`; // lanes, ruler-wrap, scroll-wrap
     }
   });
 
