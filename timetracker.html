@@ -464,6 +464,21 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
 </button>
 
+<!-- ── EDIT IDEAL TIME MODAL ── -->
+<div class="overlay" id="editIdealModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" style="font-size:14px;" id="editIdealTitle">Tiempo ideal</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <input type="number" id="eiHours" placeholder="h" min="0" max="24" style="text-align:center;font-size:18px;font-family:var(--mono);">
+      <input type="number" id="eiMins"  placeholder="m" min="0" max="59" style="text-align:center;font-size:18px;font-family:var(--mono);">
+    </div>
+    <button class="mbtn" onclick="confirmEditIdeal()">Guardar</button>
+    <button class="mcancel" style="color:var(--red);" onclick="clearIdeal()">Quitar tiempo ideal</button>
+    <button class="mcancel" onclick="closeModal('editIdealModal')">Cancelar</button>
+  </div>
+</div>
+
 <!-- ── SLEEP TIME MODAL ── -->
 <div class="overlay" id="sleepModal">
   <div class="modal">
@@ -934,11 +949,11 @@ function renderPlanned(){
       const rem=over?spent-p.idealSecs:p.idealSecs-spent;
       progressHtml=`
         <div class="pc-progress"><div class="pc-progress-fill${over?' over':''}" style="width:${Math.min(pct,100)}%"></div></div>`;
-      var metaBadges=`<span class="pc-ideal">⏱ ${fmtS(p.idealSecs)}</span>
+      var metaBadges=`<span class="pc-ideal" onclick="openEditIdeal('${p.id}')" title="Editar tiempo ideal" style="cursor:pointer;">⏱ ${fmtS(p.idealSecs)}</span>
         <span class="pc-spent">${fmtS(spent)}</span>
         <span class="pc-remaining ${over?'over':'under'}">${over?'+':'-'}${fmtS(rem)}</span>`;
     } else {
-      var metaBadges=spent>0?`<span class="pc-spent">${fmtS(spent)} transcurridos</span>`:'';
+      var metaBadges=spent>0?`<span class="pc-spent" onclick="openEditIdeal('${p.id}')" style="cursor:pointer;">${fmtS(spent)} · <span style="color:var(--text3);font-size:9px;">+ ideal</span></span>`:`<span onclick="openEditIdeal('${p.id}')" style="cursor:pointer;font-size:9px;color:var(--text3);font-family:var(--mono);">+ tiempo ideal</span>`;
     }
 
     const subtasksHtml=p.subtasks.length?`<div class="subtasks">
@@ -1941,6 +1956,30 @@ function getSleepTime(){
 function setSleepTime(hhmm){
   const key='sleep_'+new Date().toDateString();
   localStorage.setItem(key,hhmm);
+}
+
+function openEditIdeal(pid){
+  const p=S.planned.find(x=>x.id===pid);if(!p)return;
+  pendingActId=pid; // reuse pendingActId as temp storage
+  const act=S.activities.find(a=>a.id===p.actId);
+  document.getElementById('editIdealTitle').textContent=(act?act.emoji+' '+act.name:'')+ ' · tiempo ideal';
+  const h=p.idealSecs?Math.floor(p.idealSecs/3600):0;
+  const m=p.idealSecs?Math.floor((p.idealSecs%3600)/60):0;
+  document.getElementById('eiHours').value=h||'';
+  document.getElementById('eiMins').value=m||'';
+  openModal('editIdealModal');
+}
+function confirmEditIdeal(){
+  const p=S.planned.find(x=>x.id===pendingActId);if(!p)return;
+  const h=parseInt(document.getElementById('eiHours').value)||0;
+  const m=parseInt(document.getElementById('eiMins').value)||0;
+  p.idealSecs=(h*3600+m*60)||0;
+  save();closeModal('editIdealModal');renderPlanned();renderDayMeta();
+}
+function clearIdeal(){
+  const p=S.planned.find(x=>x.id===pendingActId);if(!p)return;
+  p.idealSecs=0;
+  save();closeModal('editIdealModal');renderPlanned();renderDayMeta();
 }
 
 function openSleepPicker(){
