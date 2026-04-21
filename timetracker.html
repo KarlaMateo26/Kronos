@@ -607,7 +607,7 @@ function initState(){
     if(s.currentWeek!==wk){s.activities.forEach(a=>a.weekTotal=0);s.currentWeek=wk;}
     return s;
   }
-  return{activities:DEFAULT_ACTS.map(a=>({...a,weekTotal:0})),sessions:[],planned:[],running:{},currentWeek:wk};
+  return{activities:DEFAULT_ACTS.map(a=>({...a,weekTotal:0})),sessions:[],planned:[],running:{},prefs:{},currentWeek:wk};
 }
 let S=initState();
 let timers={}; // rKey -> intervalId
@@ -675,14 +675,38 @@ function pullFromCloud(){
       delete window[cbName];
       if(script.parentNode)script.parentNode.removeChild(script);
       if(data&&data.ok&&data.state){
-        var localRunning=S.running;
-        S=Object.assign({},data.state,{running:localRunning});
+        var cloud=data.state;
+        var localRunning=S.running||{};
+        var cloudRunning=cloud.running||{};
+
+        // Merge running: for each key, keep whichever has the more recent startTime
+        var mergedRunning={};
+        var allKeys=new Set(Object.keys(localRunning).concat(Object.keys(cloudRunning)));
+        allKeys.forEach(function(k){
+          var loc=localRunning[k], cld=cloudRunning[k];
+          if(loc&&cld){
+            // keep the one with more accumulated time (more recent activity)
+            var locTotal=(loc.lapTotal||0)+(loc.paused?0:Math.floor((Date.now()-new Date(loc.startTime).getTime())/1000));
+            var cldTotal=(cld.lapTotal||0)+(cld.paused?0:Math.floor((Date.now()-new Date(cld.startTime).getTime())/1000));
+            mergedRunning[k]=cldTotal>=locTotal?cld:loc;
+          } else {
+            mergedRunning[k]=loc||cld;
+          }
+        });
+
+        S=Object.assign({},cloud,{running:mergedRunning});
         var wk=getWk();
         if(S.currentWeek!==wk){S.activities.forEach(function(a){a.weekTotal=0;});S.currentWeek=wk;}
         if(!S.sessions)S.sessions=[];
         if(!S.planned)S.planned=[];
         if(!S.running)S.running={};
+        if(!S.prefs)S.prefs={};
         localStorage.setItem(SK,JSON.stringify(S));
+        // restart ticks for any running sessions
+        Object.keys(S.running).forEach(function(k){
+          var ctx=S.running[k];
+          if(ctx&&!ctx.paused&&!timers[k])startTick(k);
+        });
         renderAll();
         _updateSyncDot(true);
       } else {
@@ -1981,14 +2005,21 @@ function renderTimeline(){
 //  DAY META BAR (date + sleep time + available hours)
 // ═══════════════════════════════════════════════════════
 function getSleepTime(){
-  // stored as "HH:MM" per day key
-  const key='sleep_'+new Date().toDateString();
-  return localStorage.getItem(key)||null;
+  // stored in S.prefs keyed by date — syncs across devices
+  const key=new Date().toDateString();
+  return (S.prefs&&S.prefs.sleep&&S.prefs.sleep[key])||null;
 }
 
 function setSleepTime(hhmm){
-  const key='sleep_'+new Date().toDateString();
-  localStorage.setItem(key,hhmm);
+  if(!S.prefs) S.prefs={};
+  if(!S.prefs.sleep) S.prefs.sleep={};
+  const key=new Date().toDateString();
+  S.prefs.sleep[key]=hhmm;
+  // keep only last 7 days to avoid bloat
+  const keys=Object.keys(S.prefs.sleep);
+  if(keys.length>7){
+    keys.sort().slice(0,keys.length-7).forEach(k=>delete S.prefs.sleep[k]);
+  }
 }
 
 function openEditIdeal(pid){
@@ -2105,6 +2136,23 @@ function esc(s){if(!s)return'';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;
 // ═══════════════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════════════
+// Auto-pull every 5s when running sessions exist on cloud
+var _autoPullInterval=null;
+function startAutoPull(){
+  if(_autoPullInterval)return;
+  _autoPullInterval=setInterval(function(){
+    // only pull if page is visible and we have running sessions or cloud might have them
+    if(document.hidden)return;
+    pullFromCloud();
+  },5000);
+}
+function stopAutoPull(){
+  clearInterval(_autoPullInterval);
+  _autoPullInterval=null;
+}
+// start auto-pull always — it's lightweight (JSONP, no CORS)
+startAutoPull();
+
 // Hidden iframe for form POST (avoids CORS on all browsers)
 var _kronosFrame=document.createElement('iframe');
 _kronosFrame.name='_kronosFrame';
