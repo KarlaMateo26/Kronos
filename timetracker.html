@@ -633,24 +633,32 @@ function syncToCloud(){
 }
 
 function _pushToCloud(){
-  // Use a hidden form POST — bypasses CORS entirely, works everywhere
-  try{
-    const data=JSON.stringify(S);
-    const form=document.createElement('form');
-    form.method='POST';
-    form.action=API_URL;
-    form.target='_kronosFrame'; // post into hidden iframe, no navigation
-    form.style.display='none';
-    const inp=document.createElement('input');
-    inp.type='hidden';inp.name='state';inp.value=data;
-    form.appendChild(inp);
-    document.body.appendChild(form);
-    form.submit();
-    document.body.removeChild(form);
+  // Try fetch first (works on desktop), fall back to form POST (mobile)
+  var payload=JSON.stringify({state:S});
+  fetch(API_URL,{
+    method:'POST',
+    mode:'no-cors',
+    headers:{'Content-Type':'text/plain'},
+    body:payload
+  }).then(function(){
     _updateSyncDot(true);
-  }catch(e){
-    _updateSyncDot(false);
-  }
+  }).catch(function(){
+    // fallback: form POST via hidden iframe
+    try{
+      var form=document.createElement('form');
+      form.method='POST';form.action=API_URL;
+      form.target='_kronosFrame';form.style.display='none';
+      var inp=document.createElement('input');
+      inp.type='hidden';inp.name='state';inp.value=JSON.stringify(S);
+      form.appendChild(inp);
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
+      _updateSyncDot(true);
+    }catch(e2){
+      _updateSyncDot(false);
+    }
+  });
 }
 
 function pullFromCloud(){
@@ -785,7 +793,16 @@ function pullFromCloud(){
           var ctx=S.running[k];
           if(ctx&&!ctx.paused&&!timers[k])startTick(k);
         });
-        renderAll();
+        // Don't disrupt open modals — only render if no modal is visible
+        var anyModalOpen=document.querySelector('.overlay.show');
+        if(!anyModalOpen){
+          renderAll();
+        } else {
+          // just update running cards and week grid silently
+          renderRunning();
+          renderWeekGrid();
+          renderDayMeta();
+        }
         _updateSyncDot(true);
       } else {
         _updateSyncDot(false);
