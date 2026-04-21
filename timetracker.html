@@ -114,6 +114,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 
 .empty-planned{text-align:center;padding:20px;color:var(--text3);font-size:11px;font-family:var(--mono);}
 
+/* day meta bar */
+.day-meta{display:flex;align-items:center;gap:0;padding:6px 16px 0;justify-content:space-between;}
+.day-meta-date{font-size:10px;color:var(--text3);font-family:var(--mono);}
+.day-meta-right{display:flex;align-items:center;gap:8px;}
+.day-meta-sleep{display:flex;align-items:center;gap:4px;cursor:pointer;touch-action:manipulation;}
+.day-meta-sleep-icon{font-size:10px;color:var(--text3);}
+.day-meta-sleep-time{font-size:10px;color:var(--text3);font-family:var(--mono);border-bottom:1px dashed var(--border2);}
+.day-meta-avail{font-size:10px;font-family:var(--mono);}
+.day-meta-avail.ok{color:var(--green);}
+.day-meta-avail.warn{color:var(--amber);}
+.day-meta-avail.over{color:var(--red);}
+.day-meta-sep{font-size:10px;color:var(--border2);}
+
 /* ─────────────────────────────────────────
    RUNNING CARDS
 ───────────────────────────────────────── */
@@ -192,8 +205,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .act-play-btn:active{transform:scale(.88);}
 .act-play-btn svg{fill:white;width:14px;height:14px;margin-left:1px;}
 .act-del-btn{width:28px;height:28px;background:var(--red-dim);border:1px solid var(--red);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all .2s;touch-action:manipulation;color:var(--red);font-size:13px;line-height:1;opacity:0;pointer-events:none;transform:scale(.6);}
-.act-row.act-editing .act-del-btn{opacity:1;pointer-events:auto;transform:scale(1);}
+.act-edit-btn{width:28px;height:28px;background:var(--accent-dim);border:1px solid var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all .2s;touch-action:manipulation;color:var(--accent);font-size:13px;line-height:1;opacity:0;pointer-events:none;transform:scale(.6);}
+.act-row.act-editing .act-del-btn,.act-row.act-editing .act-edit-btn{opacity:1;pointer-events:auto;transform:scale(1);}
 .act-del-btn:active{transform:scale(.88);}
+.act-edit-btn:active{transform:scale(.88);}
 
 /* ─────────────────────────────────────────
    HISTORY
@@ -253,6 +268,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .emoji-grid{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;justify-content:center;}
 .ep{width:40px;height:40px;background:var(--s0);border:2px solid transparent;border-radius:9px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;touch-action:manipulation;}
 .ep.sel{border-color:var(--accent);background:var(--accent-dim);}
+.color-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;justify-content:center;}
+.cp{width:32px;height:32px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:all .15s;touch-action:manipulation;flex-shrink:0;}
+.cp.sel{border-color:#fff;transform:scale(1.15);}
 .mbtn{width:100%;background:var(--accent);color:#fff;border:none;border-radius:12px;padding:14px;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer;touch-action:manipulation;transition:all .2s;}
 .mbtn:active{opacity:.85;transform:scale(.98);}
 .mcancel{width:100%;background:transparent;color:var(--text3);border:none;padding:11px;font-family:var(--sans);font-size:13px;cursor:pointer;margin-top:5px;touch-action:manipulation;}
@@ -350,6 +368,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 
   <!-- PLANNED -->
   <div class="sec-lbl">planeado hoy <span id="plannedCount"></span></div>
+  <div class="day-meta">
+    <div class="day-meta-date" id="dayMetaDate"></div>
+    <div class="day-meta-right">
+      <div class="day-meta-sleep" onclick="openSleepPicker()">
+        <span class="day-meta-sleep-icon">🌙</span>
+        <span class="day-meta-sleep-time" id="sleepTimeLabel">--:--</span>
+      </div>
+      <span class="day-meta-sep">·</span>
+      <div class="day-meta-avail" id="dayMetaAvail"></div>
+    </div>
+  </div>
   <div class="planned-list" id="plannedList">
     <div class="empty-planned">// Añade actividades con el botón "Today" ↓</div>
   </div>
@@ -430,6 +459,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
 </button>
 
+<!-- ── SLEEP TIME MODAL ── -->
+<div class="overlay" id="sleepModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" style="font-size:14px;">🌙 ¿A qué hora dormirás?</div>
+    <input type="time" id="sleepTimeInput" style="text-align:center;font-size:18px;padding:14px;font-family:var(--mono);">
+    <button class="mbtn" onclick="confirmSleepTime()">Listo</button>
+    <button class="mcancel" onclick="closeModal('sleepModal')">Cancelar</button>
+  </div>
+</div>
+
 <!-- ── ADD ACTIVITY MODAL ── -->
 <div class="overlay" id="addActModal">
   <div class="modal">
@@ -438,6 +478,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
     <div class="field"><label>Nombre</label><input type="text" id="aName" placeholder="Nombre" maxlength="30"></div>
     <div style="font-size:10px;color:var(--text3);margin-bottom:7px;text-align:center;letter-spacing:1px;text-transform:uppercase;font-family:var(--mono);">Emoji</div>
     <div class="emoji-grid" id="emojiGrid"></div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:7px;text-align:center;letter-spacing:1px;text-transform:uppercase;font-family:var(--mono);">Color</div>
+    <div class="color-grid" id="colorGrid"></div>
     <button class="mbtn" onclick="confirmAddAct()">Agregar</button>
     <button class="mcancel" onclick="closeModal('addActModal')">Cancelar</button>
   </div>
@@ -543,6 +585,8 @@ function initState(){
 let S=initState();
 let timers={}; // rKey -> intervalId
 let selEmoji=EMOJIS[0];
+const ACT_PALETTE=['#6c63ff','#ff5fa0','#2dd4c0','#f59e0b','#1db954','#ff4f6a','#a78bfa','#fb923c','#38bdf8','#e879f9','#84cc16','#f43f5e','#06b6d4','#f97316','#8b5cf6','#10b981'];
+let selColor=ACT_PALETTE[0];
 let pendingActId=null;   // for add-planned modal
 let pendingSessKey=null; // for session name modal
 let activeDetailId=null;
@@ -847,7 +891,7 @@ function setDeviation(rKey,realActId){
 //  RENDER
 // ═══════════════════════════════════════════════════════
 function renderAll(){
-  renderWeekBadge();renderPlanned();renderRunning();renderWeekGrid();renderActList();
+  renderWeekBadge();renderPlanned();renderRunning();renderWeekGrid();renderActList();renderDayMeta();
   if(document.getElementById('page-history').classList.contains('active'))renderHistory();
 }
 
@@ -1192,6 +1236,7 @@ function renderActList(){
         <button class="act-today-btn ${added?'added':''}" onclick="openAddPlanned('${a.id}')">
           ${added?'✓ En plan':'+ Today'}
         </button>
+        <button class="act-edit-btn" onclick="openAddAct('${a.id}')" title="Editar">✎</button>
         <button class="act-del-btn" onclick="deleteActivity('${a.id}')" title="Eliminar">✕</button>
         <button class="act-play-btn" onclick="startActivity('${a.id}',null,null)">
           <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -1307,16 +1352,30 @@ function saveDetailNote(){
 // ═══════════════════════════════════════════════════════
 //  ADD ACTIVITY MODAL
 // ═══════════════════════════════════════════════════════
-function openAddAct(){
+function openAddAct(editActId){
+  const act=editActId?S.activities.find(a=>a.id===editActId):null;
+  selEmoji=act?act.emoji:EMOJIS[0];
+  selColor=act?act.color||ACT_PALETTE[0]:ACT_PALETTE[0];
   document.getElementById('emojiGrid').innerHTML=EMOJIS.map(e=>`
     <div class="ep ${e===selEmoji?'sel':''}" onclick="selEp('${e}')">${e}</div>`).join('');
-  document.getElementById('aName').value='';
+  document.getElementById('colorGrid').innerHTML=ACT_PALETTE.map(col=>`
+    <div class="cp ${col===selColor?'sel':''}" style="background:${col};" onclick="selCol('${col}')"></div>`).join('');
+  document.getElementById('aName').value=act?act.name:'';
+  document.getElementById('addActModal').dataset.editId=editActId||'';
+  document.querySelector('#addActModal .modal-title').textContent=editActId?'Editar actividad':'Nueva actividad';
   openModal('addActModal');
 }
 function selEp(e){selEmoji=e;document.querySelectorAll('.ep').forEach(el=>el.classList.toggle('sel',el.textContent===e));}
+function selCol(col){selColor=col;document.querySelectorAll('.cp').forEach(el=>el.classList.toggle('sel',el.style.background===col||el.style.backgroundColor===col));}
 function confirmAddAct(){
   const n=document.getElementById('aName').value.trim();if(!n)return;
-  S.activities.push({id:'act_'+Date.now(),name:n,emoji:selEmoji,weekTotal:0});
+  const editId=document.getElementById('addActModal').dataset.editId;
+  if(editId){
+    const act=S.activities.find(a=>a.id===editId);
+    if(act){act.name=n;act.emoji=selEmoji;act.color=selColor;}
+  } else {
+    S.activities.push({id:'act_'+Date.now(),name:n,emoji:selEmoji,color:selColor,weekTotal:0});
+  }
   save();closeModal('addActModal');renderAll();
 }
 
@@ -1422,10 +1481,26 @@ function parseImportCSV(text){
     const endStr=get('fin');
     if(!actName||!startStr||!endStr) continue;
 
-    // Parse dates
-    const startTime=new Date(startStr);
-    const endTime=new Date(endStr);
-    if(isNaN(startTime)||isNaN(endTime)){errors.push(`Fila ${i+1}: fecha inválida`);continue;}
+    // Parse dates - handle Mexican locale "20/4/2026, 5:20:09 p.m."
+    function parseAnyDate(str){
+      if(!str) return null;
+      var d=new Date(str);
+      if(!isNaN(d)) return d;
+      // try mexican: DD/MM/YYYY, HH:MM:SS a.m./p.m.
+      var s=str.replace(/[\u00a0]/g,' ').trim();
+      var m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?/i);
+      if(m){
+        var h=parseInt(m[4]),mn=parseInt(m[5]),sc=parseInt(m[6]||0);
+        var ap=(m[7]||'').replace(/\./g,'').toLowerCase();
+        if(ap==='pm'&&h<12) h+=12;
+        if(ap==='am'&&h===12) h=0;
+        return new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1]),h,mn,sc);
+      }
+      return null;
+    }
+    const startTime=parseAnyDate(startStr);
+    const endTime=parseAnyDate(endStr);
+    if(!startTime||isNaN(startTime)||!endTime||isNaN(endTime)){errors.push('Fila '+(i+1)+': fecha invalida');continue;}
 
     const durSecs=Math.round((endTime-startTime)/1000);
     if(durSecs<0){errors.push(`Fila ${i+1}: duración negativa`);continue;}
@@ -1575,8 +1650,10 @@ var diaDate=new Date();    // date shown in timeline
 // Palette: cycle through accent colors per activity
 const ACT_COLORS=['#6c63ff','#ff5fa0','#2dd4c0','#f59e0b','#1db954','#ff4f6a','#a78bfa','#fb923c'];
 function actColor(actId){
+  const act=S.activities.find(a=>a.id===actId);
+  if(act&&act.color) return act.color;
   const idx=S.activities.findIndex(a=>a.id===actId);
-  return ACT_COLORS[((idx>=0?idx:0))%ACT_COLORS.length];
+  return ACT_PALETTE[((idx>=0?idx:0))%ACT_PALETTE.length];
 }
 
 function setDiaView(v){
@@ -1813,6 +1890,87 @@ function renderTimeline(){
   html+='</div>';
   el.innerHTML=html;
 }
+
+// ═══════════════════════════════════════════════════════
+//  DAY META BAR (date + sleep time + available hours)
+// ═══════════════════════════════════════════════════════
+function getSleepTime(){
+  // stored as "HH:MM" per day key
+  const key='sleep_'+new Date().toDateString();
+  return localStorage.getItem(key)||null;
+}
+
+function setSleepTime(hhmm){
+  const key='sleep_'+new Date().toDateString();
+  localStorage.setItem(key,hhmm);
+}
+
+function openSleepPicker(){
+  const cur=getSleepTime();
+  document.getElementById('sleepTimeInput').value=cur||'22:00';
+  openModal('sleepModal');
+}
+
+function confirmSleepTime(){
+  const val=document.getElementById('sleepTimeInput').value;
+  if(!val){closeModal('sleepModal');return;}
+  setSleepTime(val);
+  closeModal('sleepModal');
+  renderDayMeta();
+}
+
+function renderDayMeta(){
+  // Date label
+  const now=new Date();
+  const dateLbl=now.toLocaleDateString('es-MX',{weekday:'short',day:'2-digit',month:'2-digit'});
+  const el=document.getElementById('dayMetaDate');
+  if(el) el.textContent=dateLbl;
+
+  // Sleep time & available hours
+  const sleepEl=document.getElementById('sleepTimeLabel');
+  const availEl=document.getElementById('dayMetaAvail');
+  const sleepHHMM=getSleepTime();
+
+  if(!sleepHHMM){
+    if(sleepEl) sleepEl.textContent='--:--';
+    if(availEl){availEl.textContent='';availEl.className='day-meta-avail';}
+    return;
+  }
+
+  if(sleepEl) sleepEl.textContent=sleepHHMM;
+
+  // Compute available minutes from now until sleep
+  const [sh,sm]=sleepHHMM.split(':').map(Number);
+  const sleepDate=new Date();
+  sleepDate.setHours(sh,sm,0,0);
+  // if sleep time is before now (e.g. midnight), add a day
+  if(sleepDate<=now) sleepDate.setDate(sleepDate.getDate()+1);
+  const availMins=Math.floor((sleepDate-now)/60000);
+
+  // Subtract planned ideal time
+  const todayPlanned=S.planned.filter(p=>new Date(p.addedAt).toDateString()===now.toDateString()&&!p.done);
+  const plannedMins=Math.floor(todayPlanned.reduce((t,p)=>t+(p.idealSecs||0),0)/60);
+  const freeMins=availMins-plannedMins;
+
+  function mToStr(m){
+    if(m<0) return '-'+mToStr(-m);
+    if(m<60) return m+'m';
+    return Math.floor(m/60)+'h '+(m%60)+'m';
+  }
+
+  if(availEl){
+    if(plannedMins>0){
+      availEl.textContent=mToStr(freeMins)+' libres';
+      availEl.className='day-meta-avail '+(freeMins<0?'over':freeMins<60?'warn':'ok');
+    } else {
+      availEl.textContent=mToStr(availMins)+' hasta dormir';
+      availEl.className='day-meta-avail ok';
+    }
+  }
+}
+
+// update meta every minute
+setInterval(renderDayMeta, 60000);
 
 // ═══════════════════════════════════════════════════════
 //  NAV + MODAL UTILS
