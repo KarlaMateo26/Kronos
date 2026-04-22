@@ -673,7 +673,7 @@ function initState(){
     if(s.currentWeek!==wk){s.activities.forEach(a=>a.weekTotal=0);s.currentWeek=wk;}
     return s;
   }
-  return{activities:DEFAULT_ACTS.map(a=>({...a,weekTotal:0})),sessions:[],planned:[],running:{},prefs:{},currentWeek:wk};
+  return{activities:DEFAULT_ACTS.map(a=>({...a,weekTotal:0})),sessions:[],planned:[],running:{},prefs:{},deletedIds:[],currentWeek:wk};
 }
 let S=initState();
 let timers={}; // rKey -> intervalId
@@ -778,17 +778,27 @@ function pullFromCloud(){
         var mergedSleep=Object.assign({},cloudSleep,localSleep); // local wins (was set most recently)
         mergedPrefs.sleep=mergedSleep;
 
-        // ── Merge sessions: union by id, no duplicates ──
+        // ── Merge deletedIds: union of both tombstone lists ──
+        var localDeleted=S.deletedIds||[];
+        var cloudDeleted=cloud.deletedIds||[];
+        var deletedSet=new Set([...localDeleted,...cloudDeleted]);
+
+        // ── Merge sessions: union by id, exclude tombstones ──
         var localSessions=S.sessions||[];
         var cloudSessions=cloud.sessions||[];
         var sessMap={};
-        cloudSessions.forEach(function(s){sessMap[s.id]=s;});
+        cloudSessions.forEach(function(s){
+          if(!deletedSet.has(s.id)) sessMap[s.id]=s;
+        });
         localSessions.forEach(function(s){
-          if(!sessMap[s.id]) sessMap[s.id]=s; // local-only session kept
-          else {
-            // prefer whichever has a note or longer duration
+          if(deletedSet.has(s.id)) return; // skip deleted
+          if(!sessMap[s.id]){
+            sessMap[s.id]=s;
+          } else {
+            // prefer whichever has a note, or longer duration, or more recent edit
             var existing=sessMap[s.id];
             if(s.note&&!existing.note) sessMap[s.id]=s;
+            else if(s.duration>existing.duration) sessMap[s.id]=s;
           }
         });
         var mergedSessions=Object.values(sessMap).sort(function(a,b){
@@ -845,7 +855,8 @@ function pullFromCloud(){
           prefs:mergedPrefs,
           sessions:mergedSessions,
           planned:mergedPlanned,
-          activities:mergedActs
+          activities:mergedActs,
+          deletedIds:[...deletedSet]
         });
         var wk=getWk();
         if(S.currentWeek!==wk){S.activities.forEach(function(a){a.weekTotal=0;});S.currentWeek=wk;}
@@ -853,6 +864,7 @@ function pullFromCloud(){
         if(!S.planned)S.planned=[];
         if(!S.running)S.running={};
         if(!S.prefs)S.prefs={};
+        if(!S.deletedIds)S.deletedIds=[];
         localStorage.setItem(SK,JSON.stringify(S));
         // restart ticks for any running sessions
         Object.keys(S.running).forEach(function(k){
@@ -1219,8 +1231,10 @@ function _commitLap(ctx,startISO,endISO,secs,lapName){
   const planned=ctx.plannedId?S.planned.find(p=>p.id===ctx.plannedId):null;
   const subtask=planned&&ctx.subtaskId?planned.subtasks.find(s=>s.id===ctx.subtaskId):null;
   const realAct=ctx.realActId?S.activities.find(a=>a.id===ctx.realActId):null;
+  // Stable ID: based on startTime + actId + lapCount so both devices agree on same session
+  const stableId='s_'+ctx.actId.slice(-6)+'_'+new Date(startISO).getTime()+'_'+(ctx.lapCount||0);
   S.sessions.unshift({
-    id:genId(),groupId:ctx.rKey,
+    id:stableId,groupId:ctx.rKey,
     actId:ctx.actId,actName:ctx.actName,actEmoji:ctx.actEmoji,
     plannedId:ctx.plannedId||null,
     subtaskId:ctx.subtaskId||null,subtaskName:subtask?subtask.text:null,
@@ -2146,8 +2160,12 @@ function deleteSession(){
   const act=S.activities.find(a=>a.id===s.actId);
   if(act) act.weekTotal=Math.max(0,(act.weekTotal||0)-s.duration);
   S.sessions=S.sessions.filter(x=>x.id!==activeDetailId);
+  // tombstone: remember this ID was deleted so merge never restores it
+  if(!S.deletedIds) S.deletedIds=[];
+  S.deletedIds.push(activeDetailId);
+  if(S.deletedIds.length>500) S.deletedIds=S.deletedIds.slice(-500); // cap
   save();
-  _pushToCloud(); // immediate push so auto-pull doesn't restore it
+  _pushToCloud();
   renderHistory();renderWeekGrid();closeModal('detailModal');
 }
 
@@ -2155,10 +2173,13 @@ function deleteSessionGroup(groupId){
   const grp=S.sessions.filter(x=>x.groupId===groupId);
   if(!grp.length)return;
   if(!confirm(`¿Eliminar ${grp.length>1?`esta sesión (${grp.length} laps)`:'este registro'}?`))return;
+  if(!S.deletedIds) S.deletedIds=[];
   grp.forEach(gs=>{
     const act=S.activities.find(a=>a.id===gs.actId);
     if(act) act.weekTotal=Math.max(0,(act.weekTotal||0)-gs.duration);
+    S.deletedIds.push(gs.id);
   });
+  if(S.deletedIds.length>500) S.deletedIds=S.deletedIds.slice(-500);
   S.sessions=S.sessions.filter(x=>x.groupId!==groupId);
   save();
   _pushToCloud();
