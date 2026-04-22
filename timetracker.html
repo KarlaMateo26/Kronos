@@ -690,6 +690,17 @@ function save(){
   syncToCloud();
 }
 
+function recalcWeekTotals(){
+  const wk=getWk();
+  S.activities.forEach(a=>a.weekTotal=0);
+  S.sessions.forEach(s=>{
+    if(getWkFromDate(new Date(s.startTime))===wk){
+      const act=S.activities.find(a=>a.id===s.actId);
+      if(act) act.weekTotal=(act.weekTotal||0)+s.duration;
+    }
+  });
+}
+
 // ── CLOUD SYNC (JSONP for GET, form POST for write — works on all browsers) ──
 var _syncTimer=null;
 
@@ -753,16 +764,26 @@ function pullFromCloud(){
         var localRunning=S.running||{};
         var cloudRunning=cloud.running||{};
 
-        // Merge running: for each key, keep whichever has the more recent startTime
+        // Merge running: use the most recently modified state
+        // Use pausedAt or startTime to determine which is newer
         var mergedRunning={};
         var allKeys=new Set(Object.keys(localRunning).concat(Object.keys(cloudRunning)));
         allKeys.forEach(function(k){
           var loc=localRunning[k], cld=cloudRunning[k];
           if(loc&&cld){
-            // keep the one with more accumulated time (more recent activity)
-            var locTotal=(loc.lapTotal||0)+(loc.paused?0:Math.floor((Date.now()-new Date(loc.startTime).getTime())/1000));
-            var cldTotal=(cld.lapTotal||0)+(cld.paused?0:Math.floor((Date.now()-new Date(cld.startTime).getTime())/1000));
-            mergedRunning[k]=cldTotal>=locTotal?cld:loc;
+            // Compare by most recent action timestamp
+            var locTs=new Date(loc.pausedAt||loc.startTime).getTime();
+            var cldTs=new Date(cld.pausedAt||cld.startTime).getTime();
+            // Cloud wins if it has a more recent pausedAt (pause happened on other device)
+            // Also prefer paused state if lapTotal is same (safer)
+            if(cldTs>locTs){
+              mergedRunning[k]=cld;
+            } else if(locTs>cldTs){
+              mergedRunning[k]=loc;
+            } else {
+              // Same timestamp — prefer paused (conservative)
+              mergedRunning[k]=(cld.paused?cld:loc);
+            }
           } else {
             mergedRunning[k]=loc||cld;
           }
@@ -866,10 +887,20 @@ function pullFromCloud(){
         if(!S.prefs)S.prefs={};
         if(!S.deletedIds)S.deletedIds=[];
         localStorage.setItem(SK,JSON.stringify(S));
-        // restart ticks for any running sessions
+        // sync tick state: start for running, stop for paused
         Object.keys(S.running).forEach(function(k){
           var ctx=S.running[k];
-          if(ctx&&!ctx.paused&&!timers[k])startTick(k);
+          if(!ctx)return;
+          if(ctx.paused){
+            // stop tick if running
+            if(timers[k]){clearInterval(timers[k]);delete timers[k];}
+          } else {
+            if(!timers[k])startTick(k);
+          }
+        });
+        // stop ticks for sessions that were removed (ended on other device)
+        Object.keys(timers).forEach(function(k){
+          if(!S.running[k]){clearInterval(timers[k]);delete timers[k];}
         });
         // Don't disrupt open modals — only render if no modal is visible
         var anyModalOpen=document.querySelector('.overlay.show');
@@ -2065,9 +2096,21 @@ function renderHistory(){
     html+=`</div>`;
   }
   list.innerHTML=html;
+  // Restore open groups
+  _openLapGroups.forEach(function(gid){
+    const el=document.getElementById('lg_'+gid);
+    if(el) el.classList.add('open');
+  });
 }
 
-function toggleLapGrp(gid){document.getElementById('lg_'+gid)?.classList.toggle('open');}
+var _openLapGroups=new Set();
+function toggleLapGrp(gid){
+  const el=document.getElementById('lg_'+gid);
+  if(!el)return;
+  const open=el.classList.toggle('open');
+  if(open)_openLapGroups.add(gid);
+  else _openLapGroups.delete(gid);
+}
 
 function updateFilterOpts(){
   const sel=document.getElementById('filterSel');
@@ -2157,13 +2200,12 @@ function saveDetailNote(){
 function deleteSession(){
   const s=S.sessions.find(x=>x.id===activeDetailId);if(!s)return;
   if(!confirm('¿Eliminar este registro?'))return;
-  const act=S.activities.find(a=>a.id===s.actId);
-  if(act) act.weekTotal=Math.max(0,(act.weekTotal||0)-s.duration);
   S.sessions=S.sessions.filter(x=>x.id!==activeDetailId);
-  // tombstone: remember this ID was deleted so merge never restores it
+  // tombstone
   if(!S.deletedIds) S.deletedIds=[];
   S.deletedIds.push(activeDetailId);
-  if(S.deletedIds.length>500) S.deletedIds=S.deletedIds.slice(-500); // cap
+  if(S.deletedIds.length>500) S.deletedIds=S.deletedIds.slice(-500);
+  recalcWeekTotals(); // recalculate from scratch — more accurate than subtracting
   save();
   _pushToCloud();
   renderHistory();renderWeekGrid();closeModal('detailModal');
@@ -2174,13 +2216,10 @@ function deleteSessionGroup(groupId){
   if(!grp.length)return;
   if(!confirm(`¿Eliminar ${grp.length>1?`esta sesión (${grp.length} laps)`:'este registro'}?`))return;
   if(!S.deletedIds) S.deletedIds=[];
-  grp.forEach(gs=>{
-    const act=S.activities.find(a=>a.id===gs.actId);
-    if(act) act.weekTotal=Math.max(0,(act.weekTotal||0)-gs.duration);
-    S.deletedIds.push(gs.id);
-  });
+  grp.forEach(gs=>{ S.deletedIds.push(gs.id); });
   if(S.deletedIds.length>500) S.deletedIds=S.deletedIds.slice(-500);
   S.sessions=S.sessions.filter(x=>x.groupId!==groupId);
+  recalcWeekTotals();
   save();
   _pushToCloud();
   renderHistory();renderWeekGrid();
