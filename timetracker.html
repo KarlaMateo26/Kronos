@@ -239,6 +239,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .lap-grp.open .lg-expand{transform:rotate(180deg);}
 .lap-items{display:none;border-top:1px solid var(--border);}
 .lap-grp.open .lap-items{display:block;}
+.lap-grp{position:relative;}
+.lap-grp-del{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:var(--red-dim);border:1px solid var(--red);color:var(--red);border-radius:8px;padding:4px 10px;font-size:11px;cursor:pointer;display:none;z-index:5;touch-action:manipulation;}
+.lap-grp.lg-editing .lap-grp-del{display:block;}
+.lap-grp.lg-editing .lap-grp-hdr{opacity:.5;}
 .log-row{display:flex;align-items:center;padding:8px 12px;gap:8px;border-bottom:1px solid var(--border2);cursor:pointer;touch-action:manipulation;}
 .log-row:last-child{border-bottom:none;}
 .log-row:active{background:rgba(255,255,255,.02);}
@@ -1904,10 +1908,31 @@ function cancelLongPress(){
   clearTimeout(_lpTimer);_lpTimer=null;
 }
 
+// Long-press for history groups
+var _lapLpTimer=null;
+function startLapLongPress(gid){
+  cancelLapLongPress();
+  _lapLpTimer=setTimeout(()=>{
+    document.querySelectorAll('.lap-grp.lg-editing').forEach(el=>el.classList.remove('lg-editing'));
+    const el=document.getElementById('lg_'+gid);
+    if(el){
+      el.classList.add('lg-editing');
+      clearTimeout(el._hideTimer);
+      el._hideTimer=setTimeout(()=>el.classList.remove('lg-editing'),4000);
+    }
+  },600);
+}
+function cancelLapLongPress(){
+  clearTimeout(_lapLpTimer);_lapLpTimer=null;
+}
+
 // tap anywhere else hides the delete button
 document.addEventListener('pointerdown',function(e){
   if(!e.target.closest('.act-row')){
     document.querySelectorAll('.act-row.act-editing').forEach(r=>r.classList.remove('act-editing'));
+  }
+  if(!e.target.closest('.lap-grp')){
+    document.querySelectorAll('.lap-grp.lg-editing').forEach(r=>r.classList.remove('lg-editing'));
   }
 });
 
@@ -1986,8 +2011,13 @@ function renderHistory(){
       const sessName=first.sessionName||'';
       const hasNote=laps.some(l=>l.note&&l.note.trim());
       const hasDev=laps.some(l=>l.realActId);
-      html+=`<div class="lap-grp" id="lg_${gid}">
-        <div class="lap-grp-hdr" onclick="toggleLapGrp('${gid}')">
+      html+=`<div class="lap-grp" id="lg_${gid}"
+        onpointerdown="startLapLongPress('${gid}')"
+        onpointerup="cancelLapLongPress()"
+        onpointerleave="cancelLapLongPress()"
+        oncontextmenu="return false;">
+        <button class="lap-grp-del" onclick="event.stopPropagation();deleteSessionGroup('${gid}')">🗑 Eliminar</button>
+        <div class="lap-grp-hdr" onclick="if(!document.getElementById('lg_${gid}').classList.contains('lg-editing'))toggleLapGrp('${gid}')">
           <div class="lg-emoji">${first.actEmoji}</div>
           <div class="lg-info">
             <div class="lg-name">${first.actName}${sessName?` · <em style="color:var(--accent);font-style:normal;">${esc(sessName)}</em>`:''}</div>
@@ -2113,11 +2143,26 @@ function saveDetailNote(){
 function deleteSession(){
   const s=S.sessions.find(x=>x.id===activeDetailId);if(!s)return;
   if(!confirm('¿Eliminar este registro?'))return;
-  // subtract from weekTotal
   const act=S.activities.find(a=>a.id===s.actId);
   if(act) act.weekTotal=Math.max(0,(act.weekTotal||0)-s.duration);
   S.sessions=S.sessions.filter(x=>x.id!==activeDetailId);
-  save();renderHistory();renderWeekGrid();closeModal('detailModal');
+  save();
+  _pushToCloud(); // immediate push so auto-pull doesn't restore it
+  renderHistory();renderWeekGrid();closeModal('detailModal');
+}
+
+function deleteSessionGroup(groupId){
+  const grp=S.sessions.filter(x=>x.groupId===groupId);
+  if(!grp.length)return;
+  if(!confirm(`¿Eliminar ${grp.length>1?`esta sesión (${grp.length} laps)`:'este registro'}?`))return;
+  grp.forEach(gs=>{
+    const act=S.activities.find(a=>a.id===gs.actId);
+    if(act) act.weekTotal=Math.max(0,(act.weekTotal||0)-gs.duration);
+  });
+  S.sessions=S.sessions.filter(x=>x.groupId!==groupId);
+  save();
+  _pushToCloud();
+  renderHistory();renderWeekGrid();
 }
 
 // ═══════════════════════════════════════════════════════
