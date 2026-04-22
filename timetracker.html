@@ -764,29 +764,28 @@ function pullFromCloud(){
         var localRunning=S.running||{};
         var cloudRunning=cloud.running||{};
 
-        // Merge running: use the most recently modified state
-        // Use pausedAt or startTime to determine which is newer
+        // Merge running: cloud is the authority on ended sessions
+        // If a session exists locally but NOT in cloud → it was ended on another device → remove it
+        // If a session exists in cloud but NOT locally → it was started on another device → add it
+        // If it exists in both → use most recently modified state
         var mergedRunning={};
         var allKeys=new Set(Object.keys(localRunning).concat(Object.keys(cloudRunning)));
         allKeys.forEach(function(k){
           var loc=localRunning[k], cld=cloudRunning[k];
           if(loc&&cld){
-            // Compare by most recent action timestamp
+            // Both have it — use most recent action timestamp
             var locTs=new Date(loc.pausedAt||loc.startTime).getTime();
             var cldTs=new Date(cld.pausedAt||cld.startTime).getTime();
-            // Cloud wins if it has a more recent pausedAt (pause happened on other device)
-            // Also prefer paused state if lapTotal is same (safer)
-            if(cldTs>locTs){
-              mergedRunning[k]=cld;
-            } else if(locTs>cldTs){
-              mergedRunning[k]=loc;
+            if(cldTs>=locTs){
+              mergedRunning[k]=cld; // cloud is newer (pause/resume happened there)
             } else {
-              // Same timestamp — prefer paused (conservative)
-              mergedRunning[k]=(cld.paused?cld:loc);
+              mergedRunning[k]=loc; // local is newer
             }
-          } else {
-            mergedRunning[k]=loc||cld;
+          } else if(cld&&!loc){
+            // Started on another device — adopt it
+            mergedRunning[k]=cld;
           }
+          // If loc&&!cld → session was ended on another device → do NOT include it
         });
 
         // Merge prefs — combine both, per-day keys, most recent wins
@@ -1253,7 +1252,9 @@ function endSession(rKey){
   if(totalSecs>1) _commitLap(ctx,ctx.startTime,new Date().toISOString(),totalSecs,'');
   stopTick(rKey);
   delete S.running[rKey];
-  save();renderAll();
+  save();
+  _pushToCloud(); // immediate push so other devices pick up the ended session
+  renderAll();
 }
 
 function _commitLap(ctx,startISO,endISO,secs,lapName){
