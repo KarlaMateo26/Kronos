@@ -969,33 +969,36 @@ function openAddPlanned(actId){
 function confirmAddPlanned(){
   const act=S.activities.find(a=>a.id===pendingActId);if(!act)return;
   const today=new Date().toDateString();
-  // If auto-entry exists, upgrade it to manual (remove auto flag)
-  const existing=S.planned.find(p=>p.actId===pendingActId&&!p.done&&new Date(p.addedAt).toDateString()===today);
-  if(existing){
-    if(existing.auto){
-      // upgrade: apply new ideal time and note, remove auto flag
-      const h=parseInt(document.getElementById('apHours').value)||0;
-      const m=parseInt(document.getElementById('apMins').value)||0;
-      existing.idealSecs=(h*3600+m*60)||0;
-      existing.note=document.getElementById('apNote').value.trim();
-      delete existing.auto;
-      save();closeModal('addPlannedModal');renderAll();return;
-    }
-    closeModal('addPlannedModal');renderAll();return;
-  }
   const h=parseInt(document.getElementById('apHours').value)||0;
   const m=parseInt(document.getElementById('apMins').value)||0;
   const ideal=(h*3600+m*60)||0;
-  const pending=S.activities.find(a=>a.id===act.id)?.pendingSubtasks||[];
+  const noteVal=document.getElementById('apNote').value.trim();
+
+  // Check for active (not done) entry today
+  const existing=S.planned.find(p=>p.actId===pendingActId&&!p.done&&new Date(p.addedAt).toDateString()===today);
+  if(existing){
+    if(existing.auto){
+      // Upgrade auto-entry to manual
+      existing.idealSecs=ideal;
+      existing.note=noteVal;
+      delete existing.auto;
+      save();closeModal('addPlannedModal');renderAll();return;
+    }
+    // Already manually planned today — just close
+    closeModal('addPlannedModal');renderAll();return;
+  }
+
+  // No active entry — create a new one (even if there's a done entry today)
+  // Load pending subtasks from activity
+  const pending=act.pendingSubtasks||[];
   S.planned.push({
     id:genId(),actId:act.id,actName:act.name,actEmoji:act.emoji,
-    idealSecs:ideal,note:document.getElementById('apNote').value.trim(),
-    subtasks:pending.map(ps=>({id:ps.id,text:ps.text,done:false})),
+    idealSecs:ideal,note:noteVal,
+    subtasks:pending.map(ps=>({id:genId(),text:ps.text,done:false})),
     done:false,addedAt:new Date().toISOString()
   });
   // clear pending after loading
-  const actRef=S.activities.find(a=>a.id===act.id);
-  if(actRef) actRef.pendingSubtasks=[];
+  act.pendingSubtasks=[];
   save();closeModal('addPlannedModal');renderAll();
 }
 
@@ -1134,11 +1137,12 @@ function startActivity(actId, plannedId, subtaskId){
   let resolvedPlannedId=plannedId||null;
   if(!resolvedPlannedId){
     const today=new Date().toDateString();
+    // Only reuse an active (not done) auto entry
     let autoplan=S.planned.find(p=>p.actId===actId&&new Date(p.addedAt).toDateString()===today&&!p.done);
     if(!autoplan){
       autoplan={id:genId(),actId:act.id,actName:act.name,actEmoji:act.emoji,
         idealSecs:0,note:'',subtasks:[],done:false,
-        addedAt:new Date().toISOString(),auto:true}; // auto:true = not manually planned
+        addedAt:new Date().toISOString(),auto:true};
       S.planned.push(autoplan);
     }
     resolvedPlannedId=autoplan.id;
@@ -1998,9 +2002,9 @@ function deleteActivity(actId){
 
 function renderActList(){
   const today=S.planned.filter(p=>new Date(p.addedAt).toDateString()===new Date().toDateString());
-  const todayIds=today.map(p=>p.actId);
+  const todayActiveIds=today.filter(p=>!p.done).map(p=>p.actId); // only active (not done)
   document.getElementById('actList').innerHTML=S.activities.map(a=>{
-    const added=todayIds.includes(a.id);
+    const added=todayActiveIds.includes(a.id);
     return`<div class="act-row" id="ar_${a.id}"
       onpointerdown="startLongPress('${a.id}')"
       onpointerup="cancelLongPress()"
