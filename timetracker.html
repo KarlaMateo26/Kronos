@@ -859,7 +859,12 @@ function initState(){
   if(s){
     if(!s.sessions)s.sessions=[];
     if(!s.planned)s.planned=[];
-    if(!s.running)s.running={}; // map: plannedId|actId -> runCtx
+    if(!s.running)s.running={};
+    if(!s.prefs)s.prefs={};
+    if(!s.deletedIds)s.deletedIds=[];
+    if(!s.divisions||!s.divisions.length)s.divisions=[
+      {id:'d1',name:'Deberes'},{id:'d2',name:'Daily Advance'},{id:'d3',name:'Otros'}
+    ];
     if(s.currentWeek!==wk){s.activities.forEach(a=>a.weekTotal=0);s.currentWeek=wk;}
     return s;
   }
