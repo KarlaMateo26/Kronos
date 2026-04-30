@@ -53,6 +53,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 
 .planned-card{background:var(--s1);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .2s;min-width:0;}
 .planned-card.done-card{opacity:.5;}
+.pc-del-btn{display:none!important;color:var(--red)!important;font-size:13px;}
+.planned-card.pc-editing .pc-del-btn{display:flex!important;}
 .planned-card.pc-auto{opacity:.7;border-style:dashed;}
 .planned-card.pc-auto .pc-name{color:var(--text3);}
 .planned-card.pc-running{border-color:#1db954;}
@@ -116,6 +118,25 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 
 .empty-planned{text-align:center;padding:20px;color:var(--text3);font-size:11px;font-family:var(--mono);}
 
+/* Board view */
+.board-wrap{display:flex;gap:0;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:8px;}
+.board-wrap::-webkit-scrollbar{height:3px;}
+.board-wrap::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+.board-col{flex:0 0 calc(85vw);max-width:340px;min-width:240px;display:flex;flex-direction:column;}
+.board-col:first-child{padding-left:16px;}
+.board-col:last-child{padding-right:16px;}
+.board-col+.board-col{padding-left:8px;}
+.board-hdr{display:flex;align-items:center;gap:6px;padding:4px 0 8px;}
+.board-hdr-name{font-size:9px;letter-spacing:2px;text-transform:uppercase;font-family:var(--mono);color:var(--text3);cursor:pointer;border-bottom:1px dashed transparent;transition:border-color .2s;}
+.board-hdr-name:hover{border-color:var(--border2);}
+.board-hdr-name[contenteditable="true"]{color:var(--text);border-color:var(--accent);outline:none;}
+.board-hdr-count{font-size:9px;font-family:var(--mono);color:var(--border2);}
+.board-items{display:flex;flex-direction:column;gap:8px;min-height:60px;}
+.board-empty{font-size:10px;color:var(--border2);font-family:var(--mono);padding:12px 0;text-align:center;}
+.planned-card.pc-dragging{opacity:.4;box-shadow:0 4px 20px rgba(0,0,0,.4);}
+.planned-card.pc-drag-over{border:2px dashed var(--accent)!important;}
+.board-items.bi-drag-over{background:var(--accent-dim);border-radius:8px;min-height:60px;}
+
 /* day meta bar */
 .day-meta{display:flex;align-items:center;gap:0;padding:6px 16px 0;justify-content:space-between;}
 .day-meta-date{font-size:10px;color:var(--text3);font-family:var(--mono);}
@@ -159,6 +180,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .rc-st-check:hover{border-color:var(--green);}
 .rc-st-check.done{background:var(--green);border-color:var(--green);}
 .rc-st-check.done::after{content:'✓';font-size:8px;color:#fff;}
+.st-edit-btn,.st-del-btn{background:none;border:none;cursor:pointer;font-size:11px;padding:0 2px;line-height:1;touch-action:manipulation;opacity:0;transition:opacity .2s;flex-shrink:0;}
+.subtask-item:hover .st-edit-btn,.subtask-item:hover .st-del-btn{opacity:.7;}
+.st-edit-btn{color:var(--accent);}
+.st-del-btn{color:var(--red);}
 .rc-dev-select.deviated{color:var(--pink);}
 
 /* ── timers row: focus | break stacked ── */
@@ -200,7 +225,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
    ACTIVITIES LIST
 ───────────────────────────────────────── */
 .act-list{padding:0 16px;display:flex;flex-direction:column;gap:6px;}
-.act-row{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);display:flex;align-items:center;padding:11px 12px;gap:10px;touch-action:manipulation;position:relative;overflow:hidden;}
+.act-row{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);display:flex;align-items:center;padding:11px 12px;gap:10px;touch-action:pan-y;position:relative;overflow:hidden;transition:opacity .15s,box-shadow .15s;}
+.act-row.dragging{opacity:.5;box-shadow:0 4px 20px rgba(0,0,0,.4);}
+.act-row.drag-over{border-color:var(--accent);border-style:dashed;}
+.drag-handle{width:16px;flex-shrink:0;display:flex;flex-direction:column;gap:3px;cursor:grab;padding:2px;opacity:.3;}
+.drag-handle:active{cursor:grabbing;}
+.drag-handle span{display:block;width:10px;height:1.5px;background:var(--text3);border-radius:1px;}
+.def-sub-item{display:flex;align-items:center;gap:6px;background:var(--s0);border-radius:7px;padding:5px 8px;font-size:12px;}
+.def-sub-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:0 2px;line-height:1;margin-left:auto;}
+/* subtask drag */
+.subtask-item.dragging{opacity:.4;}
+.subtask-item.drag-over-st{border-top:2px solid var(--accent);}
 .act-emoji{font-size:20px;width:28px;text-align:center;flex-shrink:0;}
 .act-info{flex:1;min-width:0;}
 .act-name{font-size:14px;font-weight:600;}
@@ -396,6 +431,24 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .st-row:last-child{border-bottom:none;}
 .st-row-name{font-size:11px;flex:1;min-width:0;}
 .st-row-time{font-size:9px;font-family:var(--mono);color:var(--text3);flex-shrink:0;}
+
+/* Ideal plan calendar */
+.iplan-wrap{display:flex;padding:0 0 60px;}
+.iplan-ruler{width:44px;flex-shrink:0;position:relative;}
+.iplan-ruler-lbl{position:absolute;right:8px;font-size:8px;font-family:var(--mono);color:var(--text3);transform:translateY(-50%);white-space:nowrap;}
+.iplan-ruler-tick{position:absolute;right:0;width:6px;height:1px;background:var(--border);}
+.iplan-col{flex:1;position:relative;border-left:1px solid var(--border);}
+.iplan-hour-line{position:absolute;left:0;right:0;height:1px;background:var(--border);opacity:.4;}
+.iplan-hour-line.major{opacity:.8;}
+.iplan-block{position:absolute;left:4px;right:4px;border-radius:8px;overflow:hidden;cursor:pointer;transition:opacity .15s;display:flex;flex-direction:column;justify-content:flex-start;padding:4px 8px;min-height:20px;}
+.iplan-block:active{opacity:.7;}
+.iplan-block-name{font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.iplan-block-time{font-size:8px;font-family:var(--mono);opacity:.8;}
+.iplan-block-sub{font-size:8px;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.iplan-now-line{position:absolute;left:0;right:0;height:2px;background:var(--red);z-index:10;}
+.iplan-now-dot{position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--red);}
+.iplan-start-input{position:absolute;background:var(--s0);border:1px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:10px;color:var(--text);padding:2px 4px;z-index:5;cursor:pointer;}
+.iplan-empty{text-align:center;padding:40px 16px;color:var(--text3);font-family:var(--mono);font-size:11px;}
 </style>
 </head>
 <body>
@@ -412,6 +465,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
     <div class="logo">KRONOS</div>
     <div style="display:flex;align-items:center;gap:8px;">
       <span id="syncDot" title="Sync" onclick="pullFromCloud()" style="font-size:12px;color:var(--text3);cursor:pointer;font-family:var(--mono);">●</span>
+      <select id="syncSourceSel" onchange="setSyncSource(this.value)"
+        style="background:transparent;border:none;color:var(--text3);font-family:var(--mono);font-size:8px;padding:0 2px;outline:none;cursor:pointer;margin-left:2px;">
+        <option value="both">⇄</option>
+        <option value="local">📱</option>
+        <option value="cloud">☁</option>
+      </select>
       <div class="wk-badge" id="wkBadge">SEM 00</div>
     </div>
   </div>
@@ -429,9 +488,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
       <div class="day-meta-avail" id="dayMetaAvail"></div>
     </div>
   </div>
-  <div class="planned-list" id="plannedList">
-    <div class="empty-planned">// Añade actividades con el botón "Today" ↓</div>
-  </div>
+  <div class="board-wrap" id="plannedList"></div>
 
   <!-- IN PROGRESS -->
   <div class="sec-lbl" id="runningLbl" style="display:none;">en curso <span id="runningCount"></span></div>
@@ -451,8 +508,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   <div class="hdr"><div class="logo">KRONOS</div><div class="wk-badge" id="diaBadge">HOY</div></div>
   <!-- view toggle -->
   <div class="dia-view-toggle">
-    <button class="dvt-btn active" id="dvtHabit" onclick="setDiaView('habit')">📊 Hábitos</button>
+    <button class="dvt-btn active" id="dvtPlan" onclick="setDiaView('plan')">🗓 Plan</button>
     <button class="dvt-btn" id="dvtTimeline" onclick="setDiaView('timeline')">⏱ Cronograma</button>
+    <button class="dvt-btn" id="dvtHabit" onclick="setDiaView('habit')">📊 Hábitos</button>
   </div>
   <!-- date nav (only for timeline) -->
   <div class="date-nav" id="diaDateNav" style="display:none;">
@@ -463,6 +521,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   <!-- content -->
   <div id="diaHabitContent"></div>
   <div id="diaTimelineContent" style="display:none;"></div>
+  <div id="diaPlanContent" style="display:none;">
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 16px 0;">
+      <button class="date-nav-btn" onclick="shiftPlanDate(-1)">‹</button>
+      <div id="planDateLbl" style="flex:1;text-align:center;font-size:10px;font-family:var(--mono);color:var(--text3);">Hoy</div>
+      <button class="date-nav-btn" onclick="shiftPlanDate(+1)">›</button>
+    </div>
+  </div>
 </div>
 
 <!-- ═══════════ HISTORY ═══════════ -->
@@ -537,6 +602,27 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   </div>
 </div>
 
+<!-- ── EDIT SUBTASK MODAL ── -->
+<div class="overlay" id="editSubModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" style="font-size:14px;">Editar subtarea</div>
+    <input type="text" id="estName" placeholder="Nombre de la subtarea..." maxlength="60">
+    <div style="font-size:10px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;font-family:var(--mono);margin-bottom:6px;margin-top:10px;">Prioridad</div>
+    <select id="estPriority" style="background:var(--s0);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 10px;width:100%;margin-bottom:10px;">
+      <option value="">Sin prioridad</option>
+      <option value="low">🔵 Baja</option>
+      <option value="medium">🟡 Media</option>
+      <option value="high">🟠 Alta</option>
+      <option value="urgent">🔴 Urgente</option>
+    </select>
+    <div style="font-size:10px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;font-family:var(--mono);margin-bottom:6px;">Deadline (opcional)</div>
+    <input type="date" id="estDeadline" style="font-family:var(--mono);">
+    <button class="mbtn" onclick="confirmEditSubtask()" style="margin-top:14px;">Guardar</button>
+    <button class="mcancel" onclick="closeModal('editSubModal')">Cancelar</button>
+  </div>
+</div>
+
 <!-- ── SLEEP TIME MODAL ── -->
 <div class="overlay" id="sleepModal">
   <div class="modal">
@@ -558,7 +644,61 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
     <div class="emoji-grid" id="emojiGrid"></div>
     <div style="font-size:10px;color:var(--text3);margin-bottom:7px;text-align:center;letter-spacing:1px;text-transform:uppercase;font-family:var(--mono);">Color</div>
     <div class="color-grid" id="colorGrid"></div>
-    <button class="mbtn" onclick="confirmAddAct()">Agregar</button>
+    <div style="font-size:10px;color:var(--text3);margin:10px 0 7px;text-align:center;letter-spacing:1px;text-transform:uppercase;font-family:var(--mono);">Subtareas por default</div>
+    <div id="defaultSubsList" style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:6px;">
+      <input type="text" id="defaultSubInput" placeholder="+ Añadir subtarea default..." maxlength="50"
+        style="flex:1;font-size:12px;"
+        onkeydown="if(event.key==='Enter'){addDefaultSub();event.preventDefault();}">
+      <button onclick="addDefaultSub()" style="background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;">+</button>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin:10px 0 7px;text-align:center;letter-spacing:1px;text-transform:uppercase;font-family:var(--mono);">Hora de inicio por default (opcional)</div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+      <select id="actDefStartH" style="flex:1;background:var(--s0);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;padding:8px 6px;outline:none;">
+        <option value="">--</option>
+        <option value="0">00h</option>
+        <option value="1">01h</option>
+        <option value="2">02h</option>
+        <option value="3">03h</option>
+        <option value="4">04h</option>
+        <option value="5">05h</option>
+        <option value="6">06h</option>
+        <option value="7">07h</option>
+        <option value="8">08h</option>
+        <option value="9">09h</option>
+        <option value="10">10h</option>
+        <option value="11">11h</option>
+        <option value="12">12h</option>
+        <option value="13">13h</option>
+        <option value="14">14h</option>
+        <option value="15">15h</option>
+        <option value="16">16h</option>
+        <option value="17">17h</option>
+        <option value="18">18h</option>
+        <option value="19">19h</option>
+        <option value="20">20h</option>
+        <option value="21">21h</option>
+        <option value="22">22h</option>
+        <option value="23">23h</option>
+      </select>
+      <span style="color:var(--text3);">:</span>
+      <select id="actDefStartM" style="flex:1;background:var(--s0);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;padding:8px 6px;outline:none;">
+        <option value="0">00</option>
+        <option value="5">05</option>
+        <option value="10">10</option>
+        <option value="15">15</option>
+        <option value="20">20</option>
+        <option value="25">25</option>
+        <option value="30">30</option>
+        <option value="35">35</option>
+        <option value="40">40</option>
+        <option value="45">45</option>
+        <option value="50">50</option>
+        <option value="55">55</option>
+      </select>
+      <button onclick="document.getElementById('actDefStartH').value=''" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:4px;">✕</button>
+    </div>
+    <button class="mbtn" onclick="confirmAddAct()">Guardar</button>
     <button class="mcancel" onclick="closeModal('addActModal')">Cancelar</button>
   </div>
 </div>
@@ -573,6 +713,57 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
         <input type="number" id="apHours" placeholder="horas" min="0" max="24">
         <input type="number" id="apMins" placeholder="minutos" min="0" max="59">
       </div>
+    </div>
+    <div class="field"><label>Hora de inicio en el plan (opcional)</label>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <select id="apStartH" style="flex:1;background:var(--s0);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;padding:8px 6px;outline:none;">
+          <option value="">--</option>
+          <option value="0">00h</option>
+          <option value="1">01h</option>
+          <option value="2">02h</option>
+          <option value="3">03h</option>
+          <option value="4">04h</option>
+          <option value="5">05h</option>
+          <option value="6">06h</option>
+          <option value="7">07h</option>
+          <option value="8">08h</option>
+          <option value="9">09h</option>
+          <option value="10">10h</option>
+          <option value="11">11h</option>
+          <option value="12">12h</option>
+          <option value="13">13h</option>
+          <option value="14">14h</option>
+          <option value="15">15h</option>
+          <option value="16">16h</option>
+          <option value="17">17h</option>
+          <option value="18">18h</option>
+          <option value="19">19h</option>
+          <option value="20">20h</option>
+          <option value="21">21h</option>
+          <option value="22">22h</option>
+          <option value="23">23h</option>
+        </select>
+        <span style="color:var(--text3);">:</span>
+        <select id="apStartM" style="flex:1;background:var(--s0);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;padding:8px 6px;outline:none;">
+          <option value="0">00</option>
+          <option value="5">05</option>
+          <option value="10">10</option>
+          <option value="15">15</option>
+          <option value="20">20</option>
+          <option value="25">25</option>
+          <option value="30">30</option>
+          <option value="35">35</option>
+          <option value="40">40</option>
+          <option value="45">45</option>
+          <option value="50">50</option>
+          <option value="55">55</option>
+        </select>
+        <button onclick="document.getElementById('apStartH').value=''" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:4px;">✕</button>
+      </div>
+    </div>
+    <div id="apSubsSection" style="display:none;margin-bottom:10px;">
+      <div style="font-size:10px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;font-family:var(--mono);margin-bottom:7px;">Subtareas</div>
+      <div id="apSubsList" style="display:flex;flex-direction:column;gap:5px;"></div>
     </div>
     <div class="field"><label>Nota (opcional)</label><textarea id="apNote" placeholder="¿Qué esperas lograr hoy con esta actividad?"></textarea></div>
     <button class="mbtn" onclick="confirmAddPlanned()">Agregar al plan del día</button>
@@ -620,6 +811,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
     </div>
     <div class="dfield" id="dtSubRow" style="display:none"><div class="dlbl">Subtarea</div><div class="dval" id="dtSub"></div></div>
     <div class="dfield" id="dtDevRow" style="display:none"><div class="dlbl">Real (desviación)</div><div class="dval" id="dtDev" style="color:var(--pink)"></div></div>
+    <div class="dfield" id="dtBreaksRow" style="display:none"><div class="dlbl">Descansos</div><div class="dval" id="dtBreaks" style="color:var(--amber);font-size:11px;line-height:1.6;"></div></div>
     <div class="dfield" id="dtDurRow">
       <div class="dlbl">Ajustar duración</div>
       <div style="display:flex;gap:6px;align-items:center;">
@@ -673,7 +865,12 @@ function initState(){
     if(s.currentWeek!==wk){s.activities.forEach(a=>a.weekTotal=0);s.currentWeek=wk;}
     return s;
   }
-  return{activities:DEFAULT_ACTS.map(a=>({...a,weekTotal:0})),sessions:[],planned:[],running:{},prefs:{},deletedIds:[],currentWeek:wk};
+  return{activities:DEFAULT_ACTS.map(a=>({...a,weekTotal:0})),sessions:[],planned:[],running:{},prefs:{},deletedIds:[],currentWeek:wk,
+    divisions:[
+      {id:'d1',name:'Deberes'},
+      {id:'d2',name:'Daily Advance'},
+      {id:'d3',name:'Otros'}
+    ]};
 }
 let S=initState();
 let timers={}; // rKey -> intervalId
@@ -710,7 +907,7 @@ function syncToCloud(){
 }
 
 function _pushToCloud(){
-  // Try fetch first (works on desktop), fall back to form POST (mobile)
+  if(_syncSource==='cloud') return; // cloud is source — don't overwrite it
   var payload=JSON.stringify({state:S});
   fetch(API_URL,{
     method:'POST',
@@ -760,6 +957,10 @@ function pullFromCloud(){
       delete window[cbName];
       if(script.parentNode)script.parentNode.removeChild(script);
       if(data&&data.ok&&data.state){
+        if(_syncSource==='local'){
+          // local is source — ignore cloud data, just show green dot
+          _updateSyncDot(true);resolve();return;
+        }
         var cloud=data.state;
         var localRunning=S.running||{};
         var cloudRunning=cloud.running||{};
@@ -885,6 +1086,9 @@ function pullFromCloud(){
         if(!S.running)S.running={};
         if(!S.prefs)S.prefs={};
         if(!S.deletedIds)S.deletedIds=[];
+        if(!S.divisions||!S.divisions.length)S.divisions=[
+          {id:'d1',name:'Deberes'},{id:'d2',name:'Daily Advance'},{id:'d3',name:'Otros'}
+        ];
         localStorage.setItem(SK,JSON.stringify(S));
         // sync tick state: start for running, stop for paused
         Object.keys(S.running).forEach(function(k){
@@ -930,6 +1134,20 @@ function pullFromCloud(){
   });
 }
 
+var _syncSource='both'; // 'both' | 'local' | 'cloud'
+function setSyncSource(val){
+  _syncSource=val;
+  localStorage.setItem('kronos_sync_src',val);
+  // update selector on all renders
+  const sel=document.getElementById('syncSourceSel');
+  if(sel) sel.value=val;
+}
+// Load saved preference
+(function(){
+  const saved=localStorage.getItem('kronos_sync_src');
+  if(saved) _syncSource=saved;
+})();
+
 function _updateSyncDot(ok){
   const dot=document.getElementById('syncDot');
   if(!dot)return;
@@ -946,6 +1164,7 @@ function elapsed(iso){return Math.floor((Date.now()-new Date(iso).getTime())/100
 function fmt(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;return`${ph(h)}:${ph(m)}:${ph(ss)}`;}
 function ph(n){return String(n).padStart(2,'0');}
 function fmtS(s){if(s<60)return`${s}s`;if(s<3600){return`${Math.floor(s/60)}m ${s%60}s`;}return`${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;}
+function fmtM(s){if(s<60)return'<1m';if(s<3600)return`${Math.floor(s/60)}m`;return`${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;}
 function fmtFull(iso){return new Date(iso).toLocaleString('es-MX',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}
 function fmtTime(iso){return new Date(iso).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});}
 function fmtDate(iso){return new Date(iso).toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric'});}
@@ -960,9 +1179,42 @@ function openAddPlanned(actId){
   const act=S.activities.find(a=>a.id===actId);if(!act)return;
   pendingActId=actId;
   document.getElementById('apTitle').textContent=`${act.emoji} ${act.name}`;
-  document.getElementById('apHours').value='';
-  document.getElementById('apMins').value='';
+  // Pre-fill ideal time from last used value (stored on activity)
+  const defH=act.defaultIdealH!==undefined?act.defaultIdealH:0;
+  const defM=act.defaultIdealM!==undefined?act.defaultIdealM:0;
+  document.getElementById('apHours').value=defH||'';
+  document.getElementById('apMins').value=defM||'';
   document.getElementById('apNote').value='';
+  // Pre-fill start time from activity default if set
+  const defStart=act.defaultStartH!==undefined?act.defaultStartH:null;
+  const apSH=document.getElementById('apStartH');
+  const apSM=document.getElementById('apStartM');
+  if(apSH){apSH.value=defStart!==null?String(defStart):'';}
+  if(apSM){apSM.value=act.defaultStartM!==undefined?String(act.defaultStartM):'0';}
+  const pending=act.pendingSubtasks||[];
+  const defaults=act.defaultSubtasks||[];
+  const subsSection=document.getElementById('apSubsSection');
+  const subsList=document.getElementById('apSubsList');
+  // Build combined list: pending (always checked, labeled) + defaults (checked by default)
+  const allItems=[
+    ...pending.map(p=>({text:p.text,checked:true,type:'pending'})),
+    ...defaults.filter(d=>!pending.some(p=>p.text.toLowerCase()===d.toLowerCase()))
+      .map(d=>({text:d,checked:true,type:'default'}))
+  ];
+  if(allItems.length&&subsList&&subsSection){
+    subsSection.style.display='';
+    subsList.innerHTML=allItems.map((item,i)=>`
+      <label style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--s0);border-radius:7px;cursor:pointer;">
+        <input type="checkbox" class="ap-sub-cb" data-idx="${i}" ${item.checked?'checked':''}
+          style="width:14px;height:14px;accent-color:var(--accent);flex-shrink:0;">
+        <span style="font-size:12px;flex:1;">${esc(item.text)}</span>
+        ${item.type==='pending'?'<span style="font-size:8px;color:var(--amber);font-family:var(--mono);">↩</span>':'<span style="font-size:8px;color:var(--text3);font-family:var(--mono);">★</span>'}
+      </label>`).join('');
+    // store items for confirmAddPlanned
+    subsList.dataset.items=JSON.stringify(allItems);
+  } else if(subsSection){
+    subsSection.style.display='none';
+  }
   openModal('addPlannedModal');
 }
 
@@ -973,6 +1225,8 @@ function confirmAddPlanned(){
   const m=parseInt(document.getElementById('apMins').value)||0;
   const ideal=(h*3600+m*60)||0;
   const noteVal=document.getElementById('apNote').value.trim();
+  // Save as default for next time
+  if(ideal>0){act.defaultIdealH=h;act.defaultIdealM=m;}
 
   // Check for active (not done) entry today
   const existing=S.planned.find(p=>p.actId===pendingActId&&!p.done&&new Date(p.addedAt).toDateString()===today);
@@ -990,14 +1244,39 @@ function confirmAddPlanned(){
 
   // No active entry — create a new one (even if there's a done entry today)
   // Load pending subtasks from activity
-  const pending=act.pendingSubtasks||[];
-  S.planned.push({
+  // Build subtask list from checked checkboxes
+  const subsList=document.getElementById('apSubsList');
+  const storedItems=subsList&&subsList.dataset.items?JSON.parse(subsList.dataset.items):[];
+  const checkedBoxes=subsList?[...subsList.querySelectorAll('.ap-sub-cb')]:[];
+  const allSubs=storedItems
+    .filter((_,i)=>checkedBoxes[i]&&checkedBoxes[i].checked)
+    .map(item=>({id:genId(),text:item.text,done:false}));
+  const apStartHVal=document.getElementById('apStartH')?.value;
+  const apStartMVal=document.getElementById('apStartM')?.value||'0';
+  const hasStartTime=apStartHVal!==''&&apStartHVal!==undefined&&apStartHVal!==null;
+  const newPlan={
     id:genId(),actId:act.id,actName:act.name,actEmoji:act.emoji,
     idealSecs:ideal,note:noteVal,
-    subtasks:pending.map(ps=>({id:genId(),text:ps.text,done:false})),
+    subtasks:allSubs,
     done:false,addedAt:new Date().toISOString()
-  });
-  // clear pending after loading
+  };
+  S.planned.push(newPlan);
+
+  // If start time set, save as absolute offset for today's plan
+  if(hasStartTime){
+    const sh=parseInt(apStartHVal);
+    const sm=parseInt(apStartMVal)||0;
+    const absMins=sh*60+sm;
+    const pStr=new Date().toDateString();
+    const offKey='po_'+pStr;
+    if(!S.prefs)S.prefs={};
+    if(!S.prefs[offKey])S.prefs[offKey]={};
+    S.prefs[offKey][newPlan.id]={abs:absMins};
+    // Also save as default for this activity
+    act.defaultStartH=sh;
+    act.defaultStartM=sm;
+  }
+
   act.pendingSubtasks=[];
   save();closeModal('addPlannedModal');renderAll();
 }
@@ -1057,6 +1336,45 @@ function removePlanned(pid){
 }
 
 // subtasks
+// Priority icons
+function priorityIcon(p){
+  return{urgent:'🔴',high:'🟠',medium:'🟡',low:'🔵'}[p]||'';
+}
+
+// Deadline format: "Lu 07/05"
+function fmtDeadline(d){
+  if(!d)return'';
+  const dt=new Date(d+'T12:00:00');
+  const days=['Do','Lu','Ma','Mi','Ju','Vi','Sa'];
+  return`${days[dt.getDay()]} ${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}`;
+}
+
+var _editSubPid=null,_editSubSid=null;
+function openEditSubtask(pid,sid){
+  const p=S.planned.find(x=>x.id===pid);if(!p)return;
+  const st=p.subtasks.find(s=>s.id===sid);if(!st)return;
+  _editSubPid=pid;_editSubSid=sid;
+  document.getElementById('estName').value=st.text||'';
+  document.getElementById('estPriority').value=st.priority||'';
+  document.getElementById('estDeadline').value=st.deadline||'';
+  openModal('editSubModal');
+}
+function confirmEditSubtask(){
+  const p=S.planned.find(x=>x.id===_editSubPid);if(!p)return;
+  const st=p.subtasks.find(s=>s.id===_editSubSid);if(!st)return;
+  const name=document.getElementById('estName').value.trim();
+  if(name) st.text=name;
+  st.priority=document.getElementById('estPriority').value||null;
+  st.deadline=document.getElementById('estDeadline').value||null;
+  save();closeModal('editSubModal');renderPlanned();
+}
+function deleteSubtask(pid,sid){
+  const p=S.planned.find(x=>x.id===pid);if(!p)return;
+  p.subtasks=p.subtasks.filter(s=>s.id!==sid);
+  save();renderPlanned();
+}
+function editSubtaskName(pid,sid){openEditSubtask(pid,sid);}
+
 function addSubtask(pid,text){
   const p=S.planned.find(x=>x.id===pid);if(!p||!text.trim())return;
   p.subtasks.push({id:genId(),text:text.trim(),done:false});
@@ -1153,7 +1471,7 @@ function startActivity(actId, plannedId, subtaskId){
     plannedId:resolvedPlannedId,subtaskId:subtaskId||null,
     sessionName:'',startTime:new Date().toISOString(),
     lapTotal:0,lapCount:0,paused:false,pausedAt:null,
-    breakStart:null,breakTotal:0,realActId:null,
+    breakStart:null,breakTotal:0,breaks:[],realActId:null,
     subTotals:{},subSwitches:[],
     insertOrder:Date.now()
   };
@@ -1244,6 +1562,7 @@ function _doSaveLap(rKey,lapName,overrideSubId){
   // reset lap
   ctx.startTime=new Date().toISOString();
   ctx.lapTotal=0;ctx.subTotals={};ctx.subSwitches=[];
+  ctx.breakTotal=0;ctx.breaks=[];ctx.breakStart=null; // reset breaks per lap
   ctx.lapCount=(ctx.lapCount||0)+1;ctx.paused=false;ctx.pausedAt=null;
   save();startTick(rKey);renderAll();
 }
@@ -1279,6 +1598,7 @@ function _commitLap(ctx,startISO,endISO,secs,lapName){
     lapNum:(ctx.lapCount||0)+1,
     startTime:startISO,endTime:endISO,duration:secs,
     breakTotal:ctx.breakTotal||0,
+    breaks:ctx.breaks||[],
     realActId:ctx.realActId||null,realActName:realAct?realAct.name:null,
     note:''
   });
@@ -1289,13 +1609,15 @@ function _commitLap(ctx,startISO,endISO,secs,lapName){
 function toggleBreak(rKey){
   const ctx=S.running[rKey];if(!ctx)return;
   if(ctx.breakStart){
-    // stop break
-    ctx.breakTotal+=(elapsed(ctx.breakStart));
+    // stop break — record segment
+    const dur=elapsed(ctx.breakStart);
+    ctx.breakTotal+=dur;
+    if(!ctx.breaks) ctx.breaks=[];
+    ctx.breaks.push({start:ctx.breakStart,end:new Date().toISOString(),dur});
     ctx.breakStart=null;
-    // resume focus if was not paused
-    if(ctx.paused){ctx.paused=false;ctx.pausedAt=null;startTick(rKey);}
+    if(ctx.paused){ctx.paused=false;ctx.pausedAt=null;ctx.startTime=new Date().toISOString();startTick(rKey);}
   } else {
-    // start break → pause focus
+    // start break → pause focus first
     if(!ctx.paused){pauseLap(rKey);}
     ctx.breakStart=new Date().toISOString();
   }
@@ -1447,6 +1769,7 @@ function setDeviation(rKey,realActId){
 // ═══════════════════════════════════════════════════════
 function renderAll(){
   renderWeekBadge();renderPlanned();renderRunning();renderWeekGrid();renderActList();renderDayMeta();
+  const sel=document.getElementById('syncSourceSel');if(sel)sel.value=_syncSource;
   if(document.getElementById('page-history').classList.contains('active'))renderHistory();
 }
 
@@ -1460,16 +1783,41 @@ var _expandedPlans=new Set();
 
 function renderPlanned(){
   const list=document.getElementById('plannedList');
-  // Save currently expanded state before re-render
+  // Save expanded state
   document.querySelectorAll('.planned-card.pc-expanded').forEach(el=>{
     const pid=el.id.replace('pc_','');
     _expandedPlans.add(pid);
   });
   const todayPlanned=S.planned.filter(p=>new Date(p.addedAt).toDateString()===new Date().toDateString()&&!p.done);
   document.getElementById('plannedCount').textContent=todayPlanned.length?`(${todayPlanned.length})`:'';
-  list.classList.toggle('solo-plan', todayPlanned.length<=1);
-  if(!todayPlanned.length){list.innerHTML='<div class="empty-planned">// Añade actividades con el botón "Today" ↓</div>';return;}
-  list.innerHTML=todayPlanned.map(p=>{
+
+  // Ensure divisions exist
+  if(!S.divisions||!S.divisions.length) S.divisions=[
+    {id:'d1',name:'Deberes'},{id:'d2',name:'Daily Advance'},{id:'d3',name:'Otros'}
+  ];
+
+  // Build board columns
+  let boardHtml='';
+  S.divisions.forEach(div=>{
+    const divCards=todayPlanned.filter(p=>(p.divisionId||'d1')===div.id);
+    boardHtml+=`<div class="board-col" id="bcol_${div.id}">
+      <div class="board-hdr">
+        <span class="board-hdr-name" id="bhn_${div.id}"
+          ondblclick="editDivisionName('${div.id}')">${esc(div.name)}</span>
+        ${divCards.length?`<span class="board-hdr-count">(${divCards.length})</span>`:''}
+      </div>
+      <div class="board-items" id="bi_${div.id}"
+        ondragover="biDragOver(event,'${div.id}')"
+        ondrop="biDrop(event,'${div.id}')"
+        ondragleave="biDragLeave(event,'${div.id}')">
+        ${divCards.length?'':'<div class="board-empty">vacío</div>'}
+      </div>
+    </div>`;
+  });
+  list.innerHTML=boardHtml;
+
+  // Render cards into each column
+  todayPlanned.forEach(p=>{
     const spent=plannedSpent(p.id);
     const rKey=getRunKey(p.id,p.actId);
     const ctx=S.running[rKey];
@@ -1482,11 +1830,36 @@ function renderPlanned(){
       const rem=over?spent-p.idealSecs:p.idealSecs-spent;
       progressHtml=`
         <div class="pc-progress"><div class="pc-progress-fill${over?' over':''}" style="width:${Math.min(pct,100)}%"></div></div>`;
-      var metaBadges=`<span class="pc-ideal" onclick="openEditIdeal('${p.id}')" title="Editar tiempo ideal" style="cursor:pointer;">⏱ ${fmtS(p.idealSecs)}</span>
-        <span class="pc-spent">${fmtS(spent)}</span>
-        <span class="pc-remaining ${over?'over':'under'}">${over?'+':'-'}${fmtS(rem)}</span>`;
+      // break time for this planned item
+      const breakSecs=(()=>{
+        let t=0;
+        // from sessions
+        S.sessions.filter(s=>s.plannedId===p.id).forEach(s=>{t+=(s.breakTotal||0);});
+        // from live running
+        Object.values(S.running).forEach(ctx=>{
+          if(ctx.plannedId===p.id){
+            t+=(ctx.breakTotal||0);
+            if(ctx.breakStart) t+=elapsed(ctx.breakStart);
+          }
+        });
+        return t;
+      })();
+      var metaBadges=`<span class="pc-ideal" onclick="openEditIdeal('${p.id}')" title="Editar tiempo ideal" style="cursor:pointer;">⏱ ${fmtM(p.idealSecs)}</span>
+        <span class="pc-spent">${fmtM(spent)}</span>
+        ${breakSecs>0?`<span class="pc-spent"> | ${fmtM(breakSecs)}</span>`:``}`;
     } else {
-      var metaBadges=spent>0?`<span class="pc-spent" onclick="openEditIdeal('${p.id}')" style="cursor:pointer;">${fmtS(spent)} · <span style="color:var(--text3);font-size:9px;">+ ideal</span></span>`:`<span onclick="openEditIdeal('${p.id}')" style="cursor:pointer;font-size:9px;color:var(--text3);font-family:var(--mono);">+ tiempo ideal</span>`;
+      const breakSecs2=(()=>{
+        let t=0;
+        S.sessions.filter(s=>s.plannedId===p.id).forEach(s=>{t+=(s.breakTotal||0);});
+        Object.values(S.running).forEach(ctx=>{
+          if(ctx.plannedId===p.id){t+=(ctx.breakTotal||0);if(ctx.breakStart)t+=elapsed(ctx.breakStart);}
+        });
+        return t;
+      })();
+      const breakBadge2=breakSecs2>0?` <span class="pc-spent"> | ${fmtM(breakSecs2)}</span>`:'';
+      var metaBadges=spent>0
+        ?`<span class="pc-spent">${fmtM(spent)}</span>${breakBadge2}<span onclick="openEditIdeal('${p.id}')" style="cursor:pointer;font-size:9px;color:var(--text3);font-family:var(--mono);margin-left:4px;">+ ideal</span>`
+        :`<span onclick="openEditIdeal('${p.id}')" style="cursor:pointer;font-size:9px;color:var(--text3);font-family:var(--mono);">+ tiempo ideal</span>`;
     }
 
     const subtasksHtml=p.subtasks.length?`<div class="subtasks">
@@ -1517,7 +1890,16 @@ function renderPlanned(){
     const doneCount=p.subtasks.filter(s=>s.done).length;
     const pendingCount=subCount-doneCount;
     const subLabel=subCount?(pendingCount>0?`${pendingCount} pendiente${pendingCount>1?'s':''}${doneCount>0?' · '+doneCount+' ✓':''}`:`✓ Todo listo`):'+ subtareas';
-    return`<div class="planned-card ${p.done?'done-card':''} ${isRunning?'pc-running':''} ${p.auto?'pc-auto':''}" id="pc_${p.id}">
+    const cardHtml=`<div class="planned-card ${p.done?'done-card':''} ${isRunning?'pc-running':''} ${p.auto?'pc-auto':''}" id="pc_${p.id}"
+      draggable="true"
+      ondragstart="pcDragStart(event,'${p.id}')"
+      ondragover="pcDragOver(event,'${p.id}')"
+      ondrop="pcDrop(event,'${p.id}')"
+      ondragend="pcDragEnd()"
+      onpointerdown="startPcLongPress('${p.id}')"
+      onpointerup="cancelPcLongPress()"
+      onpointerleave="cancelPcLongPress()"
+      onpointercancel="cancelPcLongPress()">
       <div class="pc-header">
         <div class="pc-emoji">${p.actEmoji}</div>
         <div class="pc-info">
@@ -1530,7 +1912,14 @@ function renderPlanned(){
           </button>
           <button class="pc-icon-btn brk ${isBreaking?'breaking':''}" onclick="toggleBreak('${rKey}')" title="${isBreaking?'Fin pausa':'Descanso'}">☕</button>
           <button class="pc-icon-btn chk ${p.done?'done':''}" onclick="togglePlannedDone('${p.id}')" title="${p.done?'Reabrir':'Listo'}">✓</button>
+          <button class="pc-icon-btn pc-del-btn" onclick="removePlanned('${p.id}')" title="Eliminar tarjeta">✕</button>
         </div>
+      </div>
+      <div style="padding:0 12px 4px;text-align:right;">
+        <select onchange="setPlannedDivision('${p.id}',this.value)"
+          style="background:transparent;border:none;color:var(--border2);font-family:var(--mono);font-size:9px;padding:0;outline:none;cursor:pointer;color:transparent;width:16px;direction:rtl;">
+          ${(S.divisions||[]).map(d=>`<option value="${d.id}" style="color:var(--text);background:var(--bg);" ${(p.divisionId||'d1')===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}
+        </select>
       </div>
       ${progressHtml}
       ${p.note?`<div class="pc-note-row">📌 ${esc(p.note)}</div>`:''}
@@ -1557,13 +1946,22 @@ function renderPlanned(){
           }
           planned.forEach(st=>{
             const t=subtaskSpent(st.id);
-            html+=`<div class="subtask-item">
+            html+=`<div class="subtask-item" id="sti_${st.id}"
+              draggable="true"
+              ondragstart="stDragStart(event,'${p.id}','${st.id}')"
+              ondragover="stDragOver(event,'${st.id}')"
+              ondrop="stDrop(event,'${p.id}','${st.id}')"
+              ondragend="stDragEnd()">
               <div class="subtask-check ${st.done?'done':''}" onclick="toggleSubtask('${p.id}','${st.id}')"></div>
-              <span class="subtask-name ${st.done?'done-text':''}">${esc(st.text)}</span>
-              <span style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-right:4px;" id="st_t_${st.id}">${t>0?fmtS(t):'0s'}</span>
+              <span class="subtask-name ${st.done?'done-text':''}" id="stn_${st.id}">${esc(st.text)}</span>
+              <span style="font-size:9px;color:var(--text3);font-family:var(--mono);" id="st_t_${st.id}">${t>0?fmtS(t):'0s'}</span>
+              ${st.priority?`<span style="font-size:10px;margin-left:1px;">${priorityIcon(st.priority)}</span>`:''}
+              ${st.deadline?`<span style="font-size:8px;color:var(--text3);font-family:var(--mono);margin-left:2px;">${fmtDeadline(st.deadline)}</span>`:''}
               <button class="subtask-play" onclick="startActivity('${p.actId}','${p.id}','${st.id}')">
                 <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
               </button>
+              <button class="st-edit-btn" onclick="openEditSubtask('${p.id}','${st.id}')" title="Editar">✎</button>
+              <button class="st-del-btn" onclick="deleteSubtask('${p.id}','${st.id}')" title="Eliminar">✕</button>
             </div>`;
           });
           if(added.length){
@@ -1588,7 +1986,18 @@ function renderPlanned(){
         </div>
       </div>
     </div>`;
-  }).join('');
+
+    // Insert card into the right board column
+    const divId=p.divisionId||'d1';
+    const col=document.getElementById('bi_'+divId)||document.getElementById('bi_d1');
+    if(col){
+      const empty=col.querySelector('.board-empty');
+      if(empty) empty.remove();
+      const wrapper=document.createElement('div');
+      wrapper.innerHTML=cardHtml;
+      col.appendChild(wrapper.firstElementChild);
+    }
+  });
   // ── Clean up any stale unplanned section (no longer used) ──
   const prevSec=document.getElementById('unplannedSection');
   if(prevSec) prevSec.remove();
@@ -1690,6 +2099,109 @@ function renderPlanned(){
     const wrap=document.getElementById('sw_'+pid);
     if(card&&wrap){card.classList.add('pc-expanded');wrap.classList.add('open');}
   });
+}
+
+function setPlannedDivision(pid, divId){
+  const p=S.planned.find(x=>x.id===pid);if(!p)return;
+  p.divisionId=divId;
+  save();renderPlanned();
+}
+
+// ── DRAG & DROP: Planned cards ──
+var _pcDragId=null;
+
+function pcDragStart(e,pid){
+  _pcDragId=pid;
+  e.dataTransfer.effectAllowed='move';
+  e.stopPropagation();
+  setTimeout(()=>{
+    const el=document.getElementById('pc_'+pid);
+    if(el) el.classList.add('pc-dragging');
+  },0);
+}
+
+function pcDragOver(e,targetPid){
+  if(!_pcDragId||_pcDragId===targetPid)return;
+  e.preventDefault();e.stopPropagation();
+  e.dataTransfer.dropEffect='move';
+  document.querySelectorAll('.planned-card.pc-drag-over').forEach(el=>el.classList.remove('pc-drag-over'));
+  const el=document.getElementById('pc_'+targetPid);
+  if(el) el.classList.add('pc-drag-over');
+}
+
+function pcDrop(e,targetPid){
+  e.preventDefault();e.stopPropagation();
+  if(!_pcDragId||_pcDragId===targetPid)return;
+  const src=S.planned.find(x=>x.id===_pcDragId);
+  const tgt=S.planned.find(x=>x.id===targetPid);
+  if(!src||!tgt)return;
+  // Move src to same division as target and reorder
+  src.divisionId=tgt.divisionId||'d1';
+  // Reorder in S.planned: move src just before target
+  const srcIdx=S.planned.indexOf(src);
+  S.planned.splice(srcIdx,1);
+  const tgtIdx=S.planned.indexOf(tgt);
+  S.planned.splice(tgtIdx,0,src);
+  save();renderPlanned();
+}
+
+function pcDragEnd(){
+  _pcDragId=null;
+  document.querySelectorAll('.planned-card').forEach(el=>{
+    el.classList.remove('pc-dragging','pc-drag-over');
+  });
+  document.querySelectorAll('.board-items').forEach(el=>{
+    el.classList.remove('bi-drag-over');
+  });
+}
+
+// Drop on empty column area
+function biDragOver(e,divId){
+  if(!_pcDragId)return;
+  e.preventDefault();e.stopPropagation();
+  document.querySelectorAll('.board-items').forEach(el=>el.classList.remove('bi-drag-over'));
+  const el=document.getElementById('bi_'+divId);
+  if(el) el.classList.add('bi-drag-over');
+}
+
+function biDrop(e,divId){
+  e.preventDefault();e.stopPropagation();
+  if(!_pcDragId)return;
+  const src=S.planned.find(x=>x.id===_pcDragId);
+  if(!src)return;
+  src.divisionId=divId;
+  // Move to end of this division
+  const srcIdx=S.planned.indexOf(src);
+  S.planned.splice(srcIdx,1);
+  // Find last item in this division and insert after it
+  const divItems=S.planned.filter(x=>( x.divisionId||'d1')===divId);
+  if(divItems.length){
+    const lastIdx=S.planned.lastIndexOf(divItems[divItems.length-1]);
+    S.planned.splice(lastIdx+1,0,src);
+  } else {
+    S.planned.push(src);
+  }
+  save();renderPlanned();
+}
+
+function biDragLeave(e,divId){
+  // only remove if truly leaving the column
+  const el=document.getElementById('bi_'+divId);
+  if(el&&!el.contains(e.relatedTarget)) el.classList.remove('bi-drag-over');
+}
+
+function editDivisionName(divId){
+  const div=S.divisions.find(d=>d.id===divId);if(!div)return;
+  const el=document.getElementById('bhn_'+divId);if(!el)return;
+  el.contentEditable='true';el.focus();
+  const range=document.createRange();range.selectNodeContents(el);
+  const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+  el.onblur=function(){
+    el.contentEditable='false';
+    const newName=el.textContent.trim();
+    if(newName){div.name=newName;save();renderPlanned();}
+  };
+  el.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();el.blur();}};
 }
 
 // ── PLANNED EXPAND ──
@@ -1857,14 +2369,18 @@ function updateRunCard(rKey){
       const pct=Math.min((spent/relPlan.idealSecs)*100,100);
       const bar=document.querySelector(`#pc_${relPlan.id} .pc-progress-fill`);
       if(bar) bar.style.width=pct+'%';
-      const rem=relPlan.idealSecs-spent;
+      const spEl=document.querySelector(`#pc_${relPlan.id} .pc-spent`);
+      if(spEl) spEl.textContent=fmtM(spent);
+      // update break badge
       const remEl=document.querySelector(`#pc_${relPlan.id} .pc-remaining`);
       if(remEl){
-        remEl.textContent=(rem<0?'+':'-')+fmtS(Math.abs(rem));
-        remEl.className='pc-remaining '+(rem<0?'over':'under');
+        const liveBreak=Object.values(S.running)
+          .filter(ctx=>ctx.plannedId===relPlan.id)
+          .reduce((t,ctx)=>t+(ctx.breakTotal||0)+(ctx.breakStart?elapsed(ctx.breakStart):0),0);
+        const sesBreak=S.sessions.filter(s=>s.plannedId===relPlan.id).reduce((t,s)=>t+(s.breakTotal||0),0);
+        const tb=sesBreak+liveBreak;
+        if(tb>0){remEl.textContent=' | '+fmtM(tb);remEl.className='pc-spent';}
       }
-      const spEl=document.querySelector(`#pc_${relPlan.id} .pc-spent`);
-      if(spEl) spEl.textContent=fmtS(spent);
     }
     // subtask times (only if expanded)
     const wrap=document.getElementById('sw_'+relPlan.id);
@@ -1976,6 +2492,21 @@ function cancelLapLongPress(){
   clearTimeout(_lapLpTimer);_lapLpTimer=null;
 }
 
+var _pcLpTimer=null;
+function startPcLongPress(pid){
+  cancelPcLongPress();
+  _pcLpTimer=setTimeout(()=>{
+    document.querySelectorAll('.planned-card.pc-editing').forEach(el=>el.classList.remove('pc-editing'));
+    const el=document.getElementById('pc_'+pid);
+    if(el){
+      el.classList.add('pc-editing');
+      clearTimeout(el._hideTimer);
+      el._hideTimer=setTimeout(()=>el.classList.remove('pc-editing'),4000);
+    }
+  },600);
+}
+function cancelPcLongPress(){clearTimeout(_pcLpTimer);_pcLpTimer=null;}
+
 // tap anywhere else hides the delete button
 document.addEventListener('pointerdown',function(e){
   if(!e.target.closest('.act-row')){
@@ -1984,7 +2515,88 @@ document.addEventListener('pointerdown',function(e){
   if(!e.target.closest('.lap-grp')){
     document.querySelectorAll('.lap-grp.lg-editing').forEach(r=>r.classList.remove('lg-editing'));
   }
+  if(!e.target.closest('.planned-card')){
+    document.querySelectorAll('.planned-card.pc-editing').forEach(r=>r.classList.remove('pc-editing'));
+  }
 });
+
+// ── DRAG & DROP: Activities ──
+var _actDragId=null;
+
+function actDragStart(e,actId){
+  _actDragId=actId;
+  e.dataTransfer.effectAllowed='move';
+  setTimeout(()=>{
+    const el=document.getElementById('ar_'+actId);
+    if(el) el.classList.add('dragging');
+  },0);
+}
+
+function actDragOver(e,actId){
+  if(!_actDragId||_actDragId===actId)return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect='move';
+  document.querySelectorAll('.act-row.drag-over').forEach(el=>el.classList.remove('drag-over'));
+  const el=document.getElementById('ar_'+actId);
+  if(el) el.classList.add('drag-over');
+}
+
+function actDrop(e,targetId){
+  e.preventDefault();
+  if(!_actDragId||_actDragId===targetId)return;
+  const fromIdx=S.activities.findIndex(a=>a.id===_actDragId);
+  const toIdx=S.activities.findIndex(a=>a.id===targetId);
+  if(fromIdx<0||toIdx<0)return;
+  const [moved]=S.activities.splice(fromIdx,1);
+  S.activities.splice(toIdx,0,moved);
+  save();renderActList();
+}
+
+function actDragEnd(e){
+  _actDragId=null;
+  document.querySelectorAll('.act-row').forEach(el=>{
+    el.classList.remove('dragging','drag-over');
+  });
+}
+
+// ── DRAG & DROP: Subtasks ──
+var _stDragPid=null,_stDragSid=null;
+
+function stDragStart(e,pid,sid){
+  _stDragPid=pid;_stDragSid=sid;
+  e.dataTransfer.effectAllowed='move';
+  setTimeout(()=>{
+    const el=document.getElementById('sti_'+sid);
+    if(el) el.classList.add('dragging');
+  },0);
+}
+
+function stDragOver(e,sid){
+  if(!_stDragSid||_stDragSid===sid)return;
+  e.preventDefault();
+  document.querySelectorAll('.subtask-item.drag-over-st').forEach(el=>el.classList.remove('drag-over-st'));
+  const el=document.getElementById('sti_'+sid);
+  if(el) el.classList.add('drag-over-st');
+}
+
+function stDrop(e,pid,targetSid){
+  e.preventDefault();
+  if(!_stDragSid||_stDragSid===targetSid)return;
+  const p=S.planned.find(x=>x.id===pid);if(!p)return;
+  const fromIdx=p.subtasks.findIndex(s=>s.id===_stDragSid);
+  const toIdx=p.subtasks.findIndex(s=>s.id===targetSid);
+  if(fromIdx<0||toIdx<0)return;
+  const [moved]=p.subtasks.splice(fromIdx,1);
+  p.subtasks.splice(toIdx,0,moved);
+  save();renderPlanned();
+}
+
+function stDragEnd(){
+  _stDragPid=null;_stDragSid=null;
+  document.querySelectorAll('.subtask-item').forEach(el=>{
+    el.classList.remove('dragging','drag-over-st');
+  });
+}
 
 function deleteActivity(actId){
   // block if currently running
@@ -2006,10 +2618,16 @@ function renderActList(){
   document.getElementById('actList').innerHTML=S.activities.map(a=>{
     const added=todayActiveIds.includes(a.id);
     return`<div class="act-row" id="ar_${a.id}"
+      draggable="true"
+      ondragstart="actDragStart(event,'${a.id}')"
+      ondragover="actDragOver(event,'${a.id}')"
+      ondrop="actDrop(event,'${a.id}')"
+      ondragend="actDragEnd(event)"
       onpointerdown="startLongPress('${a.id}')"
       onpointerup="cancelLongPress()"
       onpointerleave="cancelLongPress()"
       onpointercancel="cancelLongPress()">
+      <div class="drag-handle"><span></span><span></span><span></span></div>
       <div class="act-emoji">${a.emoji}</div>
       <div class="act-info">
         <div class="act-name">${esc(a.name)}</div>
@@ -2152,6 +2770,20 @@ function openDetail(id){
   document.getElementById('dtDurH').value=hh||'';
   document.getElementById('dtDurM').value=mm||'';
   document.getElementById('dtDurRow').style.display=''; // always visible
+  // show break segments
+  const breaksRow=document.getElementById('dtBreaksRow');
+  const breaksVal=document.getElementById('dtBreaks');
+  if(s.breaks&&s.breaks.length){
+    breaksVal.innerHTML=s.breaks.map((b,i)=>
+      `Descanso ${i+1}: ${fmtS(b.dur)} (${fmtTime(b.start)} → ${fmtTime(b.end)})`
+    ).join('<br>');
+    breaksRow.style.display='';
+  } else if(s.breakTotal>0){
+    breaksVal.textContent=`Descanso total: ${fmtS(s.breakTotal)}`;
+    breaksRow.style.display='';
+  } else {
+    breaksRow.style.display='none';
+  }
   // Build lap selector — all laps in same group + "Sin lap" option
   const grpSessions=S.sessions.filter(x=>x.groupId===s.groupId).sort((a,b)=>new Date(a.startTime)-new Date(b.startTime));
   const lapSel=document.getElementById('dtLapSel');
@@ -2242,20 +2874,67 @@ function openAddAct(editActId){
   document.getElementById('colorGrid').innerHTML=ACT_PALETTE.map(col=>`
     <div class="cp ${col===selColor?'sel':''}" style="background:${col};" onclick="selCol('${col}')"></div>`).join('');
   document.getElementById('aName').value=act?act.name:'';
+  document.getElementById('defaultSubInput').value='';
   document.getElementById('addActModal').dataset.editId=editActId||'';
   document.querySelector('#addActModal .modal-title').textContent=editActId?'Editar actividad':'Nueva actividad';
+  renderDefaultSubs(act?act.defaultSubtasks||[]:[]); 
+  // Pre-fill default start time
+  const dsh=document.getElementById('actDefStartH');
+  const dsm=document.getElementById('actDefStartM');
+  if(dsh) dsh.value=act&&act.defaultStartH!==undefined?String(act.defaultStartH):'';
+  if(dsm) dsm.value=act&&act.defaultStartM!==undefined?String(act.defaultStartM):'0';
   openModal('addActModal');
 }
 function selEp(e){selEmoji=e;document.querySelectorAll('.ep').forEach(el=>el.classList.toggle('sel',el.textContent===e));}
 function selCol(col){selColor=col;document.querySelectorAll('.cp').forEach(el=>el.classList.toggle('sel',el.style.background===col||el.style.backgroundColor===col));}
+var _editingDefaultSubs=[]; // temp list while modal is open
+
+function renderDefaultSubs(subs){
+  _editingDefaultSubs=[...subs];
+  const el=document.getElementById('defaultSubsList');
+  if(!el)return;
+  el.innerHTML=_editingDefaultSubs.map((s,i)=>`
+    <div class="def-sub-item">
+      <span style="font-size:10px;color:var(--text3);">↳</span>
+      <span style="flex:1;">${esc(s)}</span>
+      <button class="def-sub-del" onclick="removeDefaultSub(${i})">✕</button>
+    </div>`).join('');
+}
+
+function addDefaultSub(){
+  const inp=document.getElementById('defaultSubInput');
+  const txt=inp?inp.value.trim():'';
+  if(!txt)return;
+  _editingDefaultSubs.push(txt);
+  inp.value='';
+  renderDefaultSubs(_editingDefaultSubs);
+  inp.focus();
+}
+
+function removeDefaultSub(idx){
+  _editingDefaultSubs.splice(idx,1);
+  renderDefaultSubs(_editingDefaultSubs);
+}
+
 function confirmAddAct(){
   const n=document.getElementById('aName').value.trim();if(!n)return;
   const editId=document.getElementById('addActModal').dataset.editId;
+  const dshVal=document.getElementById('actDefStartH')?.value;
+  const dsmVal=document.getElementById('actDefStartM')?.value;
+  const hasDefStart=dshVal!==''&&dshVal!==undefined;
   if(editId){
     const act=S.activities.find(a=>a.id===editId);
-    if(act){act.name=n;act.emoji=selEmoji;act.color=selColor;}
+    if(act){
+      act.name=n;act.emoji=selEmoji;act.color=selColor;
+      act.defaultSubtasks=[..._editingDefaultSubs];
+      if(hasDefStart){act.defaultStartH=parseInt(dshVal);act.defaultStartM=parseInt(dsmVal)||0;}
+      else{delete act.defaultStartH;delete act.defaultStartM;}
+    }
   } else {
-    S.activities.push({id:'act_'+Date.now(),name:n,emoji:selEmoji,color:selColor,weekTotal:0});
+    const newAct={id:'act_'+Date.now(),name:n,emoji:selEmoji,color:selColor,weekTotal:0,
+      defaultSubtasks:[..._editingDefaultSubs]};
+    if(hasDefStart){newAct.defaultStartH=parseInt(dshVal);newAct.defaultStartM=parseInt(dsmVal)||0;}
+    S.activities.push(newAct);
   }
   save();closeModal('addActModal');renderAll();
 }
@@ -2525,7 +3204,7 @@ function exportCSV(){
 // ═══════════════════════════════════════════════════════
 //  DÍA PAGE — TIMELINE + HABIT TRACKER
 // ═══════════════════════════════════════════════════════
-var diaView='habit';       // 'habit' | 'timeline'
+var diaView='plan';       // 'habit' | 'timeline'
 var diaDate=new Date();    // date shown in timeline
 
 // Palette: cycle through accent colors per activity
@@ -2539,24 +3218,286 @@ function actColor(actId){
 
 function setDiaView(v){
   diaView=v;
-  document.getElementById('dvtHabit').classList.toggle('active',v==='habit');
-  document.getElementById('dvtTimeline').classList.toggle('active',v==='timeline');
+  ['habit','timeline','plan'].forEach(tab=>{
+    document.getElementById('dvt'+tab.charAt(0).toUpperCase()+tab.slice(1)).classList.toggle('active',v===tab);
+  });
   document.getElementById('diaHabitContent').style.display=v==='habit'?'':'none';
   document.getElementById('diaTimelineContent').style.display=v==='timeline'?'':'none';
+  document.getElementById('diaPlanContent').style.display=v==='plan'?'':'none';
   document.getElementById('diaDateNav').style.display=v==='timeline'?'flex':'none';
   if(v==='timeline')renderTimeline();
+  else if(v==='plan')renderIdealPlan();
   else renderHabit();
 }
 
 function shiftDiaDate(d){
   diaDate=new Date(diaDate);diaDate.setDate(diaDate.getDate()+d);
-  // don't go into future
   if(diaDate>new Date())diaDate=new Date();
   renderTimeline();
 }
 
+var planDate=new Date();
+function shiftPlanDate(d){
+  planDate=new Date(planDate);planDate.setDate(planDate.getDate()+d);
+  if(planDate>new Date())planDate=new Date();
+  renderIdealPlan();
+}
+
+// ── IDEAL PLAN VIEW ──
+var _iplanPxPerMin=4; // pixels per minute — adjustable via zoom
+
+function renderIdealPlan(){
+  const el=document.getElementById('diaPlanContent');
+  const pStr=planDate.toDateString();
+  const isToday=pStr===new Date().toDateString();
+  const lbl=document.getElementById('planDateLbl');
+  if(lbl) lbl.textContent=isToday?'Hoy':planDate.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
+  // For past days show ALL planned (including done), for today only active
+  const plans=S.planned.filter(p=>new Date(p.addedAt).toDateString()===pStr&&p.idealSecs>0&&(isToday?!p.done:true));
+
+  if(!plans.length){
+    el.innerHTML=`<div class="iplan-empty">// Añade actividades con tiempo ideal ⏱ para visualizarlas aquí</div>`;
+    return;
+  }
+
+  const totalSecs=plans.reduce((t,p)=>t+(p.idealSecs||0)+(p.breakIdealSecs||0),0);
+  const sleepHHMM=getSleepTime()||'22:00';
+  const [slH,slM]=sleepHHMM.split(':').map(Number);
+  const sleepMins=slH*60+slM;
+
+  // Start time
+  let startHHMM=(S.prefs&&S.prefs.planStart)||null;
+  if(!startHHMM){
+    const now=new Date();
+    startHHMM=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+    if(!S.prefs)S.prefs={};
+    S.prefs.planStart=startHHMM;
+  }
+  const [stH,stM]=startHHMM.split(':').map(Number);
+  const startMins=stH*60+stM;
+
+  // All blocks have absolute positions — startMins only sets the viewport
+  const offKey='po_'+pStr;
+  const planOffsets=(S.prefs&&S.prefs[offKey])||{};
+  const blocks=[];
+  let cursor=startMins;
+  plans.forEach(p=>{
+    const dur=Math.max(1,Math.round((p.idealSecs||0)/60));
+    const brk=Math.round((p.breakIdealSecs||0)/60);
+    // Always use saved absolute position if available
+    // First time a block appears: place sequentially and immediately save its absolute pos
+    let blockStart;
+    if(planOffsets[p.id]&&typeof planOffsets[p.id]==='object'){
+      blockStart=planOffsets[p.id].abs;
+    } else {
+      // First time: place sequentially and save permanently
+      blockStart=cursor;
+      if(!S.prefs)S.prefs={};
+      if(!S.prefs[offKey])S.prefs[offKey]={};
+      S.prefs[offKey][p.id]={abs:blockStart};
+    }
+    blocks.push({p,startMin:blockStart,dur,brk,color:actColor(p.actId)});
+    cursor+=dur+brk;
+  });
+
+  const endMins=Math.max(...blocks.map(b=>b.startMin+b.dur+b.brk),startMins+60);
+  // viewStart is exactly the selected start time — blocks before it are hidden
+  const viewStart=startMins;
+  const viewEnd=Math.max(endMins+30,sleepMins+30);
+  const viewSpan=viewEnd-viewStart;
+  const PX=_iplanPxPerMin;
+  const totalHeight=viewSpan*PX;
+
+  // Ruler
+  let rulerHtml='',linesHtml='';
+  for(let h=Math.ceil(viewStart/60);h<=Math.floor(viewEnd/60);h++){
+    const y=(h*60-viewStart)*PX;
+    rulerHtml+=`<div class="iplan-ruler-lbl" style="top:${y}px">${String(h%24).padStart(2,'0')}h</div>
+                <div class="iplan-ruler-tick" style="top:${y}px"></div>`;
+    linesHtml+=`<div class="iplan-hour-line major" style="top:${y}px"></div>`;
+    const y30=y+30*PX;
+    if(y30<totalHeight) linesHtml+=`<div class="iplan-hour-line" style="top:${y30}px"></div>`;
+  }
+
+  // Now line
+  let nowHtml='';
+  const nowMins=new Date().getHours()*60+new Date().getMinutes();
+  if(nowMins>=viewStart&&nowMins<=viewEnd){
+    const nowY=(nowMins-viewStart)*PX;
+    nowHtml=`<div class="iplan-now-line" style="top:${nowY}px" id="iplan-now"><div class="iplan-now-dot"></div></div>`;
+  }
+
+  // Sleep line
+  let sleepHtml='';
+  if(sleepMins>=viewStart&&sleepMins<=viewEnd){
+    const slY=(sleepMins-viewStart)*PX;
+    sleepHtml=`<div style="position:absolute;left:0;right:0;top:${slY}px;height:2px;background:var(--accent);opacity:.4;pointer-events:none;"></div>
+    <div style="position:absolute;left:6px;top:${slY+4}px;font-size:8px;color:var(--accent);font-family:var(--mono);opacity:.6;pointer-events:none;">🌙 ${sleepHHMM}</div>`;
+  }
+
+  // Blocks
+  let blocksHtml='';
+  blocks.forEach(({p,startMin,dur,brk,color})=>{
+    const top=(startMin-viewStart)*PX;
+    const height=Math.max(dur*PX,28);
+    const hStart=String(Math.floor(startMin/60)%24).padStart(2,'0');
+    const mStart=String(startMin%60).padStart(2,'0');
+    const hEnd=String(Math.floor((startMin+dur)/60)%24).padStart(2,'0');
+    const mEnd=String((startMin+dur)%60).padStart(2,'0');
+    const subs=p.subtasks.filter(s=>!s.done).slice(0,3).map(s=>s.text).join(' · ');
+    blocksHtml+=`<div class="iplan-block" id="ipb_${p.id}" data-pid="${p.id}" data-dur="${dur}"
+      style="top:${top}px;height:${height}px;background:${color}25;border:1.5px solid ${color};user-select:none;">
+      <div class="iplan-block-name" style="color:${color};">${p.actEmoji} ${esc(p.actName)}</div>
+      ${height>36?`<div class="iplan-block-time" style="color:${color};">${hStart}:${mStart} → ${hEnd}:${mEnd} · ${fmtM(p.idealSecs)}</div>`:''}
+      ${height>56&&subs?`<div class="iplan-block-sub" style="color:${color};">${esc(subs)}</div>`:''}
+      <div class="iplan-resize-handle" data-pid="${p.id}" style="position:absolute;bottom:0;left:0;right:0;height:10px;cursor:ns-resize;display:flex;align-items:center;justify-content:center;">
+        <div style="width:20px;height:2px;background:${color};opacity:.5;border-radius:1px;"></div>
+      </div>
+    </div>`;
+    if(brk>0){
+      const bTop=top+height;
+      const bH=Math.max(brk*PX,8);
+      blocksHtml+=`<div style="position:absolute;left:6px;right:6px;top:${bTop}px;height:${bH}px;
+        background:var(--border);border-radius:4px;opacity:.35;pointer-events:none;"></div>
+        <div style="position:absolute;left:10px;top:${bTop+2}px;font-size:7px;font-family:var(--mono);color:var(--text3);opacity:.6;pointer-events:none;">descanso ${brk}m</div>`;
+    }
+  });
+
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;gap:6px;padding:8px 16px 6px;border-bottom:1px solid var(--border);">
+      <span style="font-size:10px;color:var(--text3);font-family:var(--mono);">inicio</span>
+      <select id="iplanStartH" onchange="setIplanStartHM()"
+        style="background:var(--s0);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:12px;padding:3px 4px;outline:none;cursor:pointer;">
+        ${Array.from({length:24},(_,h)=>`<option value="${h}" ${h===stH?'selected':''}>${String(h).padStart(2,'0')}</option>`).join('')}
+      </select>
+      <span style="color:var(--text3);font-size:12px;">:</span>
+      <select id="iplanStartM" onchange="setIplanStartHM()"
+        style="background:var(--s0);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:12px;padding:3px 4px;outline:none;cursor:pointer;">
+        ${(()=>{const nearM=Math.round(stM/5)*5%60;return[0,5,10,15,20,25,30,35,40,45,50,55].map(m=>`<option value="${m}" ${m===nearM?'selected':''}>${String(m).padStart(2,'0')}</option>`).join('');})()}
+      </select>
+      <span style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-left:auto;">total ${fmtM(totalSecs)}</span>
+    </div>
+    <div style="display:flex;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:80px;" id="iplanScroll">
+      <div class="iplan-ruler" style="height:${totalHeight+40}px;position:relative;">
+        ${rulerHtml}
+      </div>
+      <div class="iplan-col" id="iplanCol" style="height:${totalHeight+40}px;position:relative;">
+        ${linesHtml}${nowHtml}${sleepHtml}${blocksHtml}
+      </div>
+    </div>`;
+
+  // Attach drag (move) and resize handlers
+  _attachIplanInteractions(blocks,viewStart,PX);
+
+  setTimeout(()=>{
+    const n=document.getElementById('iplan-now');
+    if(n) n.scrollIntoView({behavior:'smooth',block:'center'});
+    else document.getElementById('iplanScroll')?.scrollTo({top:(startMins-viewStart)*PX-40,behavior:'smooth'});
+  },120);
+}
+
+function setIplanStart(hhmm){
+  if(!hhmm||hhmm.length<5)return;
+  if(!S.prefs)S.prefs={};
+  S.prefs.planStart=hhmm;
+  save();renderIdealPlan();
+}
+
+function setIplanStartHM(){
+  const h=parseInt(document.getElementById('iplanStartH')?.value||0);
+  const m=parseInt(document.getElementById('iplanStartM')?.value||0);
+  const hhmm=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+  if(!S.prefs)S.prefs={};
+  S.prefs.planStart=hhmm;
+  save();renderIdealPlan();
+}
+
+function _attachIplanInteractions(blocks,viewStart,PX){
+  const col=document.getElementById('iplanCol');
+  if(!col)return;
+
+  let _drag=null;
+
+  function getY(e){return e.clientY!==undefined?e.clientY:(e.touches&&e.touches[0]?e.touches[0].clientY:0);}
+
+  col.addEventListener('pointerdown',function(e){
+    const handle=e.target.closest('.iplan-resize-handle');
+    const block=e.target.closest('.iplan-block[data-pid]');
+    if(!block&&!handle)return;
+    const pid=(handle||block).dataset.pid;
+    const blk=blocks.find(b=>b.p.id===pid);if(!blk)return;
+    e.preventDefault();
+    try{col.setPointerCapture(e.pointerId);}catch(ex){}
+    _drag={pid,blk,type:handle?'resize':'move',startY:getY(e),origDur:blk.dur,origStartMin:blk.startMin};
+  },{passive:false});
+
+  col.addEventListener('pointermove',function(e){
+    if(!_drag)return;
+    e.preventDefault();
+    const deltaY=getY(e)-_drag.startY;
+    const deltaMins=Math.round(deltaY/PX/5)*5;
+    const blockEl=document.getElementById('ipb_'+_drag.pid);if(!blockEl)return;
+
+    if(_drag.type==='resize'){
+      const newDur=Math.max(5,_drag.origDur+deltaMins);
+      const newH=Math.max(newDur*PX,28);
+      blockEl.style.height=newH+'px';
+      const timeEl=blockEl.querySelector('.iplan-block-time');
+      if(timeEl) timeEl.textContent=fmtM(newDur*60);
+    } else {
+      // move ONLY this block — independent, can overlap
+      const newStart=Math.max(0,_drag.origStartMin+deltaMins);
+      blockEl.style.top=((newStart-viewStart)*PX)+'px';
+      const timeEl=blockEl.querySelector('.iplan-block-time');
+      if(timeEl){
+        const hh=String(Math.floor(newStart/60)%24).padStart(2,'0');
+        const mm=String(newStart%60).padStart(2,'0');
+        const endMin=newStart+_drag.blk.dur;
+        const eh=String(Math.floor(endMin/60)%24).padStart(2,'0');
+        const em=String(endMin%60).padStart(2,'0');
+        timeEl.textContent=`${hh}:${mm} → ${eh}:${em} · ${fmtM(_drag.blk.dur*60)}`;
+      }
+    }
+  },{passive:false});
+
+  col.addEventListener('pointerup',function(e){
+    if(!_drag)return;
+    const deltaY=getY(e)-_drag.startY;
+    const deltaMins=Math.round(deltaY/PX/5)*5;
+    const plan=S.planned.find(x=>x.id===_drag.pid);
+    if(plan){
+      if(_drag.type==='resize'){
+        const newDur=Math.max(5,_drag.origDur+deltaMins);
+        plan.idealSecs=newDur*60;
+        // Update block height in DOM permanently
+        const blockEl=document.getElementById('ipb_'+_drag.pid);
+        if(blockEl) blockEl.style.height=Math.max(newDur*PX,28)+'px';
+      } else {
+        if(!S.prefs)S.prefs={};
+        const _offKey='po_'+planDate.toDateString();
+        if(!S.prefs[_offKey])S.prefs[_offKey]={};
+        const newStart=Math.max(0,_drag.origStartMin+deltaMins);
+        S.prefs[_offKey][_drag.pid]={abs:newStart};
+        const blockEl=document.getElementById('ipb_'+_drag.pid);
+        if(blockEl) blockEl.style.top=((newStart-viewStart)*PX)+'px';
+      }
+      save(); // save but DO NOT re-render — position already correct in DOM
+    }
+    _drag=null;
+    // no renderIdealPlan() here — avoids snapping back
+  });
+
+  col.addEventListener('pointercancel',function(){_drag=null;});
+}
+
+function openEditPlannedStart(pid){
+  // Tap on block opens the ideal time editor for that plan
+  openEditIdeal(pid);
+}
+
 function renderDia(){
   if(diaView==='habit')renderHabit();
+  else if(diaView==='plan')renderIdealPlan();
   else renderTimeline();
 }
 
@@ -2772,11 +3713,8 @@ function setTlZoom(idx){
 }
 
 function scrollToNow(){
-  // scroll to now line in the current block
-  const nowLine=document.getElementById('tl-now-line');
-  if(nowLine){
-    nowLine.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
-  }
+  const n=document.getElementById('tl-now-line')||document.getElementById('iplan-now');
+  if(n) n.scrollIntoView({behavior:'smooth',block:'center'});
 }
 
 function renderTimeline(){
@@ -2789,176 +3727,121 @@ function renderTimeline(){
   const prevDate=new Date(diaDate);prevDate.setDate(prevDate.getDate()-1);
   const prevStr=prevDate.toDateString();
 
-  // Merge sessions by actId: group laps of same activity into continuous blocks
   const rawSessions=S.sessions.filter(s=>{
     const sd=new Date(s.startTime).toDateString();
     return sd===dStr||sd===prevStr;
   }).sort((a,b)=>new Date(a.startTime)-new Date(b.startTime));
 
   if(!rawSessions.length){
-    el.innerHTML=`<div class="tl-empty">// sin registros este día</div>`;
+    el.innerHTML=`<div class="iplan-empty">// sin registros este día</div>`;
     return;
   }
 
-  // Merge consecutive sessions of same actId within 5min gap into one visual block
+  // Merge consecutive sessions of same actId within 5min gap
   function mergeAct(sessions){
     const merged=[];
     sessions.forEach(s=>{
       const last=merged[merged.length-1];
       const gap=last?Math.floor((new Date(s.startTime)-new Date(last.endTime))/60000):999;
       if(last&&last.actId===s.actId&&gap<5){
-        last.endTime=s.endTime;
-        last.duration+=s.duration;
-      } else {
-        merged.push({...s});
-      }
+        last.endTime=s.endTime;last.duration+=s.duration;
+      } else merged.push({...s});
     });
     return merged;
   }
-  const allSessions=mergeAct(rawSessions);
+  const sessions=mergeAct(rawSessions);
 
-  // Zoom bar HTML
-  let html=`<div class="tl-zoom-bar">`;
-  TL_ZOOMS.forEach((z,i)=>{
-    html+=`<button class="tl-zoom-btn ${_tlZoom===i?'active':''}" onclick="setTlZoom(${i})">${z.label}</button>`;
-  });
-  html+=`<button class="tl-zoom-btn" onclick="scrollToNow()" style="margin-left:auto;">⬤ ahora</button>`;
-  html+=`</div><div class="tl-page">`;
+  // Find full day range
+  const firstSess=sessions[0];
+  const lastSess=sessions[sessions.length-1];
+  const dayStartMins=new Date(firstSess.startTime).getHours()*60+new Date(firstSess.startTime).getMinutes();
+  const dayEndMins=new Date(lastSess.endTime).getHours()*60+new Date(lastSess.endTime).getMinutes();
+  const viewStart=Math.max(0,dayStartMins-30);
+  const viewEnd=Math.min(1440,dayEndMins+30);
 
-  const TL_BLOCKS=getTLBlocks();
-  TL_BLOCKS.forEach(blk=>{
-    function inBlock(s){
-      const h=new Date(s.startTime).getHours();
-      const d=new Date(s.startTime).toDateString();
-      if(blk.id==='night'){
-        if(d===prevStr&&h>=22)return true;
-        if(d===dStr&&h<7)return true;
-        return false;
-      }
-      return d===dStr&&h>=blk.startH&&h<blk.endH;
+  const PX=_iplanPxPerMin;
+  const totalHeight=(viewEnd-viewStart)*PX;
+
+  // Assign lanes for overlapping sessions
+  function assignLanesVert(sessions){
+    const lanes=[];
+    sessions.forEach(s=>{
+      const sm=new Date(s.startTime).getHours()*60+new Date(s.startTime).getMinutes();
+      const em=new Date(s.endTime).getHours()*60+new Date(s.endTime).getMinutes();
+      let lane=0;
+      while(lanes[lane]&&lanes[lane]>sm) lane++;
+      lanes[lane]=em;
+      s._lane=lane;s._totalLanes=1;
+    });
+    const maxLane=sessions.reduce((m,s)=>Math.max(m,s._lane),0)+1;
+    sessions.forEach(s=>s._totalLanes=maxLane);
+    return sessions;
+  }
+  assignLanesVert(sessions);
+  const maxLanes=sessions.reduce((m,s)=>Math.max(m,s._totalLanes),1);
+
+  // Ruler
+  let rulerHtml='',linesHtml='';
+  for(let h=Math.ceil(viewStart/60);h<=Math.floor(viewEnd/60);h++){
+    const y=(h*60-viewStart)*PX;
+    rulerHtml+=`<div class="iplan-ruler-lbl" style="top:${y}px">${String(h%24).padStart(2,'0')}h</div>
+                <div class="iplan-ruler-tick" style="top:${y}px"></div>`;
+    linesHtml+=`<div class="iplan-hour-line major" style="top:${y}px"></div>`;
+    const y30=y+30*PX;
+    if(y30<totalHeight) linesHtml+=`<div class="iplan-hour-line" style="top:${y30}px"></div>`;
+  }
+
+  // Now line
+  let nowHtml='';
+  if(isToday){
+    const nowMins=new Date().getHours()*60+new Date().getMinutes();
+    if(nowMins>=viewStart&&nowMins<=viewEnd){
+      const nowY=(nowMins-viewStart)*PX;
+      nowHtml=`<div class="iplan-now-line" style="top:${nowY}px" id="tl-now-line"><div class="iplan-now-dot"></div></div>`;
     }
+  }
 
-    const blockSessions=allSessions.filter(s=>inBlock(s));
-    const blockTotal=rawSessions.filter(s=>inBlock(s)).reduce((t,s)=>t+s.duration,0);
+  // Session blocks
+  let blocksHtml='';
+  sessions.forEach(s=>{
+    const sm=new Date(s.startTime).getHours()*60+new Date(s.startTime).getMinutes();
+    const em=new Date(s.endTime).getHours()*60+new Date(s.endTime).getMinutes();
+    const top=(sm-viewStart)*PX;
+    const height=Math.max((em-sm)*PX,20);
+    const color=actColor(s.actId);
+    const laneW=100/maxLanes;
+    const left=s._lane*laneW;
+    const hStart=String(Math.floor(sm/60)%24).padStart(2,'0');
+    const mStart=String(sm%60).padStart(2,'0');
+    blocksHtml+=`<div class="iplan-block" style="
+        top:${top}px;height:${height}px;
+        left:${left}%;width:${laneW}%;
+        background:${color}25;border:1.5px solid ${color};"
+      onclick="openDetail('${s.id}')">
+      <div class="iplan-block-name" style="color:${color};">${s.actEmoji} ${esc(s.actName)}</div>
+      ${height>34?`<div class="iplan-block-time" style="color:${color};">${hStart}:${mStart} · ${fmtM(s.duration)}</div>`:''}
+      ${s.subtaskName&&height>50?`<div class="iplan-block-sub" style="color:${color};">↳ ${esc(s.subtaskName)}</div>`:''}
+    </div>`;
+  });
 
-    html+=`<div class="tl-block-hdr" style="padding:0 16px;">
-      <div class="tl-block-line" style="width:8px;height:1px;background:${blk.color};flex-shrink:0;"></div>
-      <div class="tl-block-title" style="color:${blk.color};">${blk.title}</div>
-      <div class="tl-block-hdr-line"></div>
-      ${blockTotal>0?`<div class="tl-block-total">${fmtS(blockTotal)}</div>`:''}
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 16px 6px;border-bottom:1px solid var(--border);">
+      <span style="font-size:10px;color:var(--text3);font-family:var(--mono);">${rawSessions.length} registros · ${fmtM(rawSessions.reduce((t,s)=>t+s.duration,0))}</span>
+      <button class="tl-zoom-btn" onclick="scrollToNow()" style="margin-left:auto;font-size:9px;">⬤ ahora</button>
+    </div>
+    <div style="display:flex;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:80px;" id="tlScroll">
+      <div class="iplan-ruler" style="height:${totalHeight+40}px;position:relative;">
+        ${rulerHtml}
+      </div>
+      <div class="iplan-col" style="height:${totalHeight+40}px;position:relative;">
+        ${linesHtml}${nowHtml}${blocksHtml}
+      </div>
     </div>`;
 
-    if(!blockSessions.length){
-      html+=`<div style="height:10px;margin:0 16px 6px;border-left:2px solid ${blk.color}22;"></div>`;
-    } else {
-      let blockStartMin, blockEndMin;
-      if(blk.id==='night'){blockStartMin=22*60;blockEndMin=31*60;}
-      else{blockStartMin=blk.startH*60;blockEndMin=blk.endH*60;}
-      const blockSpanMins=blockEndMin-blockStartMin;
-
-      // Determine pixel width based on zoom
-      const zoomObj=TL_ZOOMS[_tlZoom];
-      const containerW=Math.max(window.innerWidth-32,300);
-      let totalPx;
-      if(!zoomObj.mpp){
-        totalPx=containerW; // fit to screen
-      } else {
-        totalPx=Math.round(blockSpanMins/zoomObj.mpp*containerW);
-      }
-      const pxPerMin=totalPx/blockSpanMins;
-
-      function toBlockPx(s){
-        const st=new Date(s.startTime),en=new Date(s.endTime);
-        let sm=st.getHours()*60+st.getMinutes();
-        let em=en.getHours()*60+en.getMinutes();
-        if(blk.id==='night'){
-          if(new Date(s.startTime).toDateString()===dStr){sm+=24*60;}
-          if(new Date(s.endTime).toDateString()===dStr){em+=24*60;}
-        }
-        sm=Math.max(sm,blockStartMin);
-        em=Math.min(em,blockEndMin);
-        const left=Math.round((sm-blockStartMin)*pxPerMin);
-        const width=Math.max(Math.round((em-sm)*pxPerMin),4);
-        return{left,width};
-      }
-
-      const {items,laneCount}=assignLanes(blockSessions);
-
-      // Find longest pill per actId for emoji display
-      const longestByAct={};
-      items.forEach(it=>{
-        const pw=toBlockPx(it.s).width;
-        if(!longestByAct[it.s.actId]||pw>longestByAct[it.s.actId].width){
-          longestByAct[it.s.actId]={id:it.s.id,width:pw};
-        }
-      });
-
-      html+=`<div class="tl-scroll-wrap" id="tlsw_${blk.id}"><div class="tl-ruler-wrap" style="width:${totalPx}px;min-width:100%;position:relative;">`;
-
-      // Ticks every 30min or 10min depending on zoom
-      const tickEvery=zoomObj.mpp?Math.max(10,Math.round(30/Math.max(1,blockSpanMins/zoomObj.mpp))):30;
-      html+=`<div class="tl-ticks">`;
-      for(let m=0;m<=blockSpanMins;m+=tickEvery){
-        const px=Math.round(m*pxPerMin);
-        const isHour=m%60===0;
-        html+=`<div class="tl-tick ${isHour?'hour':''}" style="left:${px}px"></div>`;
-      }
-      html+=`</div>`;
-
-      // Hour labels
-      html+=`<div class="tl-ruler-labels" style="position:relative;height:14px;">`;
-      for(let m=0;m<blockSpanMins;m+=60){
-        const absMin=blockStartMin+m;
-        const h=Math.floor(absMin/60)%24;
-        const px=Math.round(m*pxPerMin);
-        html+=`<div style="position:absolute;left:${px}px;font-size:8px;color:var(--text3);font-family:var(--mono);">${String(h).padStart(2,'0')}h</div>`;
-      }
-      html+=`</div>`;
-
-      // Lanes
-      html+=`<div class="tl-lanes">`;
-      for(let li=0;li<laneCount;li++){
-        html+=`<div class="tl-lane" style="position:relative;height:28px;">`;
-        items.filter(it=>it.lane===li).forEach(it=>{
-          const {left,width}=toBlockPx(it.s);
-          const color=actColor(it.s.actId);
-          const isLongest=longestByAct[it.s.actId]?.id===it.s.id;
-          const showEmoji=width>18; // always show emoji if there's room
-          const showName=width>60;
-          const showDur=width>90;
-          html+=`<div class="tl-pill"
-            style="position:absolute;left:${left}px;width:${width}px;background:${color}33;border:1.5px solid ${color};"
-            onclick="openDetail('${it.s.id}')">
-            ${showEmoji?`<span class="tl-pill-emoji">${it.s.actEmoji}</span>`:''}
-            ${showName?`<span class="tl-pill-name" style="color:${color};">${esc(it.s.actName)}</span>`:''}
-            ${showDur?`<span class="tl-pill-dur" style="color:${color};">${fmtS(it.s.duration)}</span>`:''}
-          </div>`;
-        });
-        html+=`</div>`;
-      }
-      // Red "now" line — only in the block that contains the current time
-      const nowH=new Date().getHours(), nowM=new Date().getMinutes();
-      const nowMin=nowH*60+nowM;
-      let nowInBlock=false;
-      if(blk.id==='night'){
-        nowInBlock=(nowH>=22)||(nowH<7);
-      } else {
-        nowInBlock=nowH>=blk.startH&&nowH<blk.endH;
-      }
-      if(nowInBlock&&diaDate.toDateString()===new Date().toDateString()){
-        let nowBlockMin=nowMin;
-        if(blk.id==='night'&&nowH<7) nowBlockMin=nowMin+24*60;
-        const nowPx=Math.round((nowBlockMin-blockStartMin)*pxPerMin);
-        html+=`<div id="tl-now-line" style="position:absolute;left:${nowPx}px;top:0;bottom:0;width:2px;background:var(--red);opacity:.8;pointer-events:none;z-index:10;">
-          <div style="position:absolute;top:-4px;left:-4px;width:10px;height:10px;background:var(--red);border-radius:50%;"></div>
-        </div>`;
-      }
-      html+=`</div></div></div>`; // lanes, ruler-wrap, scroll-wrap
-    }
-  });
-
-  html+='</div>';
-  el.innerHTML=html;
+  setTimeout(()=>{
+    const n=document.getElementById('tl-now-line');
+    if(n) n.scrollIntoView({behavior:'smooth',block:'center'});
+  },100);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3022,16 +3905,16 @@ function confirmSleepTime(){
 }
 
 function renderDayMeta(){
-  // Date label
   const now=new Date();
   const dateLbl=now.toLocaleDateString('es-MX',{weekday:'short',day:'2-digit',month:'2-digit'});
   const el=document.getElementById('dayMetaDate');
   if(el) el.textContent=dateLbl;
 
-  // Sleep time & available hours
   const sleepEl=document.getElementById('sleepTimeLabel');
   const availEl=document.getElementById('dayMetaAvail');
-  const sleepHHMM=getSleepTime();
+  // Default sleep time: 22:00
+  let sleepHHMM=getSleepTime();
+  if(!sleepHHMM){setSleepTime('22:00');save();sleepHHMM='22:00';}
 
   if(!sleepHHMM){
     if(sleepEl) sleepEl.textContent='--:--';
@@ -3060,10 +3943,26 @@ function renderDayMeta(){
     return Math.floor(m/60)+'h '+(m%60)+'m';
   }
 
+  // Subtract already-spent time for today's planned activities
+  const now2=new Date();
+  const todayStr=now2.toDateString();
+  const spentToday=S.sessions
+    .filter(s=>new Date(s.startTime).toDateString()===todayStr)
+    .reduce((t,s)=>t+s.duration,0);
+  const spentMins=Math.floor(spentToday/60);
+  // Also subtract live running time
+  const liveMins=Math.floor(Object.values(S.running).reduce((t,ctx)=>{
+    if(ctx.paused)return t+(ctx.lapTotal||0);
+    return t+(ctx.lapTotal||0)+elapsed(ctx.startTime);
+  },0)/60);
+  const totalSpentMins=spentMins+liveMins;
+  const remainingPlannedMins=Math.max(0,plannedMins-totalSpentMins);
+  const adjustedFreeMins=availMins-remainingPlannedMins;
+
   if(availEl){
     if(plannedMins>0){
-      availEl.textContent=mToStr(freeMins)+' libres';
-      availEl.className='day-meta-avail '+(freeMins<0?'over':freeMins<60?'warn':'ok');
+      availEl.textContent=mToStr(adjustedFreeMins)+' libres';
+      availEl.className='day-meta-avail '+(adjustedFreeMins<0?'over':adjustedFreeMins<60?'warn':'ok');
     } else {
       availEl.textContent=mToStr(availMins)+' hasta dormir';
       availEl.className='day-meta-avail ok';
