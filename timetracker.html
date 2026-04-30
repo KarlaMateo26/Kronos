@@ -465,12 +465,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
     <div class="logo">KRONOS</div>
     <div style="display:flex;align-items:center;gap:8px;">
       <span id="syncDot" title="Sync" onclick="pullFromCloud()" style="font-size:12px;color:var(--text3);cursor:pointer;font-family:var(--mono);">●</span>
-      <select id="syncSourceSel" onchange="setSyncSource(this.value)"
-        style="background:transparent;border:none;color:var(--text3);font-family:var(--mono);font-size:8px;padding:0 2px;outline:none;cursor:pointer;margin-left:2px;">
-        <option value="both">⇄</option>
-        <option value="local">📱</option>
-        <option value="cloud">☁</option>
-      </select>
+      <button id="primaryBtn" onclick="togglePrimary()"
+        style="background:none;border:none;font-family:var(--mono);font-size:8px;padding:0 3px;cursor:pointer;outline:none;color:var(--text3);">
+        ○ Sin principal
+      </button>
       <div class="wk-badge" id="wkBadge">SEM 00</div>
     </div>
   </div>
@@ -907,7 +905,7 @@ function syncToCloud(){
 }
 
 function _pushToCloud(){
-  if(_syncSource==='cloud') return; // cloud is source — don't overwrite it
+  if(!canWrite()) return; // not the primary device — don't write
   var payload=JSON.stringify({state:S});
   fetch(API_URL,{
     method:'POST',
@@ -1116,6 +1114,7 @@ function pullFromCloud(){
           renderDayMeta();
         }
         _updateSyncDot(true);
+        updateDeviceUI();
       } else {
         _updateSyncDot(false);
       }
@@ -1134,18 +1133,95 @@ function pullFromCloud(){
   });
 }
 
+// ── DEVICE IDENTITY + PRIMARY DEVICE SYSTEM ──
+var _deviceId=(function(){
+  let id=localStorage.getItem('kronos_device_id');
+  if(!id){id='dev_'+Math.random().toString(36).slice(2,8);localStorage.setItem('kronos_device_id',id);}
+  return id;
+})();
+
+var _deviceName=(function(){
+  // Auto-detect device type
+  const ua=navigator.userAgent;
+  if(/android/i.test(ua)) return '📱 Celular';
+  if(/iphone|ipad/i.test(ua)) return '📱 Celular';
+  return '💻 Computadora';
+})();
+
 var _syncSource='both'; // 'both' | 'local' | 'cloud'
+var _isPrimary=false; // this device is the primary (writes to cloud)
+
 function setSyncSource(val){
   _syncSource=val;
   localStorage.setItem('kronos_sync_src',val);
-  // update selector on all renders
   const sel=document.getElementById('syncSourceSel');
   if(sel) sel.value=val;
 }
-// Load saved preference
+
+function setPrimary(val){
+  _isPrimary=val;
+  localStorage.setItem('kronos_is_primary',val?'1':'0');
+  if(val){
+    // Register this device as primary in prefs
+    if(!S.prefs)S.prefs={};
+    S.prefs.primaryDevice={id:_deviceId,name:_deviceName,ts:Date.now()};
+    save();
+  }
+  updateDeviceUI();
+}
+
+function updateDeviceUI(){
+  const btn=document.getElementById('primaryBtn');
+  if(!btn)return;
+  const cloudPrimary=S.prefs&&S.prefs.primaryDevice;
+  const isMine=cloudPrimary&&cloudPrimary.id===_deviceId;
+  const otherName=cloudPrimary&&!isMine?cloudPrimary.name:null;
+  if(_isPrimary||isMine){
+    btn.textContent='★ '+_deviceName;
+    btn.style.color='var(--green)';
+    btn.title='Este dispositivo es el principal — toca para desactivar';
+  } else if(otherName){
+    btn.textContent='⚠ '+otherName;
+    btn.style.color='var(--amber)';
+    btn.title=otherName+' es el dispositivo principal. Toca para tomar control.';
+  } else {
+    btn.textContent='○ Sin principal';
+    btn.style.color='var(--text3)';
+    btn.title='Toca para declarar este dispositivo como principal';
+  }
+}
+
+function togglePrimary(){
+  const cloudPrimary=S.prefs&&S.prefs.primaryDevice;
+  const isMine=cloudPrimary&&cloudPrimary.id===_deviceId;
+  if(isMine||_isPrimary){
+    // Push latest data first, then relinquish
+    _isPrimary=true; // ensure we can push
+    if(S.prefs) delete S.prefs.primaryDevice;
+    save();
+    _pushToCloud(); // upload everything before handing off
+    _isPrimary=false;
+    localStorage.removeItem('kronos_is_primary');
+  } else {
+    // Take control
+    setPrimary(true);
+  }
+  updateDeviceUI();
+}
+
+// Can this device write to cloud?
+function canWrite(){
+  if(_syncSource==='cloud') return false; // cloud-only mode
+  const cloudPrimary=S.prefs&&S.prefs.primaryDevice;
+  if(!cloudPrimary) return true; // no primary set — all can write
+  return cloudPrimary.id===_deviceId; // only primary can write
+}
+
 (function(){
   const saved=localStorage.getItem('kronos_sync_src');
   if(saved) _syncSource=saved;
+  const isPrim=localStorage.getItem('kronos_is_primary');
+  if(isPrim==='1') _isPrimary=true;
 })();
 
 function _updateSyncDot(ok){
@@ -1451,6 +1527,13 @@ function startActivity(actId, plannedId, subtaskId){
     // already running this slot — ignore
     return;
   }
+  // Warn if another device is primary
+  const cloudPrimary=S.prefs&&S.prefs.primaryDevice;
+  if(cloudPrimary&&cloudPrimary.id!==_deviceId){
+    const take=confirm(cloudPrimary.name+' es el dispositivo principal.\n\n¿Tomar control desde este dispositivo?');
+    if(!take)return;
+    setPrimary(true);
+  }
   // Auto-create a planned entry if none exists, so subtask tracking works uniformly
   let resolvedPlannedId=plannedId||null;
   if(!resolvedPlannedId){
@@ -1569,14 +1652,17 @@ function _doSaveLap(rKey,lapName,overrideSubId){
 
 function endSession(rKey){
   const ctx=S.running[rKey];if(!ctx)return;
-  // commit remaining time
   const liveSecs=ctx.paused?0:elapsed(ctx.startTime);
   const totalSecs=(ctx.lapTotal||0)+liveSecs;
   if(totalSecs>1) _commitLap(ctx,ctx.startTime,new Date().toISOString(),totalSecs,'');
   stopTick(rKey);
   delete S.running[rKey];
+  // Temporarily allow write even if not primary for stop action
+  const wasPrimary=_isPrimary;
+  _isPrimary=true;
   save();
-  _pushToCloud(); // immediate push so other devices pick up the ended session
+  _pushToCloud();
+  _isPrimary=wasPrimary;
   renderAll();
 }
 
@@ -1769,7 +1855,7 @@ function setDeviation(rKey,realActId){
 // ═══════════════════════════════════════════════════════
 function renderAll(){
   renderWeekBadge();renderPlanned();renderRunning();renderWeekGrid();renderActList();renderDayMeta();
-  const sel=document.getElementById('syncSourceSel');if(sel)sel.value=_syncSource;
+  updateDeviceUI();
   if(document.getElementById('page-history').classList.contains('active'))renderHistory();
 }
 
