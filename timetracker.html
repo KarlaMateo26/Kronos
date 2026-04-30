@@ -465,7 +465,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
     <div class="logo">KRONOS</div>
     <div style="display:flex;align-items:center;gap:8px;">
       <span id="syncDot" title="Sync" onclick="pullFromCloud()" style="font-size:12px;color:var(--text3);cursor:pointer;font-family:var(--mono);">●</span>
-      <button id="primaryBtn" onclick="togglePrimary()"
+      <button id="primaryBtn" onclick="toggleSyncMode()"
         style="background:none;border:none;font-family:var(--mono);font-size:8px;padding:0 3px;cursor:pointer;outline:none;color:var(--text3);">
         🔄 Compartido
       </button>
@@ -1114,7 +1114,6 @@ function pullFromCloud(){
           renderDayMeta();
         }
         _updateSyncDot(true);
-        autoDeclarePrimaryIfNone();
         updateDeviceUI();
       } else {
         _updateSyncDot(false);
@@ -1134,116 +1133,65 @@ function pullFromCloud(){
   });
 }
 
-// ── DEVICE IDENTITY + PRIMARY DEVICE SYSTEM ──
-var _deviceId=(function(){
-  let id=localStorage.getItem('kronos_device_id');
-  if(!id){id='dev_'+Math.random().toString(36).slice(2,8);localStorage.setItem('kronos_device_id',id);}
-  return id;
+// ── SYNC MODE — simple per-device preference ──
+// 'shared'   = read+write (default, both devices sync freely)
+// 'primary'  = read+write (this device is the main one)
+// 'readonly' = read only  (only pulls, never pushes)
+var _syncMode=(function(){
+  return localStorage.getItem('kronos_sync_mode')||'shared';
 })();
 
-var _deviceName=(function(){
-  // Auto-detect device type
-  const ua=navigator.userAgent;
-  if(/android/i.test(ua)) return '📱 Celular';
-  if(/iphone|ipad/i.test(ua)) return '📱 Celular';
-  return '💻 Computadora';
-})();
-
-var _syncSource='both'; // 'both' | 'local' | 'cloud'
-var _isPrimary=false; // this device is the primary (writes to cloud)
-
-function setSyncSource(val){
-  _syncSource=val;
-  localStorage.setItem('kronos_sync_src',val);
-  const sel=document.getElementById('syncSourceSel');
-  if(sel) sel.value=val;
+function setSyncMode(mode){
+  _syncMode=mode;
+  localStorage.setItem('kronos_sync_mode',mode);
+  updateDeviceUI();
 }
 
-function setPrimary(val){
-  _isPrimary=val;
-  localStorage.setItem('kronos_is_primary',val?'1':'0');
-  if(val){
-    // Register this device as primary in prefs
-    if(!S.prefs)S.prefs={};
-    S.prefs.primaryDevice={id:_deviceId,name:_deviceName,ts:Date.now()};
-    save();
-  }
-  updateDeviceUI();
+function canWrite(){
+  return _syncMode!=='readonly';
+}
+
+function forcePush(){
+  // Always push on explicit user actions regardless of mode
+  const orig=_syncMode;
+  _syncMode='primary';
+  _pushToCloud();
+  _syncMode=orig;
 }
 
 function updateDeviceUI(){
   const btn=document.getElementById('primaryBtn');
   if(!btn)return;
-  const cloudPrimary=S.prefs&&S.prefs.primaryDevice;
-  const isMine=cloudPrimary&&cloudPrimary.id===_deviceId;
-  const otherName=cloudPrimary&&!isMine?cloudPrimary.name:null;
-  if(_isPrimary||isMine){
-    btn.textContent='★ '+_deviceName;
-    btn.style.color='var(--green)';
-    btn.title='Este dispositivo es el principal. Toca para liberar.';
-  } else if(otherName){
-    btn.textContent='⚠ '+otherName;
+  if(_syncMode==='readonly'){
+    btn.textContent='📖 Solo lectura';
     btn.style.color='var(--amber)';
-    btn.title=otherName+' controla la sync. Toca para tomar control.';
+    btn.title='Solo lectura — no sube cambios. Toca para cambiar.';
+  } else if(_syncMode==='primary'){
+    btn.textContent='★ Principal';
+    btn.style.color='var(--green)';
+    btn.title='Dispositivo principal — sube todos los cambios. Toca para cambiar.';
   } else {
     btn.textContent='🔄 Compartido';
     btn.style.color='var(--text3)';
-    btn.title='Ambos dispositivos sincronizan libremente. Toca para declarar este como principal.';
+    btn.title='Ambos sincronizan. Toca para cambiar.';
   }
 }
 
-function togglePrimary(){
-  const cloudPrimary=S.prefs&&S.prefs.primaryDevice;
-  const isMine=cloudPrimary&&cloudPrimary.id===_deviceId;
-  if(isMine||_isPrimary){
-    // Push latest data first, then relinquish
-    _isPrimary=true; // ensure we can push
-    if(S.prefs) delete S.prefs.primaryDevice;
-    save();
-    _pushToCloud(); // upload everything before handing off
-    _isPrimary=false;
-    localStorage.removeItem('kronos_is_primary');
+function toggleSyncMode(){
+  // Cycle: shared → primary → readonly → shared
+  if(_syncMode==='shared') setSyncMode('primary');
+  else if(_syncMode==='primary'){
+    // Push before switching to readonly
+    _pushToCloud();
+    setSyncMode('readonly');
   } else {
-    // Take control
-    setPrimary(true);
-  }
-  updateDeviceUI();
-}
-
-// Can this device write to cloud?
-function canWrite(){
-  if(_syncSource==='cloud') return false;
-  const cloudPrimary=S.prefs&&S.prefs.primaryDevice;
-  // If no primary set: only write if explicitly declared primary on this device
-  if(!cloudPrimary) return _isPrimary;
-  return cloudPrimary.id===_deviceId;
-}
-
-// Force write regardless of primary status (for user actions like stop/pause)
-function forcePush(){
-  const wasPrimary=_isPrimary;
-  _isPrimary=true;
-  _pushToCloud();
-  _isPrimary=wasPrimary;
-}
-
-(function(){
-  const saved=localStorage.getItem('kronos_sync_src');
-  if(saved) _syncSource=saved;
-  const isPrim=localStorage.getItem('kronos_is_primary');
-  if(isPrim==='1') _isPrimary=true;
-  // If explicitly set to '0', respect that (user relinquished)
-  // If never set (null), will auto-declare after first pull if no primary exists
-})();
-
-function autoDeclarePrimaryIfNone(){
-  const cloudPrimary=S.prefs&&S.prefs.primaryDevice;
-  const neverSet=localStorage.getItem('kronos_is_primary')===null;
-  if(!cloudPrimary&&neverSet){
-    // No primary anywhere — declare this device silently
-    setPrimary(true);
+    setSyncMode('shared');
   }
 }
+
+// Legacy stubs (no-op)
+function setSyncSource(){}
+function autoDeclarePrimaryIfNone(){}
 
 function _updateSyncDot(ok){
   const dot=document.getElementById('syncDot');
@@ -1548,12 +1496,11 @@ function startActivity(actId, plannedId, subtaskId){
     // already running this slot — ignore
     return;
   }
-  // Warn if another device is primary
-  const cloudPrimary=S.prefs&&S.prefs.primaryDevice;
-  if(cloudPrimary&&cloudPrimary.id!==_deviceId){
-    const take=confirm(cloudPrimary.name+' es el dispositivo principal.\n\n¿Tomar control desde este dispositivo?');
+  // Warn if in readonly mode
+  if(_syncMode==='readonly'){
+    const take=confirm('Este dispositivo está en modo Solo Lectura.\n\n¿Activar modo Compartido para iniciar?');
     if(!take)return;
-    setPrimary(true);
+    setSyncMode('shared');
   }
   // Auto-create a planned entry if none exists, so subtask tracking works uniformly
   let resolvedPlannedId=plannedId||null;
