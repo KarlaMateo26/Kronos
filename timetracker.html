@@ -1625,12 +1625,8 @@ function endSession(rKey){
   if(totalSecs>1) _commitLap(ctx,ctx.startTime,new Date().toISOString(),totalSecs,'');
   stopTick(rKey);
   delete S.running[rKey];
-  // Temporarily allow write even if not primary for stop action
-  const wasPrimary=_isPrimary;
-  _isPrimary=true;
   save();
-  _pushToCloud();
-  _isPrimary=wasPrimary;
+  forcePush(); // always push on stop regardless of sync mode
   renderAll();
 }
 
