@@ -756,6 +756,69 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   </div>
 </div>
 
+<!-- ── IPLAN BLOCK EDIT MODAL ── -->
+<div class="overlay" id="iplanEditModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="iplanEditTitle" style="font-size:14px;"></div>
+    <div class="field"><label>Hora de inicio</label>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <select id="iplanEditH" style="flex:1;background:var(--s0);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;padding:8px 6px;outline:none;">
+          <option value="0">00h</option>
+          <option value="1">01h</option>
+          <option value="2">02h</option>
+          <option value="3">03h</option>
+          <option value="4">04h</option>
+          <option value="5">05h</option>
+          <option value="6">06h</option>
+          <option value="7">07h</option>
+          <option value="8">08h</option>
+          <option value="9">09h</option>
+          <option value="10">10h</option>
+          <option value="11">11h</option>
+          <option value="12">12h</option>
+          <option value="13">13h</option>
+          <option value="14">14h</option>
+          <option value="15">15h</option>
+          <option value="16">16h</option>
+          <option value="17">17h</option>
+          <option value="18">18h</option>
+          <option value="19">19h</option>
+          <option value="20">20h</option>
+          <option value="21">21h</option>
+          <option value="22">22h</option>
+          <option value="23">23h</option>
+        </select>
+        <span style="color:var(--text3);">:</span>
+        <select id="iplanEditM" style="flex:1;background:var(--s0);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;padding:8px 6px;outline:none;">
+          <option value="0">00</option>
+          <option value="5">05</option>
+          <option value="10">10</option>
+          <option value="15">15</option>
+          <option value="20">20</option>
+          <option value="25">25</option>
+          <option value="30">30</option>
+          <option value="35">35</option>
+          <option value="40">40</option>
+          <option value="45">45</option>
+          <option value="50">50</option>
+          <option value="55">55</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>Duración</label>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input type="number" id="iplanEditDurH" placeholder="h" min="0" max="24" style="text-align:center;font-family:var(--mono);">
+        <span style="color:var(--text3);font-size:12px;">h</span>
+        <input type="number" id="iplanEditDurM" placeholder="min" min="0" max="59" style="text-align:center;font-family:var(--mono);">
+        <span style="color:var(--text3);font-size:12px;">min</span>
+      </div>
+    </div>
+    <button class="mbtn" onclick="confirmIplanEdit()">Guardar</button>
+    <button class="mcancel" onclick="closeModal('iplanEditModal')">Cancelar</button>
+  </div>
+</div>
+
 <!-- ── SLEEP TIME MODAL ── -->
 <div class="overlay" id="sleepModal">
   <div class="modal">
@@ -4334,22 +4397,46 @@ function _buildDayPlans(pd){
     new Date(p.addedAt).toDateString()===pdStr&&(pdIsToday?!p.done:true)
   );
 
-  // From S.weekPlan (calendar entries) — include even without idealSecs
+  // From S.weekPlan (calendar entries)
   const wplanItems=(S.weekPlan&&S.weekPlan[pdKey])||[];
   wplanItems.forEach(item=>{
     const act=S.activities.find(a=>a.id===item.actId);
     if(!act)return;
-    if(plans.find(p=>p.actId===item.actId))return; // already in planned
+    if(plans.find(p=>p.actId===item.actId))return;
     plans.push({
       id:'wpl_'+pdKey+'_'+item.actId,
       actId:item.actId,actName:act.name,actEmoji:act.emoji,
-      idealSecs:item.idealSecs||60*60, // default 1h if not set
+      idealSecs:item.idealSecs||3600,
       breakIdealSecs:0,note:'',
       subtasks:(item.subtasks||[]).map(s=>({id:'ws_'+s.text,text:s.text,done:false})),
       done:false,addedAt:pd.toISOString(),_virtual:true,
       _wplanStartH:item.startH,_wplanStartM:item.startM||0
     });
   });
+
+  // From real sessions — show unplanned activity blocks
+  const daySessions=S.sessions.filter(s=>new Date(s.startTime).toDateString()===pdStr);
+  // Group by actId, use earliest start
+  const sessMap={};
+  daySessions.forEach(s=>{
+    if(!sessMap[s.actId]||new Date(s.startTime)<new Date(sessMap[s.actId].startTime))
+      sessMap[s.actId]=s;
+  });
+  Object.values(sessMap).forEach(s=>{
+    if(plans.find(p=>p.actId===s.actId))return; // already shown
+    const act=S.activities.find(a=>a.id===s.actId);if(!act)return;
+    const st=new Date(s.startTime);
+    // Sum all durations for this actId today
+    const totalDur=daySessions.filter(x=>x.actId===s.actId).reduce((t,x)=>t+x.duration,0);
+    plans.push({
+      id:'sess_'+pdKey+'_'+s.actId,
+      actId:s.actId,actName:s.actName||act.name,actEmoji:s.actEmoji||act.emoji,
+      idealSecs:totalDur,breakIdealSecs:0,note:'',subtasks:[],
+      done:false,addedAt:pd.toISOString(),_virtual:true,_fromSession:true,
+      _wplanStartH:st.getHours(),_wplanStartM:st.getMinutes()
+    });
+  });
+
   return{plans,pdIsToday,pdKey};
 }
 
@@ -4421,7 +4508,8 @@ function _renderDayCol(blocks, viewStart, viewEnd, PX, isToday, dateKey, showAdd
     const mE=String((startMin+dur)%60).padStart(2,'0');
     const subs=(p.subtasks||[]).filter(s=>!s.done).slice(0,2).map(s=>s.text).join(' · ');
     blocksHtml+=`<div class="iplan-block" id="ipb_${p.id}" data-pid="${p.id}" data-dur="${dur}"
-      style="top:${top}px;height:${height}px;background:${color}25;border:1.5px solid ${color};user-select:none;z-index:2;">
+      onclick="openIplanBlockEdit('${p.id}','${p._virtual?'wpl':'plan'}',${startMin},${dur})"
+      style="top:${top}px;height:${height}px;background:${color}25;border:1.5px solid ${color};user-select:none;z-index:2;cursor:pointer;">
       <div class="iplan-block-name" style="color:${color};">${p.actEmoji} ${esc(p.actName)}</div>
       ${height>36?`<div class="iplan-block-time" style="color:${color};">${hS}:${mS} → ${hE}:${mE} · ${fmtM(p.idealSecs)}</div>`:''}
       ${height>52&&subs?`<div class="iplan-block-sub" style="color:${color};">${esc(subs)}</div>`:''}
@@ -4431,6 +4519,55 @@ function _renderDayCol(blocks, viewStart, viewEnd, PX, isToday, dateKey, showAdd
     </div>`;
   });
   return{rulerHtml,linesHtml,nowHtml,sleepHtml,tapAdd,blocksHtml,totalHeight};
+}
+
+// ── IPLAN BLOCK EDIT ──
+var _iplanEditPid=null,_iplanEditDateStr=null,_iplanEditType=null;
+
+function openIplanBlockEdit(pid,type,startMin,dur){
+  _iplanEditPid=pid;_iplanEditType=type;
+  _iplanEditDateStr=planDate.toDateString();
+  // Find plan to get name
+  let plan=S.planned.find(p=>p.id===pid);
+  let label='Editar bloque';
+  if(plan) label=`${plan.actEmoji} ${plan.actName}`;
+
+  document.getElementById('iplanEditTitle').textContent=label;
+  document.getElementById('iplanEditH').value=String(Math.floor(startMin/60)%24);
+  document.getElementById('iplanEditM').value=String(Math.round((startMin%60)/5)*5%60);
+  document.getElementById('iplanEditDurH').value=Math.floor(dur/60)||'';
+  document.getElementById('iplanEditDurM').value=dur%60||'';
+  openModal('iplanEditModal');
+}
+
+function confirmIplanEdit(){
+  const h=parseInt(document.getElementById('iplanEditH').value)||0;
+  const m=parseInt(document.getElementById('iplanEditM').value)||0;
+  const dh=parseInt(document.getElementById('iplanEditDurH').value)||0;
+  const dm=parseInt(document.getElementById('iplanEditDurM').value)||0;
+  const newStart=h*60+m;
+  const newDur=dh*60+dm;
+
+  // Update position offset
+  const offKey='po_'+_iplanEditDateStr;
+  if(!S.prefs)S.prefs={};
+  if(!S.prefs[offKey])S.prefs[offKey]={};
+  S.prefs[offKey][_iplanEditPid]={abs:newStart};
+
+  // Update duration in planned or weekPlan
+  const plan=S.planned.find(p=>p.id===_iplanEditPid);
+  if(plan&&newDur>0) plan.idealSecs=newDur*60;
+
+  // If virtual (weekPlan), update there too
+  if(_iplanEditType==='wpl'&&newDur>0){
+    const pdKey=new Date(_iplanEditDateStr).toISOString().slice(0,10);
+    const items=(S.weekPlan&&S.weekPlan[pdKey])||[];
+    const actId=_iplanEditPid.replace('wpl_'+pdKey+'_','');
+    const item=items.find(x=>x.actId===actId);
+    if(item){item.startH=h;item.startM=m;item.idealSecs=newDur*60;}
+  }
+
+  save();closeModal('iplanEditModal');renderIdealPlan();
 }
 
 // Tap on calendar to add activity at that time
