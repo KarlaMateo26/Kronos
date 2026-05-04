@@ -2063,10 +2063,11 @@ function renderAll(){
 var _lastStateHash='';
 function smartRenderAfterPull(){
   const hash=JSON.stringify({
-    acts:S.activities.map(a=>a.id+a.divisionId+a.weekTotal).join(','),
-    planned:S.planned.map(p=>p.id+p.done+(p.subtasks||[]).length).join(','),
-    running:Object.keys(S.running).join(','),
-    sessions:S.sessions.length
+    acts:S.activities.map(a=>a.id+(a.divisionId||'')+(a.weekTotal||0)+(a.color||'')).join(','),
+    planned:S.planned.map(p=>p.id+(p.done?'1':'0')+(p.divisionId||'')+(p.subtasks||[]).length).join(','),
+    running:Object.keys(S.running).sort().join(','),
+    sessions:S.sessions.length,
+    actDivs:(S.actDivisions||[]).map(d=>d.id+d.name).join(',')
   });
   if(hash===_lastStateHash) return; // nothing changed — skip render
   _lastStateHash=hash;
