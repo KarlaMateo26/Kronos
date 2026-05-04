@@ -3032,6 +3032,18 @@ function renderActList(){
       <div class="act-info">
         <div class="act-name">${esc(a.name)}</div>
         <div class="act-wk">Semana: ${fmtS(a.weekTotal||0)}</div>
+        ${(()=>{
+          const activePlans=S.planned.filter(p=>p.actId===a.id&&!p.done);
+          if(!activePlans.length)return'';
+          return activePlans.map(p=>{
+            const d=new Date(p.addedAt);
+            const lbl=d.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'numeric'});
+            return`<span style="font-size:8px;font-family:var(--mono);color:var(--teal);cursor:pointer;margin-right:4px;"
+              title="Eliminar este plan"
+              onclick="event.stopPropagation();if(confirm('¿Eliminar plan del ${lbl}?')){removePlanned('${p.id}');}"
+            >📅 ${lbl} ✕</span>`;
+          }).join('');
+        })()}
       </div>
       <div class="act-btns">
         <button class="act-today-btn ${added?'added':''}" onclick="openAddPlanned('${a.id}')">
@@ -3972,46 +3984,54 @@ function renderWeekPlanMonth(el, refDate){
   else { startDiff=-fDow; }
   startDate.setDate(firstDay.getDate()+startDiff);
 
+  // Iterate day by day, place into correct column slot
   let d=new Date(startDate);
-  const isWeekEnd=()=>_wplanWeekStart===1?d.getDay()===1:d.getDay()===0;
-  while(d<=lastDay||!isWeekEnd()){
-    dayOrderM.forEach((dow)=>{
-      // Skip if this day of week doesn't match
-      if(d.getDay()!==dow){return;}
-      const isToday=d.toDateString()===now.toDateString();
-      const isOtherMonth=d.getMonth()!==month;
-      const isPast=d<new Date(now.getFullYear(),now.getMonth(),now.getDate());
-      const dayNum=d.getDate();
-      const dayDate=new Date(d);
+  // Build week rows
+  const isStartOfWeek=()=>d.getDay()===(_wplanWeekStart===1?1:0);
+  while(d<=lastDay||!isStartOfWeek()){
+    // Start a new row for each week
+    if(isStartOfWeek()||d.getTime()===startDate.getTime()){
+      // For each day in dayOrderM, find the date for that weekday
+      dayOrderM.forEach(dow=>{
+        // Find the date in this week that matches dow
+        const dayDate=new Date(d);
+        const diff=(dow-d.getDay()+7)%7;
+        dayDate.setDate(d.getDate()+diff);
+        const isToday=dayDate.toDateString()===now.toDateString();
+        const isOtherMonth=dayDate.getMonth()!==month;
+        const isPast=dayDate<new Date(now.getFullYear(),now.getMonth(),now.getDate());
+        const dayNum=dayDate.getDate();
+        const mDateKey=dayDate.toISOString().slice(0,10);
+        const mItems=S.weekPlan[mDateKey]||[];
+        const mSorted=[...mItems].sort((a,b)=>(a.startH||0)-(b.startH||0));
 
-      html+=`<div class="wplan-col ${isPast?'wplan-past':''} ${isOtherMonth?'':''}">
-        <div class="wplan-day-hdr ${isToday?'today':''}" style="opacity:${isOtherMonth?0.3:1};">
-          <div class="wplan-day-num" style="font-size:11px;">${dayNum}</div>
-        </div>
-        <div class="wplan-items">`;
+        html+=`<div class="wplan-col ${isPast?'wplan-past':''}">
+          <div class="wplan-day-hdr ${isToday?'today':''}" style="opacity:${isOtherMonth?0.3:1};">
+            <div class="wplan-day-num" style="font-size:11px;">${dayNum}</div>
+          </div>
+          <div class="wplan-items">`;
 
-      // Items for this specific date
-      const mDateKey=d.toISOString().slice(0,10);
-      const mItems=S.weekPlan[mDateKey]||[];
-      const mSorted=[...mItems].sort((a,b)=>(a.startH||0)-(b.startH||0));
-      mSorted.forEach((item,idx)=>{
-        const act=S.activities.find(a=>a.id===item.actId);
-        if(!act)return;
-        const color=actColor(act.id);
-        html+=`<div class="wplan-block" style="background:${color}22;border-color:${color};"
-          onclick="openWplanEdit('${mDateKey}',${idx})">
-          <div class="wplan-block-name" style="color:${color};font-size:9px;">${act.emoji} ${esc(act.name)}</div>
-          ${item.startH!==undefined?`<div class="wplan-block-time" style="color:${color};">${String(item.startH).padStart(2,'0')}:${String(item.startM||0).padStart(2,'0')}</div>`:''}
-        </div>`;
+        mSorted.forEach((item,idx)=>{
+          const act=S.activities.find(a=>a.id===item.actId);
+          if(!act)return;
+          const color=actColor(act.id);
+          html+=`<div class="wplan-block" style="background:${color}22;border-color:${color};"
+            onclick="openWplanEdit('${mDateKey}',${idx})">
+            <div class="wplan-block-name" style="color:${color};font-size:9px;">${act.emoji} ${esc(act.name)}</div>
+            ${item.startH!==undefined?`<div class="wplan-block-time" style="color:${color};">${String(item.startH).padStart(2,'0')}:${String(item.startM||0).padStart(2,'0')}</div>`:''}
+          </div>`;
+        });
+        if(!isOtherMonth){
+          html+=`<div class="wplan-add" onclick="openWplanAdd('${mDateKey}')">+</div>`;
+        }
+        html+=`</div></div>`;
       });
-      if(!isOtherMonth){
-        html+=`<div class="wplan-add" onclick="openWplanAdd('${mDateKey}')">+</div>`;
-      }
-
-      html+=`</div></div>`;
+      // Advance to next week
+      d.setDate(d.getDate()+7);
+      if(d>lastDay&&isStartOfWeek())break;
+    } else {
       d.setDate(d.getDate()+1);
-    });
-    if(d>lastDay&&isWeekEnd())break;
+    }
   }
 
   html+=`</div></div>`;
