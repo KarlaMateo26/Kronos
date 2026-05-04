@@ -224,7 +224,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 /* ─────────────────────────────────────────
    ACTIVITIES LIST
 ───────────────────────────────────────── */
-.act-list{padding:0 16px;display:flex;flex-direction:column;gap:6px;}
+.act-list{padding:0;display:block;}
 .act-row{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);display:flex;align-items:center;padding:11px 12px;gap:10px;touch-action:pan-y;position:relative;overflow:hidden;transition:opacity .15s,box-shadow .15s;}
 .act-row.dragging{opacity:.5;box-shadow:0 4px 20px rgba(0,0,0,.4);}
 .act-row.drag-over{border-color:var(--accent);border-style:dashed;}
@@ -296,6 +296,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
    FAB
 ───────────────────────────────────────── */
 .fab{position:fixed;bottom:20px;right:16px;width:52px;height:52px;background:linear-gradient(135deg,var(--accent),var(--pink));border:none;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 6px 20px rgba(108,99,255,.4);touch-action:manipulation;z-index:100;transition:all .2s;}
+.fab.fab-hidden{display:none!important;}
 .fab:active{transform:scale(.88);}
 .fab svg{fill:white;width:20px;height:20px;}
 
@@ -434,6 +435,26 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 
 /* Ideal plan calendar */
 .iplan-wrap{display:flex;padding:0 0 60px;}
+
+/* Weekly planner */
+.wplan-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:8px 0 60px;}
+.wplan-grid{display:grid;grid-template-columns:repeat(7,1fr);min-width:700px;gap:1px;background:var(--border);}
+.wplan-col{background:var(--bg);display:flex;flex-direction:column;}
+.wplan-day-hdr{padding:6px 8px;text-align:center;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:2;}
+.wplan-day-name{font-size:9px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:1px;}
+.wplan-day-num{font-size:14px;font-weight:700;color:var(--text);}
+.wplan-day-hdr.today .wplan-day-num{color:var(--accent);}
+.wplan-day-hdr.today .wplan-day-name{color:var(--accent);}
+.wplan-items{display:flex;flex-direction:column;gap:4px;padding:6px 4px;min-height:80px;}
+.wplan-block{border-radius:7px;padding:5px 7px;cursor:pointer;transition:opacity .15s;border:1px solid transparent;}
+.wplan-block:active{opacity:.7;}
+.wplan-block-name{font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.wplan-block-time{font-size:8px;font-family:var(--mono);opacity:.7;}
+.wplan-block-subs{font-size:8px;opacity:.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.wplan-add{text-align:center;padding:4px;color:var(--border2);font-size:18px;cursor:pointer;line-height:1;}
+.wplan-add:hover{color:var(--text3);}
+.wplan-past{opacity:.5;}
+.wplan-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:2px;}
 .iplan-ruler{width:44px;flex-shrink:0;position:relative;}
 .iplan-ruler-lbl{position:absolute;right:8px;font-size:8px;font-family:var(--mono);color:var(--text3);transform:translateY(-50%);white-space:nowrap;}
 .iplan-ruler-tick{position:absolute;right:0;width:6px;height:1px;background:var(--border);}
@@ -507,24 +528,36 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   <!-- view toggle -->
   <div class="dia-view-toggle">
     <button class="dvt-btn active" id="dvtPlan" onclick="setDiaView('plan')">🗓 Plan</button>
+    <button class="dvt-btn" id="dvtWeekPlan" onclick="setDiaView('weekplan')">📅 Semana</button>
     <button class="dvt-btn" id="dvtTimeline" onclick="setDiaView('timeline')">⏱ Cronograma</button>
     <button class="dvt-btn" id="dvtHabit" onclick="setDiaView('habit')">📊 Hábitos</button>
   </div>
   <!-- date nav (only for timeline) -->
   <div class="date-nav" id="diaDateNav" style="display:none;">
     <button class="date-nav-btn" onclick="shiftDiaDate(-1)">‹</button>
-    <div class="date-nav-lbl" id="diaDateLbl">—</div>
+    <div class="date-nav-lbl" id="diaDateLbl" style="cursor:pointer;" onclick="diaDate=new Date();renderTimeline()">—</div>
     <button class="date-nav-btn" onclick="shiftDiaDate(+1)">›</button>
+    <button class="tl-zoom-btn" id="tlViewBtn" onclick="toggleTlView()" style="margin-left:6px;font-size:9px;">Mes</button>
   </div>
+  <div id="diaMonthContent" style="display:none;"></div>
   <!-- content -->
   <div id="diaHabitContent"></div>
   <div id="diaTimelineContent" style="display:none;"></div>
+  <div id="diaWeekPlanContent" style="display:none;"></div>
   <div id="diaPlanContent" style="display:none;">
-    <div style="display:flex;align-items:center;gap:8px;padding:6px 16px 0;">
+    <div style="display:flex;align-items:center;gap:6px;padding:6px 16px 6px;border-bottom:1px solid var(--border);">
       <button class="date-nav-btn" onclick="shiftPlanDate(-1)">‹</button>
-      <div id="planDateLbl" style="flex:1;text-align:center;font-size:10px;font-family:var(--mono);color:var(--text3);">Hoy</div>
+      <div id="planDateLbl" style="flex:1;text-align:center;font-size:11px;font-family:var(--mono);color:var(--text3);cursor:pointer;" onclick="planDate=new Date();renderIdealPlan()">Hoy</div>
       <button class="date-nav-btn" onclick="shiftPlanDate(+1)">›</button>
+      <select id="planDaysCount" onchange="renderIdealPlan()"
+        style="background:var(--s0);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:10px;padding:3px 4px;outline:none;cursor:pointer;">
+        <option value="1">1d</option>
+        <option value="2">2d</option>
+        <option value="3">3d</option>
+        <option value="7" selected>7d</option>
+      </select>
     </div>
+    <div id="diaPlanBody" style="overflow-x:auto;-webkit-overflow-scrolling:touch;"></div>
   </div>
 </div>
 
@@ -621,6 +654,92 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   </div>
 </div>
 
+<!-- ── WEEKLY PLAN ACTIVITY PICKER ── -->
+<div class="overlay" id="wplanPickerModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="wplanPickerTitle" style="font-size:14px;">Elegir actividad</div>
+    <div id="wplanPickerList" style="max-height:300px;overflow-y:auto;margin:0 -16px;"></div>
+    <button class="mcancel" onclick="closeModal('wplanPickerModal')">Cancelar</button>
+  </div>
+</div>
+
+<!-- ── WEEKLY PLAN DAY EDITOR ── -->
+<div class="overlay" id="wplanModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+      <div class="modal-title" id="wplanTitle" style="font-size:14px;margin:0;flex:1;"></div>
+      <span style="font-size:11px;font-family:var(--mono);color:var(--accent);background:var(--accent-dim);padding:3px 8px;border-radius:6px;" id="wplanDayLbl"></span>
+    </div>
+    <div class="field"><label>Hora de inicio (opcional)</label>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <select id="wplanStartH" style="flex:1;background:var(--s0);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;padding:8px 6px;outline:none;">
+          <option value="">--</option>
+          <option value="0">00h</option>
+          <option value="1">01h</option>
+          <option value="2">02h</option>
+          <option value="3">03h</option>
+          <option value="4">04h</option>
+          <option value="5">05h</option>
+          <option value="6">06h</option>
+          <option value="7">07h</option>
+          <option value="8">08h</option>
+          <option value="9">09h</option>
+          <option value="10">10h</option>
+          <option value="11">11h</option>
+          <option value="12">12h</option>
+          <option value="13">13h</option>
+          <option value="14">14h</option>
+          <option value="15">15h</option>
+          <option value="16">16h</option>
+          <option value="17">17h</option>
+          <option value="18">18h</option>
+          <option value="19">19h</option>
+          <option value="20">20h</option>
+          <option value="21">21h</option>
+          <option value="22">22h</option>
+          <option value="23">23h</option>
+        </select>
+        <span style="color:var(--text3);">:</span>
+        <select id="wplanStartM" style="flex:1;background:var(--s0);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;padding:8px 6px;outline:none;">
+          <option value="0">00</option>
+          <option value="5">05</option>
+          <option value="10">10</option>
+          <option value="15">15</option>
+          <option value="20">20</option>
+          <option value="25">25</option>
+          <option value="30">30</option>
+          <option value="35">35</option>
+          <option value="40">40</option>
+          <option value="45">45</option>
+          <option value="50">50</option>
+          <option value="55">55</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>Tiempo ideal (opcional)</label>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input type="number" id="wplanIdealH" placeholder="h" min="0" style="text-align:center;font-family:var(--mono);">
+        <span style="color:var(--text3);font-size:12px;">h</span>
+        <input type="number" id="wplanIdealM" placeholder="m" min="0" max="59" style="text-align:center;font-family:var(--mono);">
+        <span style="color:var(--text3);font-size:12px;">min</span>
+      </div>
+    </div>
+    <div class="field"><label>Subtareas para este día</label>
+      <div id="wplanSubsList" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px;"></div>
+      <div style="display:flex;gap:6px;">
+        <input type="text" id="wplanSubInput" placeholder="+ Añadir subtarea..." style="flex:1;font-size:12px;"
+          onkeydown="if(event.key==='Enter'){addWplanSub();event.preventDefault();}">
+        <button onclick="addWplanSub()" style="background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;">+</button>
+      </div>
+    </div>
+    <button class="mbtn" onclick="confirmWplanEdit()">Guardar</button>
+    <button class="det-btn del" onclick="removeWplanDay()" style="width:100%;padding:10px;margin-top:6px;">Quitar este día</button>
+    <button class="mcancel" onclick="closeModal('wplanModal')">Cancelar</button>
+  </div>
+</div>
+
 <!-- ── SLEEP TIME MODAL ── -->
 <div class="overlay" id="sleepModal">
   <div class="modal">
@@ -650,6 +769,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
         onkeydown="if(event.key==='Enter'){addDefaultSub();event.preventDefault();}">
       <button onclick="addDefaultSub()" style="background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;">+</button>
     </div>
+    <div style="font-size:10px;color:var(--text3);margin:10px 0 7px;text-align:center;letter-spacing:1px;text-transform:uppercase;font-family:var(--mono);">División</div>
+    <select id="actDivSelect" style="background:var(--s0);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 10px;width:100%;margin-bottom:10px;">
+    </select>
     <div style="font-size:10px;color:var(--text3);margin:10px 0 7px;text-align:center;letter-spacing:1px;text-transform:uppercase;font-family:var(--mono);">Hora de inicio por default (opcional)</div>
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
       <select id="actDefStartH" style="flex:1;background:var(--s0);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;padding:8px 6px;outline:none;">
@@ -849,6 +971,19 @@ const DEFAULT_ACTS=[
 // ═══════════════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════════════
+// "Today" window: current day OR if it's before 4am, also yesterday
+function isTodayWindow(dateStr){
+  const now=new Date();
+  const today=now.toDateString();
+  if(dateStr===today) return true;
+  // before 4am: also show yesterday's plans
+  if(now.getHours()<4){
+    const yesterday=new Date(now);yesterday.setDate(yesterday.getDate()-1);
+    if(dateStr===yesterday.toDateString()) return true;
+  }
+  return false;
+}
+
 function getWk(){
   const n=new Date(),j=new Date(n.getFullYear(),0,1);
   return`${n.getFullYear()}-W${Math.ceil(((n-j)/86400000+j.getDay()+1)/7)}`;
@@ -873,7 +1008,8 @@ function initState(){
       {id:'d1',name:'Deberes'},
       {id:'d2',name:'Daily Advance'},
       {id:'d3',name:'Otros'}
-    ]};
+    ],
+    weekPlan:{}};
 }
 let S=initState();
 let timers={}; // rKey -> intervalId
@@ -1512,7 +1648,7 @@ function startActivity(actId, plannedId, subtaskId){
   if(!resolvedPlannedId){
     const today=new Date().toDateString();
     // Only reuse an active (not done) auto entry
-    let autoplan=S.planned.find(p=>p.actId===actId&&new Date(p.addedAt).toDateString()===today&&!p.done);
+    let autoplan=S.planned.find(p=>p.actId===actId&&isTodayWindow(new Date(p.addedAt).toDateString())&&!p.done);
     if(!autoplan){
       autoplan={id:genId(),actId:act.id,actName:act.name,actEmoji:act.emoji,
         idealSecs:0,note:'',subtasks:[],done:false,
@@ -1757,7 +1893,7 @@ function confirmNewSub(rKey){
   const today=new Date().toDateString();
   let plan=S.planned.find(p=>
     p.actId===ctx.actId&&
-    new Date(p.addedAt).toDateString()===today&&
+    isTodayWindow(new Date(p.addedAt).toDateString())&&
     !p.done
   );
   if(!plan){
@@ -1790,7 +1926,7 @@ function addSubtaskToRunning(rKey,text){
   const ctx=S.running[rKey];if(!ctx)return;
   // find or create a planned entry for this activity today
   const today=new Date().toDateString();
-  let plan=S.planned.find(p=>p.actId===ctx.actId&&new Date(p.addedAt).toDateString()===today&&!p.done);
+  let plan=S.planned.find(p=>p.actId===ctx.actId&&isTodayWindow(new Date(p.addedAt).toDateString())&&!p.done);
   if(!plan){
     plan={id:genId(),actId:ctx.actId,actName:ctx.actName,actEmoji:ctx.actEmoji,
       idealSecs:0,note:'',subtasks:[],done:false,addedAt:new Date().toISOString()};
@@ -1844,7 +1980,8 @@ function renderPlanned(){
     const pid=el.id.replace('pc_','');
     _expandedPlans.add(pid);
   });
-  const todayPlanned=S.planned.filter(p=>new Date(p.addedAt).toDateString()===new Date().toDateString()&&!p.done);
+  // Show all non-done planned items — they stay until explicitly finished/removed
+  const todayPlanned=S.planned.filter(p=>!p.done);
   document.getElementById('plannedCount').textContent=todayPlanned.length?`(${todayPlanned.length})`:'';
 
   // Always ensure divisions exist
@@ -2599,21 +2736,43 @@ function actDragOver(e,actId){
 }
 
 function actDrop(e,targetId){
-  e.preventDefault();
+  e.preventDefault();e.stopPropagation();
   if(!_actDragId||_actDragId===targetId)return;
-  const fromIdx=S.activities.findIndex(a=>a.id===_actDragId);
-  const toIdx=S.activities.findIndex(a=>a.id===targetId);
-  if(fromIdx<0||toIdx<0)return;
-  const [moved]=S.activities.splice(fromIdx,1);
-  S.activities.splice(toIdx,0,moved);
+  const src=S.activities.find(a=>a.id===_actDragId);
+  const tgt=S.activities.find(a=>a.id===targetId);
+  if(!src||!tgt)return;
+  // Match division of target
+  src.divisionId=tgt.divisionId||'d_otros';
+  // Reorder
+  const fromIdx=S.activities.indexOf(src);
+  S.activities.splice(fromIdx,1);
+  const toIdx=S.activities.indexOf(tgt);
+  S.activities.splice(toIdx,0,src);
   save();renderActList();
 }
 
 function actDragEnd(e){
   _actDragId=null;
-  document.querySelectorAll('.act-row').forEach(el=>{
-    el.classList.remove('dragging','drag-over');
-  });
+  document.querySelectorAll('.act-row').forEach(el=>el.classList.remove('dragging','drag-over'));
+  document.querySelectorAll('.board-items').forEach(el=>el.classList.remove('bi-drag-over'));
+}
+
+// Drag act to different division column
+function actBiDragOver(e,divId){
+  if(!_actDragId)return;
+  e.preventDefault();e.stopPropagation();
+  document.querySelectorAll('.board-items').forEach(el=>el.classList.remove('bi-drag-over'));
+  const el=document.getElementById('abi_'+divId);
+  if(el) el.classList.add('bi-drag-over');
+}
+
+function actBiDrop(e,divId){
+  e.preventDefault();e.stopPropagation();
+  if(!_actDragId)return;
+  const act=S.activities.find(a=>a.id===_actDragId);
+  if(!act)return;
+  act.divisionId=divId;
+  save();renderActList();
 }
 
 // ── DRAG & DROP: Subtasks ──
@@ -2669,12 +2828,52 @@ function deleteActivity(actId){
   save();renderAll();
 }
 
+function getActDivisions(){
+  if(!S.actDivisions||!S.actDivisions.length){
+    S.actDivisions=[{id:'d_deberes',name:'Deberes'},{id:'d_daily',name:'Daily Advance'},{id:'d_otros',name:'Otros'}];
+  }
+  return S.actDivisions;
+}
+
 function renderActList(){
-  const today=S.planned.filter(p=>new Date(p.addedAt).toDateString()===new Date().toDateString());
-  const todayActiveIds=today.filter(p=>!p.done).map(p=>p.actId); // only active (not done)
-  document.getElementById('actList').innerHTML=S.activities.map(a=>{
+  const todayActiveIds=S.planned.filter(p=>!p.done).map(p=>p.actId);
+  const divs=getActDivisions();
+  const actListEl=document.getElementById('actList');
+  actListEl.style.display='block';
+  actListEl.style.padding='0';
+
+  // Same board-wrap as planned
+  let html=`<div class="board-wrap" id="actBoardWrap">`;
+
+  divs.forEach(div=>{
+    const divActs=S.activities.filter(a=>(a.divisionId||'d_otros')===div.id);
+    html+=`<div class="board-col">
+      <div class="board-hdr">
+        <span class="board-hdr-name" ondblclick="editActDivision('${div.id}')">${esc(div.name)}</span>
+        ${divActs.length?`<span class="board-hdr-count">(${divActs.length})</span>`:''}
+        <button onclick="addActDivision()" style="background:none;border:none;color:var(--border2);cursor:pointer;font-size:14px;padding:0 2px;margin-left:auto;line-height:1;" title="Nueva división">+</button>
+      </div>
+      <div class="board-items" id="abi_${div.id}"
+        ondragover="actBiDragOver(event,'${div.id}')"
+        ondrop="actBiDrop(event,'${div.id}')">
+        ${divActs.length?'':'<div class="board-empty">vacío</div>'}
+      </div>
+    </div>`;
+  });
+
+  html+=`</div>`;
+  actListEl.innerHTML=html;
+
+  // Insert act cards into columns (like planned board)
+  S.activities.forEach(a=>{
     const added=todayActiveIds.includes(a.id);
-    return`<div class="act-row" id="ar_${a.id}"
+    const divId=a.divisionId||'d_otros';
+    const col=document.getElementById('abi_'+divId)||document.getElementById('abi_d_otros');
+    if(!col)return;
+    const empty=col.querySelector('.board-empty');
+    if(empty)empty.remove();
+    const wrapper=document.createElement('div');
+    wrapper.innerHTML=`<div class="act-row" id="ar_${a.id}"
       draggable="true"
       ondragstart="actDragStart(event,'${a.id}')"
       ondragover="actDragOver(event,'${a.id}')"
@@ -2701,7 +2900,22 @@ function renderActList(){
         </button>
       </div>
     </div>`;
-  }).join('');
+    col.appendChild(wrapper.firstElementChild);
+  });
+}
+
+function editActDivision(divId){
+  const div=(S.actDivisions||[]).find(d=>d.id===divId);if(!div)return;
+  const newName=prompt('Nombre de la división:',div.name);
+  if(newName&&newName.trim()){div.name=newName.trim();save();renderActList();}
+}
+
+function addActDivision(){
+  const name=prompt('Nombre de la nueva división:');
+  if(!name||!name.trim())return;
+  if(!S.actDivisions) S.actDivisions=[{id:'d_deberes',name:'Deberes'},{id:'d_daily',name:'Daily Advance'},{id:'d_otros',name:'Otros'}];
+  S.actDivisions.push({id:'d_'+Date.now(),name:name.trim()});
+  save();renderActList();
 }
 
 // ── HISTORY ──
@@ -2935,6 +3149,12 @@ function openAddAct(editActId){
   document.getElementById('addActModal').dataset.editId=editActId||'';
   document.querySelector('#addActModal .modal-title').textContent=editActId?'Editar actividad':'Nueva actividad';
   renderDefaultSubs(act?act.defaultSubtasks||[]:[]); 
+  // Populate division selector
+  const actDivSel=document.getElementById('actDivSelect');
+  if(actDivSel){
+    const divs=[...(S.actDivisions||[{id:'d_deberes',name:'Deberes'},{id:'d_daily',name:'Daily Advance'},{id:'d_otros',name:'Otros'}])];
+    actDivSel.innerHTML=divs.map(d=>`<option value="${d.id}" ${(act&&act.divisionId||'d_otros')===d.id?'selected':''}>${esc(d.name)}</option>`).join('');
+  } 
   // Pre-fill default start time
   const dsh=document.getElementById('actDefStartH');
   const dsm=document.getElementById('actDefStartM');
@@ -2979,17 +3199,19 @@ function confirmAddAct(){
   const dshVal=document.getElementById('actDefStartH')?.value;
   const dsmVal=document.getElementById('actDefStartM')?.value;
   const hasDefStart=dshVal!==''&&dshVal!==undefined;
+  const actDivId=document.getElementById('actDivSelect')?.value||'d_otros';
   if(editId){
     const act=S.activities.find(a=>a.id===editId);
     if(act){
       act.name=n;act.emoji=selEmoji;act.color=selColor;
       act.defaultSubtasks=[..._editingDefaultSubs];
+      act.divisionId=actDivId;
       if(hasDefStart){act.defaultStartH=parseInt(dshVal);act.defaultStartM=parseInt(dsmVal)||0;}
       else{delete act.defaultStartH;delete act.defaultStartM;}
     }
   } else {
     const newAct={id:'act_'+Date.now(),name:n,emoji:selEmoji,color:selColor,weekTotal:0,
-      defaultSubtasks:[..._editingDefaultSubs]};
+      defaultSubtasks:[..._editingDefaultSubs],divisionId:actDivId};
     if(hasDefStart){newAct.defaultStartH=parseInt(dshVal);newAct.defaultStartM=parseInt(dsmVal)||0;}
     S.activities.push(newAct);
   }
@@ -3275,45 +3497,507 @@ function actColor(actId){
 
 function setDiaView(v){
   diaView=v;
-  ['habit','timeline','plan'].forEach(tab=>{
-    document.getElementById('dvt'+tab.charAt(0).toUpperCase()+tab.slice(1)).classList.toggle('active',v===tab);
+  ['habit','timeline','plan','weekplan'].forEach(tab=>{
+    const el=document.getElementById('dvt'+tab.charAt(0).toUpperCase()+tab.slice(1));
+    if(el) el.classList.toggle('active',v===tab);
   });
   document.getElementById('diaHabitContent').style.display=v==='habit'?'':'none';
-  document.getElementById('diaTimelineContent').style.display=v==='timeline'?'':'none';
+  document.getElementById('diaTimelineContent').style.display=(v==='timeline'&&_tlViewMode==='day')?'':'none';
+  const dmc=document.getElementById('diaMonthContent');
+  if(dmc) dmc.style.display=(v==='timeline'&&_tlViewMode==='month')?'':'none';
   document.getElementById('diaPlanContent').style.display=v==='plan'?'':'none';
+  document.getElementById('diaWeekPlanContent').style.display=v==='weekplan'?'':'none';
   document.getElementById('diaDateNav').style.display=v==='timeline'?'flex':'none';
   if(v==='timeline')renderTimeline();
   else if(v==='plan')renderIdealPlan();
+  else if(v==='weekplan')renderWeekPlan();
   else renderHabit();
 }
 
+var _tlViewMode='day'; // 'day' | 'month'
+
+function toggleTlView(){
+  _tlViewMode=_tlViewMode==='day'?'month':'day';
+  const btn=document.getElementById('tlViewBtn');
+  if(btn) btn.textContent=_tlViewMode==='day'?'Mes':'Día';
+  document.getElementById('diaTimelineContent').style.display=_tlViewMode==='day'?'':'none';
+  document.getElementById('diaMonthContent').style.display=_tlViewMode==='month'?'':'none';
+  if(_tlViewMode==='month') renderMonthCalendar();
+  else renderTimeline();
+}
+
 function shiftDiaDate(d){
-  diaDate=new Date(diaDate);diaDate.setDate(diaDate.getDate()+d);
-  if(diaDate>new Date())diaDate=new Date();
-  renderTimeline();
+  diaDate=new Date(diaDate);
+  if(_tlViewMode==='month'){
+    diaDate.setMonth(diaDate.getMonth()+d);
+  } else {
+    diaDate.setDate(diaDate.getDate()+d);
+  }
+  if(diaDate>new Date()&&_tlViewMode==='day') diaDate=new Date();
+  if(_tlViewMode==='month') renderMonthCalendar();
+  else renderTimeline();
+}
+
+function renderMonthCalendar(){
+  const el=document.getElementById('diaMonthContent');
+  if(!el)return;
+  const now=new Date();
+  const year=diaDate.getFullYear();
+  const month=diaDate.getMonth();
+  const lbl=document.getElementById('diaDateLbl');
+  if(lbl) lbl.textContent=diaDate.toLocaleDateString('es-MX',{month:'long',year:'numeric'});
+
+  const firstDay=new Date(year,month,1);
+  const lastDay=new Date(year,month+1,0);
+  const dayNames=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+
+  // Group sessions by date
+  const sessionsByDate={};
+  S.sessions.forEach(s=>{
+    const d=new Date(s.startTime);
+    if(d.getFullYear()===year&&d.getMonth()===month){
+      const key=d.getDate();
+      if(!sessionsByDate[key]) sessionsByDate[key]=[];
+      sessionsByDate[key].push(s);
+    }
+  });
+
+  let html=`<div class="wplan-wrap"><div class="wplan-grid" style="min-width:700px;">`;
+  dayNames.forEach(d=>{ html+=`<div class="wplan-day-hdr"><div class="wplan-day-name">${d}</div></div>`; });
+
+  // Start from Monday before first day
+  const startDate=new Date(firstDay);
+  const diff=firstDay.getDay()===0?-6:1-firstDay.getDay();
+  startDate.setDate(firstDay.getDate()+diff);
+  const dayOrder=[1,2,3,4,5,6,0];
+
+  let d=new Date(startDate);
+  while(d<=lastDay||d.getDay()!==1){
+    dayOrder.forEach(dow=>{
+      const isToday=d.toDateString()===now.toDateString();
+      const isOtherMonth=d.getMonth()!==month;
+      const dayNum=d.getDate();
+      const daySessions=(!isOtherMonth&&sessionsByDate[dayNum])||[];
+
+      // Group by activity, sum durations
+      const actTotals={};
+      daySessions.forEach(s=>{
+        if(!actTotals[s.actId]) actTotals[s.actId]={emoji:s.actEmoji,name:s.actName,dur:0,actId:s.actId};
+        actTotals[s.actId].dur+=s.duration;
+      });
+      const dayDate=new Date(d);
+
+      html+=`<div class="wplan-col" style="opacity:${isOtherMonth?0.2:1};">
+        <div class="wplan-day-hdr ${isToday?'today':''}" style="cursor:pointer;" onclick="diaDate=new Date(${dayDate.getTime()});_tlViewMode='day';toggleTlView();">
+          <div class="wplan-day-num" style="font-size:11px;">${dayNum}</div>
+        </div>
+        <div class="wplan-items" style="padding:3px;">`;
+
+      Object.values(actTotals).forEach(({emoji,name,dur,actId})=>{
+        const color=actColor(actId);
+        html+=`<div class="wplan-block" style="background:${color}22;border-color:${color};padding:3px 5px;"
+          onclick="diaDate=new Date(${dayDate.getTime()});_tlViewMode='day';toggleTlView();">
+          <div class="wplan-block-name" style="color:${color};font-size:9px;">${emoji} ${fmtM(dur)}</div>
+        </div>`;
+      });
+
+      html+=`</div></div>`;
+      d.setDate(d.getDate()+1);
+    });
+    if(d>lastDay&&isWeekEnd())break;
+  }
+
+  html+=`</div></div>`;
+  el.innerHTML=html;
 }
 
 var planDate=new Date();
 function shiftPlanDate(d){
   planDate=new Date(planDate);planDate.setDate(planDate.getDate()+d);
-  if(planDate>new Date())planDate=new Date();
+  // Allow up to 7 days in the future for planning
+  const maxFuture=new Date();maxFuture.setDate(maxFuture.getDate()+7);
+  if(planDate>maxFuture)planDate=maxFuture;
   renderIdealPlan();
 }
 
-// ── IDEAL PLAN VIEW ──
+// ── WEEKLY PLANNER ──
+var _wplanEditActId=null, _wplanEditDay=null;
+
+var _wplanView='week'; // 'week' | 'month'
+var _wplanMonthOffset=0; // months from current
+var _wplanWeekStart=parseInt(localStorage.getItem('wplan_week_start')||'1'); // 1=Mon, 0=Sun
+var _wplanShowWeekend=localStorage.getItem('wplan_show_weekend')!=='0'; // default true
+
+function setWplanWeekStart(v){_wplanWeekStart=v;localStorage.setItem('wplan_week_start',v);renderWeekPlan();}
+function toggleWplanWeekend(){_wplanShowWeekend=!_wplanShowWeekend;localStorage.setItem('wplan_show_weekend',_wplanShowWeekend?'1':'0');renderWeekPlan();}
+
+function renderWeekPlan(){
+  const el=document.getElementById('diaWeekPlanContent');
+  if(!el)return;
+  if(!S.weekPlan)S.weekPlan={};
+
+  const now=new Date();
+
+  // Header: toggle + month navigation
+  const refDate=new Date(now.getFullYear(), now.getMonth()+_wplanMonthOffset, 1);
+  // Compute label based on view
+  let navLabel;
+  if(_wplanView==='week'){
+    const wkStart=new Date(now);
+    const wkDiff=now.getDay()===0?-6:1-now.getDay();
+    wkStart.setDate(now.getDate()+wkDiff+(_wplanWeekOffset*7));
+    const wkEnd=new Date(wkStart);wkEnd.setDate(wkStart.getDate()+6);
+    navLabel=`${wkStart.getDate()}/${wkStart.getMonth()+1} — ${wkEnd.getDate()}/${wkEnd.getMonth()+1}/${wkEnd.getFullYear()}`;
+  } else {
+    navLabel=refDate.toLocaleDateString('es-MX',{month:'long',year:'numeric'});
+  }
+
+  let topBar=`<div style="display:flex;align-items:center;gap:8px;padding:6px 16px 4px;border-bottom:1px solid var(--border);flex-wrap:wrap;">
+    <button class="tl-zoom-btn ${_wplanView==='week'?'active':''}" onclick="setWplanView('week')">Sem</button>
+    <button class="tl-zoom-btn ${_wplanView==='month'?'active':''}" onclick="setWplanView('month')">Mes</button>
+    <button class="tl-zoom-btn ${_wplanWeekStart===1?'active':''}" onclick="setWplanWeekStart(1)" title="Iniciar semana en Lunes">L</button>
+    <button class="tl-zoom-btn ${_wplanWeekStart===0?'active':''}" onclick="setWplanWeekStart(0)" title="Iniciar semana en Domingo">D</button>
+    <button class="tl-zoom-btn ${_wplanShowWeekend?'active':''}" onclick="toggleWplanWeekend()" title="Mostrar/ocultar fines de semana">fin</button>
+    <div style="flex:1;text-align:center;font-size:11px;font-family:var(--mono);color:var(--text3);">${navLabel}</div>
+    <button class="date-nav-btn" onclick="shiftWplanMonth(-1)">‹</button>
+    <button class="date-nav-btn" onclick="shiftWplanMonth(1)">›</button>
+  </div>`;
+
+  el.innerHTML=topBar+'<div id="wplanBody"></div>';
+
+  if(_wplanView==='week'){
+    renderWeekPlanWeek(document.getElementById('wplanBody'), refDate);
+  } else {
+    renderWeekPlanMonth(document.getElementById('wplanBody'), refDate);
+  }
+}
+
+function setWplanView(v){
+  _wplanView=v;
+  if(v==='week') _wplanMonthOffset=0; // reset month when going to week
+  renderWeekPlan();
+}
+var _wplanWeekOffset=0; // weeks from current week
+
+function shiftWplanMonth(d){
+  if(_wplanView==='week'){
+    _wplanWeekOffset+=d; // navigate week by week
+  } else {
+    _wplanMonthOffset=Math.min(3,_wplanMonthOffset+d); // month by month
+  }
+  renderWeekPlan();
+}
+
+function renderWeekPlanWeek(el, refDate){
+  const now=new Date();
+  // Get Monday of the week containing refDate (or current week)
+  // Use week offset for navigation, respecting week start preference
+  const weekStart=new Date(now);
+  const todayDow=now.getDay();
+  let diffToStart;
+  if(_wplanWeekStart===1){ // Monday start
+    diffToStart=todayDow===0?-6:1-todayDow;
+  } else { // Sunday start
+    diffToStart=-todayDow;
+  }
+  weekStart.setDate(now.getDate()+diffToStart+(_wplanWeekOffset*7));
+  weekStart.setHours(0,0,0,0);
+
+  const dayNames=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  const allDNW={0:'Dom',1:'Lun',2:'Mar',3:'Mi\u00e9',4:'Jue',5:'Vie',6:'S\u00e1b'};
+  let dayOrder=(_wplanWeekStart===1)?[1,2,3,4,5,6,0]:[0,1,2,3,4,5,6];
+  if(!_wplanShowWeekend) dayOrder=dayOrder.filter(d=>d!==0&&d!==6);
+
+  let html=`<div class="wplan-wrap"><div class="wplan-grid" style="grid-template-columns:repeat(${dayOrder.length},1fr);">`;
+
+  dayOrder.forEach((day,col)=>{
+    const dayDate=new Date(weekStart);
+    const baseDay=weekStart.getDay();
+    const offset=(day-baseDay+7)%7;
+    dayDate.setDate(weekStart.getDate()+offset);
+    const isToday=dayDate.toDateString()===now.toDateString();
+    const isPast=dayDate<new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    const dayNum=dayDate.getDate();
+    const monthStr=String(dayDate.getMonth()+1).padStart(2,'0');
+
+    html+=`<div class="wplan-col ${isPast?'wplan-past':''}">
+      <div class="wplan-day-hdr ${isToday?'today':''}">
+        <div class="wplan-day-name">${allDNW[day]||allDayNamesW&&allDayNamesW[day]||""}</div>
+        <div class="wplan-day-num">${dayNum}/${monthStr}</div>
+      </div>
+      <div class="wplan-items" id="wpi_${day}">`;
+
+    // Show planned items for this specific date
+    const dateKey=dayDate.toISOString().slice(0,10);
+    const dayItems=S.weekPlan[dateKey]||[];
+    const sortedItems=[...dayItems].sort((a,b)=>(a.startH||0)-(b.startH||0));
+
+    sortedItems.forEach(item=>{
+      const act=S.activities.find(a=>a.id===item.actId);
+      if(!act)return;
+      const color=actColor(act.id);
+      const timeStr=item.startH!==undefined
+        ?`${String(item.startH).padStart(2,'0')}:${String(item.startM||0).padStart(2,'0')}`:'';
+      const subsStr=(item.subtasks||[]).slice(0,2).map(s=>s.text).join(', ');
+      html+=`<div class="wplan-block" style="background:${color}22;border-color:${color};"
+        onclick="openWplanEdit('${dateKey}',${dayItems.indexOf(item)})">
+        <div class="wplan-block-name" style="color:${color};">${act.emoji} ${esc(act.name)}</div>
+        ${timeStr?`<div class="wplan-block-time" style="color:${color};">${timeStr}${item.idealSecs?' · '+fmtM(item.idealSecs):''}</div>`:''}
+        ${subsStr?`<div class="wplan-block-subs" style="color:${color};">${esc(subsStr)}</div>`:''}
+      </div>`;
+    });
+
+    html+=`<div class="wplan-add" onclick="openWplanAdd('${dateKey}')">+</div>
+      </div>
+    </div>`;
+  });
+
+  html+=`</div></div>`;
+  el.innerHTML=html;
+}
+
+function renderWeekPlanMonth(el, refDate){
+  const now=new Date();
+  const year=refDate.getFullYear();
+  const month=refDate.getMonth();
+  const firstDay=new Date(year,month,1);
+  const lastDay=new Date(year,month+1,0);
+  const allDNM2={0:'Dom',1:'Lun',2:'Mar',3:'Mié',4:'Jue',5:'Vie',6:'Sáb'};
+  let dayOrderM=(_wplanWeekStart===1)?[1,2,3,4,5,6,0]:[0,1,2,3,4,5,6];
+  if(!_wplanShowWeekend) dayOrderM=dayOrderM.filter(dw=>dw!==0&&dw!==6);
+
+  let html=`<div class="wplan-wrap">
+    <div class="wplan-grid" style="min-width:${dayOrderM.length*100}px;grid-template-columns:repeat(${dayOrderM.length},1fr);">`;
+
+  // Header row
+  dayOrderM.forEach(dw=>{
+    html+=`<div class="wplan-day-hdr" style="position:relative;">
+      <div class="wplan-day-name">${allDNM2[dw]}</div>
+    </div>`;
+  });
+
+  // Fill grid — start from week start before first day
+  const startDate=new Date(firstDay);
+  const fDow=firstDay.getDay();
+  let startDiff;
+  if(_wplanWeekStart===1){ startDiff=fDow===0?-6:1-fDow; }
+  else { startDiff=-fDow; }
+  startDate.setDate(firstDay.getDate()+startDiff);
+
+  let d=new Date(startDate);
+  const isWeekEnd=()=>_wplanWeekStart===1?d.getDay()===1:d.getDay()===0;
+  while(d<=lastDay||!isWeekEnd()){
+    dayOrderM.forEach((dow)=>{
+      // Skip if this day of week doesn't match
+      if(d.getDay()!==dow){return;}
+      const isToday=d.toDateString()===now.toDateString();
+      const isOtherMonth=d.getMonth()!==month;
+      const isPast=d<new Date(now.getFullYear(),now.getMonth(),now.getDate());
+      const dayNum=d.getDate();
+      const dayDate=new Date(d);
+
+      html+=`<div class="wplan-col ${isPast?'wplan-past':''} ${isOtherMonth?'':''}">
+        <div class="wplan-day-hdr ${isToday?'today':''}" style="opacity:${isOtherMonth?0.3:1};">
+          <div class="wplan-day-num" style="font-size:11px;">${dayNum}</div>
+        </div>
+        <div class="wplan-items">`;
+
+      // Items for this specific date
+      const mDateKey=d.toISOString().slice(0,10);
+      const mItems=S.weekPlan[mDateKey]||[];
+      const mSorted=[...mItems].sort((a,b)=>(a.startH||0)-(b.startH||0));
+      mSorted.forEach((item,idx)=>{
+        const act=S.activities.find(a=>a.id===item.actId);
+        if(!act)return;
+        const color=actColor(act.id);
+        html+=`<div class="wplan-block" style="background:${color}22;border-color:${color};"
+          onclick="openWplanEdit('${mDateKey}',${idx})">
+          <div class="wplan-block-name" style="color:${color};font-size:9px;">${act.emoji} ${esc(act.name)}</div>
+          ${item.startH!==undefined?`<div class="wplan-block-time" style="color:${color};">${String(item.startH).padStart(2,'0')}:${String(item.startM||0).padStart(2,'0')}</div>`:''}
+        </div>`;
+      });
+      if(!isOtherMonth){
+        html+=`<div class="wplan-add" onclick="openWplanAdd('${mDateKey}')">+</div>`;
+      }
+
+      html+=`</div></div>`;
+      d.setDate(d.getDate()+1);
+    });
+    if(d>lastDay&&isWeekEnd())break;
+  }
+
+  html+=`</div></div>`;
+  el.innerHTML=html;
+}
+
+function openWplanAdd(dateKey){
+  _wplanEditDay=dateKey;_wplanEditActId=null;
+  const dt=new Date(dateKey+'T12:00:00');
+  const dayNames=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const label=`${dayNames[dt.getDay()]} ${dt.getDate()}/${dt.getMonth()+1}`;
+  const opts=S.activities.map(a=>`
+    <div onclick="openWplanEditByDate('${a.id}','${dateKey}')"
+      style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);">
+      <span style="font-size:16px;">${a.emoji}</span>
+      <span style="font-size:13px;">${esc(a.name)}</span>
+    </div>`).join('');
+  document.getElementById('wplanPickerTitle').textContent=`${label} — elegir actividad`;
+  document.getElementById('wplanPickerList').innerHTML=opts;
+  openModal('wplanPickerModal');
+}
+
+function openWplanEditByDate(actId, dateKey){
+  closeModal('wplanPickerModal');
+  if(!S.weekPlan[dateKey]) S.weekPlan[dateKey]=[];
+  const existing=S.weekPlan[dateKey].find(x=>x.actId===actId);
+  if(!existing) S.weekPlan[dateKey].push({actId,startH:undefined,startM:0,idealSecs:0,subtasks:[]});
+  const idx=S.weekPlan[dateKey].findIndex(x=>x.actId===actId);
+  openWplanEdit(dateKey, idx);
+}
+
+function openWplanEdit(dateKey,idx){
+  _wplanEditDay=dateKey;_wplanEditActId=idx;
+  if(!S.weekPlan[dateKey]) S.weekPlan[dateKey]=[];
+  const item=S.weekPlan[dateKey][idx];
+  if(!item)return;
+  const act=S.activities.find(a=>a.id===item.actId);if(!act)return;
+
+  document.getElementById('wplanTitle').textContent=`${act.emoji} ${act.name}`;
+  const dt=new Date(dateKey+'T12:00:00');
+  const dayNames=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  document.getElementById('wplanDayLbl').textContent=`${dayNames[dt.getDay()]} ${dt.getDate()}/${dt.getMonth()+1}`;
+  document.getElementById('wplanStartH').value=item.startH!==undefined?String(item.startH):'';
+  document.getElementById('wplanStartM').value=String(item.startM||0);
+  const h=item.idealSecs?Math.floor(item.idealSecs/3600):0;
+  const m=item.idealSecs?Math.floor((item.idealSecs%3600)/60):0;
+  document.getElementById('wplanIdealH').value=h||'';
+  document.getElementById('wplanIdealM').value=m||'';
+  document.getElementById('wplanSubsList').innerHTML=(item.subtasks||[]).map((s,i)=>`
+    <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--s0);border-radius:7px;font-size:12px;">
+      <span style="flex:1;">${esc(s.text)}</span>
+      <button onclick="removeWplanSub(${i})" style="background:none;border:none;color:var(--text3);cursor:pointer;">✕</button>
+    </div>`).join('');
+  document.getElementById('wplanSubInput').value='';
+  openModal('wplanModal');
+}
+
+function removeWplanSub(idx){
+  const item=S.weekPlan[_wplanEditDay]&&S.weekPlan[_wplanEditDay][_wplanEditActId];
+  if(!item)return;
+  item.subtasks.splice(idx,1);
+  openWplanEdit(_wplanEditDay,_wplanEditActId);
+}
+
+function addWplanSub(){
+  const inp=document.getElementById('wplanSubInput');
+  const txt=inp?inp.value.trim():'';if(!txt)return;
+  const item=S.weekPlan[_wplanEditDay]&&S.weekPlan[_wplanEditDay][_wplanEditActId];
+  if(!item)return;
+  item.subtasks.push({text:txt});
+  inp.value='';
+  openWplanEdit(_wplanEditDay,_wplanEditActId);
+}
+
+function confirmWplanEdit(){
+  const item=S.weekPlan[_wplanEditDay]&&S.weekPlan[_wplanEditDay][_wplanEditActId];
+  if(!item)return;
+  const sh=document.getElementById('wplanStartH').value;
+  item.startH=sh!==''?parseInt(sh):undefined;
+  item.startM=parseInt(document.getElementById('wplanStartM').value)||0;
+  const ih=parseInt(document.getElementById('wplanIdealH').value)||0;
+  const im=parseInt(document.getElementById('wplanIdealM').value)||0;
+  item.idealSecs=(ih*3600+im*60)||0;
+  save();closeModal('wplanModal');renderWeekPlan();
+}
+
+function removeWplanDay(){
+  if(!S.weekPlan[_wplanEditDay])return;
+  S.weekPlan[_wplanEditDay].splice(_wplanEditActId,1);
+  if(!S.weekPlan[_wplanEditDay].length) delete S.weekPlan[_wplanEditDay];
+  save();closeModal('wplanModal');renderWeekPlan();
+}
+
+// Auto-add today's week plan items to planned
+function applyWeekPlanToday(){
+  if(!S.weekPlan)return;
+  const todayStr=new Date().toDateString();
+  const todayKey=new Date().toISOString().slice(0,10);
+  const dayItems=S.weekPlan[todayKey]||[];
+  dayItems.forEach(item=>{
+    const act=S.activities.find(a=>a.id===item.actId);if(!act)return;
+    const already=S.planned.find(p=>p.actId===item.actId&&new Date(p.addedAt).toDateString()===todayStr);
+    if(already)return;
+    const newPlan={
+      id:genId(),actId:act.id,actName:act.name,actEmoji:act.emoji,
+      idealSecs:item.idealSecs||0,note:'',
+      subtasks:(item.subtasks||[]).map(s=>({id:genId(),text:s.text,done:false})),
+      done:false,addedAt:new Date().toISOString(),fromWeekPlan:true
+    };
+    S.planned.push(newPlan);
+    if(item.startH!==undefined){
+      const offKey='po_'+todayStr;
+      if(!S.prefs)S.prefs={};
+      if(!S.prefs[offKey])S.prefs[offKey]={};
+      S.prefs[offKey][newPlan.id]={abs:item.startH*60+(item.startM||0)};
+    }
+  });
+}
+
+// Check on load if we need to apply today's week plan
+(function(){
+  setTimeout(()=>{
+    const todayStr=new Date().toDateString();
+    const lastApplied=localStorage.getItem('wplan_applied');
+    if(lastApplied!==todayStr){
+      applyWeekPlanToday();
+      localStorage.setItem('wplan_applied',todayStr);
+      save();renderPlanned();
+    }
+  },2000); // after pull completes
+})();
 var _iplanPxPerMin=4; // pixels per minute — adjustable via zoom
 
 function renderIdealPlan(){
-  const el=document.getElementById('diaPlanContent');
   const pStr=planDate.toDateString();
   const isToday=pStr===new Date().toDateString();
   const lbl=document.getElementById('planDateLbl');
   if(lbl) lbl.textContent=isToday?'Hoy':planDate.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
-  // For past days show ALL planned (including done), for today only active
+  const daysCount=parseInt(document.getElementById('planDaysCount')?.value||'1');
+
+  // For multi-day: build array of dates
+  const planDates=[];
+  for(let i=0;i<daysCount;i++){
+    const d=new Date(planDate);d.setDate(planDate.getDate()+i);
+    planDates.push(d);
+  }
+
+  // Show planned items for this date
   const plans=S.planned.filter(p=>new Date(p.addedAt).toDateString()===pStr&&p.idealSecs>0&&(isToday?!p.done:true));
+  
+  // Also include weekPlan items for this date that aren't already in planned
+  const planDateKey=planDate.toISOString().slice(0,10);
+  const wplanItems=S.weekPlan&&S.weekPlan[planDateKey]||[];
+  wplanItems.forEach(item=>{
+    const act=S.activities.find(a=>a.id===item.actId);
+    if(!act||!item.idealSecs)return;
+    // Check if already in planned
+    const already=plans.find(p=>p.actId===item.actId);
+    if(!already){
+      // Create a virtual planned item for display
+      plans.push({
+        id:'wpl_'+planDateKey+'_'+item.actId,
+        actId:item.actId,actName:act.name,actEmoji:act.emoji,
+        idealSecs:item.idealSecs,note:'',
+        subtasks:(item.subtasks||[]).map(s=>({id:'ws_'+s.text,text:s.text,done:false})),
+        done:false,addedAt:planDate.toISOString(),
+        _virtual:true // mark as virtual (from weekPlan)
+      });
+    }
+  });
 
   if(!plans.length){
-    el.innerHTML=`<div class="iplan-empty">// Añade actividades con tiempo ideal ⏱ para visualizarlas aquí</div>`;
+    const body=document.getElementById('diaPlanBody');
+    if(body) body.innerHTML=`<div class="iplan-empty">// Añade actividades con tiempo ideal ⏱ para visualizarlas aquí</div>`;
     return;
   }
 
@@ -3420,28 +4104,64 @@ function renderIdealPlan(){
     }
   });
 
-  el.innerHTML=`
-    <div style="display:flex;align-items:center;gap:6px;padding:8px 16px 6px;border-bottom:1px solid var(--border);">
-      <span style="font-size:10px;color:var(--text3);font-family:var(--mono);">inicio</span>
-      <select id="iplanStartH" onchange="setIplanStartHM()"
-        style="background:var(--s0);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:12px;padding:3px 4px;outline:none;cursor:pointer;">
-        ${Array.from({length:24},(_,h)=>`<option value="${h}" ${h===stH?'selected':''}>${String(h).padStart(2,'0')}</option>`).join('')}
-      </select>
-      <span style="color:var(--text3);font-size:12px;">:</span>
-      <select id="iplanStartM" onchange="setIplanStartHM()"
-        style="background:var(--s0);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:12px;padding:3px 4px;outline:none;cursor:pointer;">
-        ${(()=>{const nearM=Math.round(stM/5)*5%60;return[0,5,10,15,20,25,30,35,40,45,50,55].map(m=>`<option value="${m}" ${m===nearM?'selected':''}>${String(m).padStart(2,'0')}</option>`).join('');})()}
-      </select>
-      <span style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-left:auto;">total ${fmtM(totalSecs)}</span>
-    </div>
-    <div style="display:flex;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:80px;" id="iplanScroll">
-      <div class="iplan-ruler" style="height:${totalHeight+40}px;position:relative;">
-        ${rulerHtml}
-      </div>
-      <div class="iplan-col" id="iplanCol" style="height:${totalHeight+40}px;position:relative;">
-        ${linesHtml}${nowHtml}${sleepHtml}${blocksHtml}
-      </div>
-    </div>`;
+  const el=document.getElementById('diaPlanBody');if(!el)return;
+
+  if(daysCount===1){
+    el.innerHTML=`
+      <div style="display:flex;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:80px;" id="iplanScroll">
+        <div class="iplan-ruler" style="height:${totalHeight+40}px;position:relative;">${rulerHtml}</div>
+        <div class="iplan-col" id="iplanCol" style="height:${totalHeight+40}px;position:relative;">
+          ${linesHtml}${nowHtml}${sleepHtml}${blocksHtml}
+        </div>
+      </div>`;
+  } else {
+    // Multi-day: build columns for each day
+    let multiHtml=`<div style="display:flex;overflow-x:auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:80px;height:calc(100vh - 160px);">
+      <div class="iplan-ruler" style="height:${totalHeight+40}px;position:relative;flex-shrink:0;">${rulerHtml}</div>`;
+    planDates.forEach((pd,di)=>{
+      const pdStr=pd.toDateString();
+      const pdIsToday=pdStr===new Date().toDateString();
+      const pdPlans=S.planned.filter(p=>new Date(p.addedAt).toDateString()===pdStr&&p.idealSecs>0&&(pdIsToday?!p.done:true));
+      const pdKey=pd.toISOString().slice(0,10);
+      const pdWplan=(S.weekPlan&&S.weekPlan[pdKey])||[];
+      pdWplan.forEach(item=>{
+        const act=S.activities.find(a=>a.id===item.actId);
+        if(!act||!item.idealSecs)return;
+        if(!pdPlans.find(p=>p.actId===item.actId)){
+          pdPlans.push({id:'wpl_'+pdKey+'_'+item.actId,actId:item.actId,actName:act.name,actEmoji:act.emoji,idealSecs:item.idealSecs,note:'',subtasks:(item.subtasks||[]).map(s=>({id:'ws_'+s.text,text:s.text,done:false})),done:false,addedAt:pd.toISOString(),_virtual:true});
+        }
+      });
+      // Build blocks for this day
+      const offKey='po_'+pdStr;
+      const pdOffsets=(S.prefs&&S.prefs[offKey])||{};
+      const pdBlocks=[];let pdCursor=startMins;
+      pdPlans.forEach(p=>{
+        const dur=Math.max(1,Math.round((p.idealSecs||0)/60));
+        const brk=Math.round((p.breakIdealSecs||0)/60);
+        let blockStart;
+        if(pdOffsets[p.id]&&typeof pdOffsets[p.id]==='object') blockStart=pdOffsets[p.id].abs;
+        else{blockStart=pdCursor;if(!S.prefs)S.prefs={};if(!S.prefs[offKey])S.prefs[offKey]={};S.prefs[offKey][p.id]={abs:blockStart};}
+        pdBlocks.push({p,startMin:blockStart,dur,brk,color:actColor(p.actId)});
+        pdCursor+=dur+brk;
+      });
+      let pdBlocksHtml='';
+      pdBlocks.forEach(({p,startMin,dur,brk,color})=>{
+        const top=(startMin-viewStart)*PX;
+        const height=Math.max(dur*PX,28);
+        pdBlocksHtml+=`<div class="iplan-block" style="top:${top}px;height:${height}px;background:${color}25;border:1.5px solid ${color};">
+          <div class="iplan-block-name" style="color:${color};">${p.actEmoji} ${esc(p.actName)}</div>
+          ${height>34?`<div class="iplan-block-time" style="color:${color};">${fmtM(p.idealSecs)}</div>`:''}
+        </div>`;
+      });
+      const dayLabel=pd.toLocaleDateString('es-MX',{weekday:'short',day:'numeric'});
+      multiHtml+=`<div style="flex:0 0 140px;display:flex;flex-direction:column;">
+        <div style="text-align:center;font-size:9px;font-family:var(--mono);color:${pdIsToday?'var(--accent)':'var(--text3)'};padding:4px 0;border-bottom:1px solid var(--border);border-left:1px solid var(--border);">${dayLabel}</div>
+        <div class="iplan-col" style="height:${totalHeight}px;position:relative;flex:1;">${linesHtml}${pdIsToday?nowHtml:''}${pdBlocksHtml}</div>
+      </div>`;
+    });
+    multiHtml+=`</div>`;
+    el.innerHTML=multiHtml;
+  }
 
   // Attach drag (move) and resize handlers
   _attachIplanInteractions(blocks,viewStart,PX);
@@ -4086,6 +4806,18 @@ function stopAutoPull(){
 }
 startAutoPull();
 
+// Show FAB only when activities section is visible
+(function(){
+  const fab=document.getElementById('fab');
+  const obs=new IntersectionObserver(entries=>{
+    entries.forEach(e=>{
+      if(fab) fab.classList.toggle('fab-hidden',!e.isIntersecting);
+    });
+  },{threshold:0.1});
+  const actEl=document.getElementById('actList');
+  if(actEl) obs.observe(actEl);
+})();
+
 // Hidden iframe for form POST (avoids CORS on all browsers)
 var _kronosFrame=document.createElement('iframe');
 _kronosFrame.name='_kronosFrame';
@@ -4107,6 +4839,8 @@ if(_savedRaw){
     if(!_saved.divisions||!Array.isArray(_saved.divisions)||!_saved.divisions.length){
       _saved.divisions=[{id:'d1',name:'Deberes'},{id:'d2',name:'Daily Advance'},{id:'d3',name:'Otros'}];
     }
+    if(!_saved.weekPlan)_saved.weekPlan={};
+    if(!_saved.actDivisions||!_saved.actDivisions.length) _saved.actDivisions=[{id:'d_deberes',name:'Deberes'},{id:'d_daily',name:'Daily Advance'},{id:'d_otros',name:'Otros'}];
     S=_saved;
   }catch(e){console.warn('localStorage parse error:',e);}
 }
