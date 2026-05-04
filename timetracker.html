@@ -1176,10 +1176,13 @@ function pullFromCloud(){
         var localPlanned=S.planned||[];
         var cloudPlanned=cloud.planned||[];
         var planMap={};
-        cloudPlanned.forEach(function(p){planMap[p.id]=JSON.parse(JSON.stringify(p));});
+        cloudPlanned.forEach(function(p){
+          if(!deletedSet.has(p.id)) planMap[p.id]=JSON.parse(JSON.stringify(p));
+        });
         localPlanned.forEach(function(p){
+          if(deletedSet.has(p.id)) return; // deleted
           if(!planMap[p.id]){
-            planMap[p.id]=p; // local-only planned item kept
+            planMap[p.id]=p;
           } else {
             var merged=planMap[p.id];
             // merge subtasks: union by id
@@ -1201,18 +1204,27 @@ function pullFromCloud(){
           return new Date(a.addedAt)-new Date(b.addedAt);
         });
 
-        // ── Merge activities: union, local color/name edits win ──
+        // ── Merge deletedActIds ──
+        var localDelActs=S.deletedActIds||[];
+        var cloudDelActs=cloud.deletedActIds||[];
+        var deletedActSet=new Set([...localDelActs,...cloudDelActs]);
+
+        // ── Merge activities: respect tombstones ──
         var localActs=S.activities||[];
         var cloudActs=cloud.activities||[];
         var actMap={};
-        cloudActs.forEach(function(a){actMap[a.id]=Object.assign({},a);});
+        cloudActs.forEach(function(a){
+          if(!deletedActSet.has(a.id)) actMap[a.id]=Object.assign({},a);
+        });
         localActs.forEach(function(a){
+          if(deletedActSet.has(a.id)) return; // deleted — skip
           if(!actMap[a.id]) actMap[a.id]=a;
           else {
-            // local edits to color/name win
             if(a.color) actMap[a.id].color=a.color;
             if(a.name!==actMap[a.id].name&&a.name) actMap[a.id].name=a.name;
             if(a.emoji!==actMap[a.id].emoji&&a.emoji) actMap[a.id].emoji=a.emoji;
+            if(a.divisionId) actMap[a.id].divisionId=a.divisionId;
+            if(a.defaultSubtasks) actMap[a.id].defaultSubtasks=a.defaultSubtasks;
           }
         });
         var mergedActs=Object.values(actMap);
@@ -1223,7 +1235,8 @@ function pullFromCloud(){
           sessions:mergedSessions,
           planned:mergedPlanned,
           activities:mergedActs,
-          deletedIds:[...deletedSet]
+          deletedIds:[...deletedSet],
+          deletedActIds:[...deletedActSet]
         });
         var wk=getWk();
         if(S.currentWeek!==wk){S.activities.forEach(function(a){a.weekTotal=0;});S.currentWeek=wk;}
@@ -1251,12 +1264,11 @@ function pullFromCloud(){
         Object.keys(timers).forEach(function(k){
           if(!S.running[k]){clearInterval(timers[k]);delete timers[k];}
         });
-        // Don't disrupt open modals — only render if no modal is visible
+        // Don't disrupt open modals
         var anyModalOpen=document.querySelector('.overlay.show');
         if(!anyModalOpen){
-          renderAll();
+          smartRenderAfterPull(); // only re-renders if something changed
         } else {
-          // just update running cards and week grid silently
           renderRunning();
           renderWeekGrid();
           renderDayMeta();
@@ -1588,7 +1600,11 @@ function confirmPendingDone(saveForNext){
 }
 
 function removePlanned(pid){
-  S.planned=S.planned.filter(x=>x.id!==pid);save();renderAll();
+  S.planned=S.planned.filter(x=>x.id!==pid);
+  if(!S.deletedIds)S.deletedIds=[];
+  S.deletedIds.push(pid);
+  if(S.deletedIds.length>500)S.deletedIds=S.deletedIds.slice(-500);
+  save();forcePush();renderAll();
 }
 
 // subtasks
@@ -2041,6 +2057,38 @@ function renderAll(){
   renderWeekBadge();renderPlanned();renderRunning();renderWeekGrid();renderActList();renderDayMeta();
   updateDeviceUI();
   if(document.getElementById('page-history').classList.contains('active'))renderHistory();
+}
+
+// Smart render after pull — only re-render if data changed, preserve scroll
+var _lastStateHash='';
+function smartRenderAfterPull(){
+  const hash=JSON.stringify({
+    acts:S.activities.map(a=>a.id+a.divisionId+a.weekTotal).join(','),
+    planned:S.planned.map(p=>p.id+p.done+(p.subtasks||[]).length).join(','),
+    running:Object.keys(S.running).join(','),
+    sessions:S.sessions.length
+  });
+  if(hash===_lastStateHash) return; // nothing changed — skip render
+  _lastStateHash=hash;
+
+  // Preserve scroll positions
+  const trackerPage=document.getElementById('page-tracker');
+  const scrollTop=trackerPage?trackerPage.scrollTop:0;
+  const boardWrap=document.getElementById('actBoardWrap');
+  const boardScrollLeft=boardWrap?boardWrap.scrollLeft:0;
+  const planBoard=document.getElementById('plannedList');
+  const planScrollLeft=planBoard?planBoard.scrollLeft:0;
+
+  try{renderAll();}catch(e){console.warn(e);}
+
+  // Restore scroll positions
+  requestAnimationFrame(()=>{
+    if(trackerPage&&scrollTop) trackerPage.scrollTop=scrollTop;
+    const bw=document.getElementById('actBoardWrap');
+    if(bw&&boardScrollLeft) bw.scrollLeft=boardScrollLeft;
+    const pb=document.getElementById('plannedList');
+    if(pb&&planScrollLeft) pb.scrollLeft=planScrollLeft;
+  });
 }
 
 function renderWeekBadge(){
@@ -2913,7 +2961,11 @@ function deleteActivity(actId){
   S.activities=S.activities.filter(a=>a.id!==actId);
   // also remove from today's planned if present
   S.planned=S.planned.filter(p=>p.actId!==actId);
-  save();renderAll();
+  // Tombstone so other devices don't restore it
+  if(!S.deletedActIds)S.deletedActIds=[];
+  S.deletedActIds.push(actId);
+  if(S.deletedActIds.length>200)S.deletedActIds=S.deletedActIds.slice(-200);
+  save();forcePush();renderAll();
 }
 
 function getActDivisions(){
@@ -5041,6 +5093,7 @@ if(_savedRaw){
     if(!_saved.running)_saved.running={};
     if(!_saved.prefs)_saved.prefs={};
     if(!_saved.deletedIds)_saved.deletedIds=[];
+    if(!_saved.deletedActIds)_saved.deletedActIds=[];
     if(!_saved.activities)_saved.activities=[];
     if(!_saved.divisions||!Array.isArray(_saved.divisions)||!_saved.divisions.length){
       _saved.divisions=[{id:'d1',name:'Deberes'},{id:'d2',name:'Daily Advance'},{id:'d3',name:'Otros'}];
@@ -5062,7 +5115,7 @@ Object.keys(S.running).forEach(k=>{
 // Then sync with cloud in background
 pullFromCloud().finally(()=>{
   migrateDivisionIds();
-  try{renderAll();}catch(e){console.warn('Post-pull render:',e);}
+  try{smartRenderAfterPull();}catch(e){console.warn('Post-pull render:',e);}
   Object.keys(S.running).forEach(k=>{
     const ctx=S.running[k];
     if(ctx&&!ctx.paused&&!timers[k])startTick(k);
