@@ -485,7 +485,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   <div class="hdr">
     <div class="logo">KRONOS</div>
     <div style="display:flex;align-items:center;gap:8px;">
-      <span id="syncDot" title="Sync" onclick="pullFromCloud()" style="font-size:12px;color:var(--text3);cursor:pointer;font-family:var(--mono);">●</span>
+      <span id="syncDot" title="Sync" onclick="forcePullAndRender()" style="font-size:12px;color:var(--text3);cursor:pointer;font-family:var(--mono);">●</span>
       <button id="primaryBtn" onclick="toggleSyncMode()"
         style="background:none;border:none;font-family:var(--mono);font-size:8px;padding:0 3px;cursor:pointer;outline:none;color:var(--text3);">
         🔄 Compartido
@@ -733,6 +733,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
           onkeydown="if(event.key==='Enter'){addWplanSub();event.preventDefault();}">
         <button onclick="addWplanSub()" style="background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;">+</button>
       </div>
+    </div>
+    <div class="field" style="margin-top:8px;">
+      <label>Repetir (opcional)</label>
+      <select id="wplanRepeat" style="background:var(--s0);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 10px;width:100%;outline:none;">
+        <option value="">Sin repetición</option>
+        <option value="weekly">Cada semana (mismo día)</option>
+        <option value="weekdays">Lunes a Viernes</option>
+        <option value="daily">Todos los días</option>
+      </select>
     </div>
     <button class="mbtn" onclick="confirmWplanEdit()">Guardar</button>
     <button class="det-btn del" onclick="removeWplanDay()" style="width:100%;padding:10px;margin-top:6px;">Quitar este día</button>
@@ -1293,11 +1302,20 @@ function canWrite(){
 }
 
 function forcePush(){
-  // Always push on explicit user actions regardless of mode
   const orig=_syncMode;
   _syncMode='primary';
   _pushToCloud();
   _syncMode=orig;
+}
+
+function forcePullAndRender(){
+  // Force pull regardless of sync mode, then render
+  const orig=_syncMode;
+  if(_syncMode==='readonly') _syncMode='shared'; // temporarily allow pull
+  pullFromCloud().finally(()=>{
+    _syncMode=orig;
+    try{renderAll();}catch(e){}
+  });
 }
 
 function updateDeviceUI(){
@@ -1444,7 +1462,8 @@ function confirmAddPlanned(){
     id:genId(),actId:act.id,actName:act.name,actEmoji:act.emoji,
     idealSecs:ideal,note:noteVal,
     subtasks:allSubs,
-    done:false,addedAt:new Date().toISOString()
+    done:false,addedAt:new Date().toISOString(),
+    divisionId:act.divisionId||'d_otros' // inherit from activity
   };
   S.planned.push(newPlan);
 
@@ -1560,6 +1579,15 @@ function deleteSubtask(pid,sid){
   save();renderPlanned();
 }
 function editSubtaskName(pid,sid){openEditSubtask(pid,sid);}
+
+function loadMissingDefaults(pid,event){
+  event.stopPropagation();
+  const p=S.planned.find(x=>x.id===pid);if(!p)return;
+  const act=S.activities.find(a=>a.id===p.actId);if(!act)return;
+  const missing=(act.defaultSubtasks||[]).filter(dt=>!p.subtasks.some(st=>st.text.toLowerCase()===dt.toLowerCase()));
+  missing.forEach(dt=>p.subtasks.push({id:genId(),text:dt,done:false}));
+  save();renderPlanned();
+}
 
 function addSubtask(pid,text){
   const p=S.planned.find(x=>x.id===pid);if(!p||!text.trim())return;
@@ -1984,10 +2012,11 @@ function renderPlanned(){
   const todayPlanned=S.planned.filter(p=>!p.done);
   document.getElementById('plannedCount').textContent=todayPlanned.length?`(${todayPlanned.length})`:'';
 
-  // Always ensure divisions exist
-  if(!S.divisions||!Array.isArray(S.divisions)||!S.divisions.length){
-    S.divisions=[{id:'d1',name:'Deberes'},{id:'d2',name:'Daily Advance'},{id:'d3',name:'Otros'}];
+  // Unify: use actDivisions as single source of truth for all boards
+  if(!S.actDivisions||!S.actDivisions.length){
+    S.actDivisions=[{id:'d_deberes',name:'Deberes'},{id:'d_daily',name:'Daily Advance'},{id:'d_otros',name:'Otros'}];
   }
+  S.divisions=S.actDivisions; // keep in sync
 
   // Build board columns
   let boardHtml='';
@@ -2083,6 +2112,9 @@ function renderPlanned(){
     const doneCount=p.subtasks.filter(s=>s.done).length;
     const pendingCount=subCount-doneCount;
     const subLabel=subCount?(pendingCount>0?`${pendingCount} pendiente${pendingCount>1?'s':''}${doneCount>0?' · '+doneCount+' ✓':''}`:`✓ Todo listo`):'+ subtareas';
+    // Check for missing default subtasks
+    const act4def=S.activities.find(a=>a.id===p.actId);
+    const missingDefaults=(act4def&&act4def.defaultSubtasks||[]).filter(dt=>!p.subtasks.some(st=>st.text.toLowerCase()===dt.toLowerCase()));
     const cardHtml=`<div class="planned-card ${p.done?'done-card':''} ${isRunning?'pc-running':''} ${p.auto?'pc-auto':''}" id="pc_${p.id}"
       draggable="true"
       ondragstart="pcDragStart(event,'${p.id}')"
@@ -2118,6 +2150,7 @@ function renderPlanned(){
       ${p.note?`<div class="pc-note-row">📌 ${esc(p.note)}</div>`:''}
       <div class="pc-expand-row" onclick="togglePcExpand('${p.id}')">
         <span class="pc-expand-lbl">${subLabel}</span>
+        ${missingDefaults.length?`<button onclick="loadMissingDefaults('${p.id}',event)" style="font-size:9px;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);border-radius:5px;padding:1px 5px;cursor:pointer;margin-right:4px;" title="Cargar subtareas default faltantes">+${missingDefaults.length}</button>`:''}
         <span class="pc-expand-icon">▼</span>
       </div>
       <div class="subtasks-wrap" id="sw_${p.id}">
@@ -2847,7 +2880,10 @@ function renderActList(){
 
   divs.forEach(div=>{
     const divActs=S.activities.filter(a=>(a.divisionId||'d_otros')===div.id);
-    html+=`<div class="board-col">
+    html+=`<div class="board-col" draggable="true"
+      ondragstart="divDragStart(event,'${div.id}')"
+      ondragover="divDragOver(event,'${div.id}')"
+      ondrop="divDrop(event,'${div.id}')">
       <div class="board-hdr">
         <span class="board-hdr-name" ondblclick="editActDivision('${div.id}')">${esc(div.name)}</span>
         ${divActs.length?`<span class="board-hdr-count">(${divActs.length})</span>`:''}
@@ -2906,8 +2942,17 @@ function renderActList(){
 
 function editActDivision(divId){
   const div=(S.actDivisions||[]).find(d=>d.id===divId);if(!div)return;
-  const newName=prompt('Nombre de la división:',div.name);
-  if(newName&&newName.trim()){div.name=newName.trim();save();renderActList();}
+  const newName=prompt('Renombrar división (deja vacío para eliminar):',div.name);
+  if(newName===null)return; // cancelled
+  if(!newName.trim()){
+    if(!confirm('¿Eliminar división "'+div.name+'"? Las actividades irán a Otros.'))return;
+    S.actDivisions=S.actDivisions.filter(d=>d.id!==divId);
+    S.activities.forEach(a=>{if(a.divisionId===divId)a.divisionId='d_otros';});
+    S.planned.forEach(p=>{if(p.divisionId===divId)p.divisionId='d_otros';});
+  } else {
+    div.name=newName.trim();
+  }
+  save();renderActList();renderPlanned();
 }
 
 function addActDivision(){
@@ -2916,6 +2961,22 @@ function addActDivision(){
   if(!S.actDivisions) S.actDivisions=[{id:'d_deberes',name:'Deberes'},{id:'d_daily',name:'Daily Advance'},{id:'d_otros',name:'Otros'}];
   S.actDivisions.push({id:'d_'+Date.now(),name:name.trim()});
   save();renderActList();
+}
+
+// Drag to reorder divisions
+var _divDragId=null;
+function divDragStart(e,divId){_divDragId=divId;e.stopPropagation();}
+function divDragOver(e,divId){if(!_divDragId||_divDragId===divId)return;e.preventDefault();e.stopPropagation();}
+function divDrop(e,divId){
+  e.preventDefault();e.stopPropagation();
+  if(!_divDragId||_divDragId===divId)return;
+  const from=S.actDivisions.findIndex(d=>d.id===_divDragId);
+  const to=S.actDivisions.findIndex(d=>d.id===divId);
+  if(from<0||to<0)return;
+  const [moved]=S.actDivisions.splice(from,1);
+  S.actDivisions.splice(to,0,moved);
+  _divDragId=null;
+  save();renderActList();renderPlanned();
 }
 
 // ── HISTORY ──
@@ -3171,11 +3232,30 @@ function renderDefaultSubs(subs){
   const el=document.getElementById('defaultSubsList');
   if(!el)return;
   el.innerHTML=_editingDefaultSubs.map((s,i)=>`
-    <div class="def-sub-item">
+    <div class="def-sub-item" id="dsi_${i}">
       <span style="font-size:10px;color:var(--text3);">↳</span>
-      <span style="flex:1;">${esc(s)}</span>
+      <span style="flex:1;cursor:pointer;" ondblclick="editDefaultSub(${i})" id="dst_${i}">${esc(s)}</span>
+      <button class="def-sub-del" onclick="editDefaultSub(${i})" style="color:var(--accent);margin-right:4px;">✎</button>
       <button class="def-sub-del" onclick="removeDefaultSub(${i})">✕</button>
     </div>`).join('');
+}
+
+function editDefaultSub(idx){
+  const current=_editingDefaultSubs[idx];
+  const span=document.getElementById('dst_'+idx);
+  if(!span)return;
+  const input=document.createElement('input');
+  input.type='text';input.value=current;
+  input.style.cssText='flex:1;background:var(--s0);border:1px solid var(--accent);border-radius:6px;padding:3px 6px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none;';
+  span.replaceWith(input);
+  input.focus();input.select();
+  const confirm=()=>{
+    const val=input.value.trim();
+    if(val) _editingDefaultSubs[idx]=val;
+    renderDefaultSubs(_editingDefaultSubs);
+  };
+  input.onblur=confirm;
+  input.onkeydown=e=>{if(e.key==='Enter')confirm();if(e.key==='Escape')renderDefaultSubs(_editingDefaultSubs);};
 }
 
 function addDefaultSub(){
@@ -3865,7 +3945,11 @@ function openWplanEdit(dateKey,idx){
   document.getElementById('wplanTitle').textContent=`${act.emoji} ${act.name}`;
   const dt=new Date(dateKey+'T12:00:00');
   const dayNames=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-  document.getElementById('wplanDayLbl').textContent=`${dayNames[dt.getDay()]} ${dt.getDate()}/${dt.getMonth()+1}`;
+  const dayLblEl2=dayLblEl||null;const dayLblEl=document.getElementById('wplanDayLbl');
+  dayLblEl.textContent=`${dayNames[dt.getDay()]} ${dt.getDate()}/${dt.getMonth()+1}`;
+  dayLblEl.style.cursor='pointer';
+  dayLblEl.title='Toca para cambiar la fecha';
+  dayLblEl.onclick=()=>openWplanDatePicker(dateKey);
   document.getElementById('wplanStartH').value=item.startH!==undefined?String(item.startH):'';
   document.getElementById('wplanStartM').value=String(item.startM||0);
   const h=item.idealSecs?Math.floor(item.idealSecs/3600):0;
@@ -3888,6 +3972,31 @@ function removeWplanSub(idx){
   openWplanEdit(_wplanEditDay,_wplanEditActId);
 }
 
+function openWplanDatePicker(currentDateKey){
+  const newDate=prompt('Nueva fecha (YYYY-MM-DD):',currentDateKey);
+  if(!newDate||!newDate.match(/^\d{4}-\d{2}-\d{2}$/))return;
+  if(newDate===currentDateKey)return;
+  // Move item to new date
+  if(!S.weekPlan[newDate])S.weekPlan[newDate]=[];
+  const items=S.weekPlan[currentDateKey]||[];
+  const idx=_wplanEditActId;
+  if(items[idx]){
+    S.weekPlan[newDate].push(items[idx]);
+    items.splice(idx,1);
+    if(!items.length)delete S.weekPlan[currentDateKey];
+    _wplanEditDay=newDate;
+    _wplanEditActId=S.weekPlan[newDate].length-1;
+    save();
+    // Reopen with new date
+    const act=S.activities.find(a=>a.id===S.weekPlan[newDate][_wplanEditActId].actId);
+    document.getElementById('wplanTitle').textContent=act?`${act.emoji} ${act.name}`:'';
+    const dt2=new Date(newDate+'T12:00:00');
+    const dn2=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+    document.getElementById('wplanDayLbl').textContent=`${dn2[dt2.getDay()]} ${dt2.getDate()}/${dt2.getMonth()+1}`;
+    renderWeekPlan();
+  }
+}
+
 function addWplanSub(){
   const inp=document.getElementById('wplanSubInput');
   const txt=inp?inp.value.trim():'';if(!txt)return;
@@ -3907,6 +4016,40 @@ function confirmWplanEdit(){
   const ih=parseInt(document.getElementById('wplanIdealH').value)||0;
   const im=parseInt(document.getElementById('wplanIdealM').value)||0;
   item.idealSecs=(ih*3600+im*60)||0;
+
+  // Handle repeat
+  const repeat=document.getElementById('wplanRepeat')?.value;
+  if(repeat){
+    const baseDate=new Date(_wplanEditDay+'T12:00:00');
+    const dates=[];
+    // Generate dates for the next 8 weeks
+    for(let w=0;w<8;w++){
+      if(repeat==='weekly'){
+        const d=new Date(baseDate);d.setDate(baseDate.getDate()+w*7);
+        dates.push(d.toISOString().slice(0,10));
+      } else if(repeat==='weekdays'){
+        for(let day=1;day<=5;day++){
+          const d=new Date(baseDate);
+          const diff=day-baseDate.getDay();
+          d.setDate(baseDate.getDate()+diff+w*7);
+          if(d>=baseDate) dates.push(d.toISOString().slice(0,10));
+        }
+      } else if(repeat==='daily'){
+        for(let day=0;day<7;day++){
+          const d=new Date(baseDate);d.setDate(baseDate.getDate()+day+w*7);
+          dates.push(d.toISOString().slice(0,10));
+        }
+      }
+    }
+    // Add entry for each date (skip if already exists for this actId)
+    dates.forEach(dateKey=>{
+      if(!S.weekPlan[dateKey])S.weekPlan[dateKey]=[];
+      if(!S.weekPlan[dateKey].find(x=>x.actId===item.actId)){
+        S.weekPlan[dateKey].push({...item,day:new Date(dateKey+'T12:00:00').getDay()});
+      }
+    });
+  }
+
   save();closeModal('wplanModal');renderWeekPlan();
 }
 
