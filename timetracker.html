@@ -1368,6 +1368,41 @@ function toggleSyncMode(){
 function setSyncSource(){}
 function autoDeclarePrimaryIfNone(){}
 
+// ── MIGRATION: fix old division IDs ──
+function migrateDivisionIds(){
+  // Map old IDs to new ones
+  const idMap={'d1':'d_deberes','d2':'d_daily','d3':'d_otros'};
+  let changed=false;
+  // Fix activities
+  S.activities.forEach(a=>{
+    if(a.divisionId&&idMap[a.divisionId]){
+      a.divisionId=idMap[a.divisionId];changed=true;
+    }
+    // If no divisionId or unknown, default to d_otros
+    if(!a.divisionId||(!idMap[a.divisionId]&&!S.actDivisions?.find(d=>d.id===a.divisionId))){
+      // Check if it matches any current division
+      const found=S.actDivisions&&S.actDivisions.find(d=>d.id===a.divisionId);
+      if(!found){a.divisionId='d_otros';changed=true;}
+    }
+  });
+  // Fix planned
+  S.planned.forEach(p=>{
+    if(p.divisionId&&idMap[p.divisionId]){
+      p.divisionId=idMap[p.divisionId];changed=true;
+    }
+    if(p.divisionId){
+      const found=S.actDivisions&&S.actDivisions.find(d=>d.id===p.divisionId);
+      if(!found){
+        // Try to inherit from activity
+        const act=S.activities.find(a=>a.id===p.actId);
+        p.divisionId=act?act.divisionId:'d_otros';
+        changed=true;
+      }
+    }
+  });
+  if(changed) save();
+}
+
 function _updateSyncDot(ok){
   const dot=document.getElementById('syncDot');
   if(!dot)return;
@@ -2028,11 +2063,15 @@ function renderPlanned(){
   const todayPlanned=S.planned.filter(p=>!p.done);
   document.getElementById('plannedCount').textContent=todayPlanned.length?`(${todayPlanned.length})`:'';
 
-  // Unify: use actDivisions as single source of truth for all boards
+  // Ensure actDivisions exists with defaults
   if(!S.actDivisions||!S.actDivisions.length){
     S.actDivisions=[{id:'d_deberes',name:'Deberes'},{id:'d_daily',name:'Daily Advance'},{id:'d_otros',name:'Otros'}];
   }
-  S.divisions=S.actDivisions; // keep in sync
+  // Ensure d_otros always exists as fallback
+  if(!S.actDivisions.find(d=>d.id==='d_otros')){
+    S.actDivisions.push({id:'d_otros',name:'Otros'});
+  }
+  S.divisions=S.actDivisions;
 
   // Build board columns
   let boardHtml='';
@@ -5013,6 +5052,7 @@ if(_savedRaw){
 }
 
 // Render immediately from local data
+migrateDivisionIds();
 try{renderAll();}catch(e){console.warn('Initial render:',e);}
 Object.keys(S.running).forEach(k=>{
   const ctx=S.running[k];
@@ -5021,6 +5061,7 @@ Object.keys(S.running).forEach(k=>{
 
 // Then sync with cloud in background
 pullFromCloud().finally(()=>{
+  migrateDivisionIds();
   try{renderAll();}catch(e){console.warn('Post-pull render:',e);}
   Object.keys(S.running).forEach(k=>{
     const ctx=S.running[k];
