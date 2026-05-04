@@ -1837,6 +1837,7 @@ function renderWeekBadge(){
 var _expandedPlans=new Set();
 
 function renderPlanned(){
+  try {
   const list=document.getElementById('plannedList');
   // Save expanded state
   document.querySelectorAll('.planned-card.pc-expanded').forEach(el=>{
@@ -1846,10 +1847,10 @@ function renderPlanned(){
   const todayPlanned=S.planned.filter(p=>new Date(p.addedAt).toDateString()===new Date().toDateString()&&!p.done);
   document.getElementById('plannedCount').textContent=todayPlanned.length?`(${todayPlanned.length})`:'';
 
-  // Ensure divisions exist
-  if(!S.divisions||!S.divisions.length) S.divisions=[
-    {id:'d1',name:'Deberes'},{id:'d2',name:'Daily Advance'},{id:'d3',name:'Otros'}
-  ];
+  // Always ensure divisions exist
+  if(!S.divisions||!Array.isArray(S.divisions)||!S.divisions.length){
+    S.divisions=[{id:'d1',name:'Deberes'},{id:'d2',name:'Daily Advance'},{id:'d3',name:'Otros'}];
+  }
 
   // Build board columns
   let boardHtml='';
@@ -2154,6 +2155,7 @@ function renderPlanned(){
     const wrap=document.getElementById('sw_'+pid);
     if(card&&wrap){card.classList.add('pc-expanded');wrap.classList.add('open');}
   });
+  } catch(e){ console.error('renderPlanned error:',e); }
 }
 
 function setPlannedDivision(pid, divId){
@@ -4090,10 +4092,39 @@ _kronosFrame.name='_kronosFrame';
 _kronosFrame.style.display='none';
 document.body.appendChild(_kronosFrame);
 
-// Pull from cloud first, then render
+// Load from localStorage immediately and render — don't wait for cloud
+const _savedRaw=localStorage.getItem(SK);
+if(_savedRaw){
+  try{
+    const _saved=JSON.parse(_savedRaw);
+    // Patch all required fields
+    if(!_saved.sessions)_saved.sessions=[];
+    if(!_saved.planned)_saved.planned=[];
+    if(!_saved.running)_saved.running={};
+    if(!_saved.prefs)_saved.prefs={};
+    if(!_saved.deletedIds)_saved.deletedIds=[];
+    if(!_saved.activities)_saved.activities=[];
+    if(!_saved.divisions||!Array.isArray(_saved.divisions)||!_saved.divisions.length){
+      _saved.divisions=[{id:'d1',name:'Deberes'},{id:'d2',name:'Daily Advance'},{id:'d3',name:'Otros'}];
+    }
+    S=_saved;
+  }catch(e){console.warn('localStorage parse error:',e);}
+}
+
+// Render immediately from local data
+try{renderAll();}catch(e){console.warn('Initial render:',e);}
+Object.keys(S.running).forEach(k=>{
+  const ctx=S.running[k];
+  if(ctx&&!ctx.paused)startTick(k);
+});
+
+// Then sync with cloud in background
 pullFromCloud().finally(()=>{
-  renderAll();
-  Object.keys(S.running).forEach(k=>{const ctx=S.running[k];if(ctx&&!ctx.paused)startTick(k);});
+  try{renderAll();}catch(e){console.warn('Post-pull render:',e);}
+  Object.keys(S.running).forEach(k=>{
+    const ctx=S.running[k];
+    if(ctx&&!ctx.paused&&!timers[k])startTick(k);
+  });
 });
 </script>
 </body>
