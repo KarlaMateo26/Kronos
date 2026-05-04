@@ -451,7 +451,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .wplan-block-name{font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .wplan-block-time{font-size:8px;font-family:var(--mono);opacity:.7;}
 .wplan-block-subs{font-size:8px;opacity:.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.wplan-add{text-align:center;padding:4px;color:var(--border2);font-size:18px;cursor:pointer;line-height:1;}
+.wplan-add{text-align:center;padding:4px;color:var(--border2);font-size:18px;cursor:pointer;line-height:1;touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
 .wplan-add:hover{color:var(--text3);}
 .wplan-past{opacity:.5;}
 .wplan-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:2px;}
@@ -555,6 +555,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
         <option value="1">1d</option>
         <option value="2">2d</option>
         <option value="3">3d</option>
+        <option value="5">5d</option>
         <option value="7" selected>7d</option>
       </select>
     </div>
@@ -737,12 +738,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
     </div>
     <div class="field" style="margin-top:8px;">
       <label>Repetir (opcional)</label>
-      <select id="wplanRepeat" style="background:var(--s0);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 10px;width:100%;outline:none;">
+      <select id="wplanRepeat" style="background:var(--s0);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 10px;width:100%;outline:none;"
+        onchange="document.getElementById('wplanUntilRow').style.display=this.value?'':'none'">
         <option value="">Sin repetición</option>
         <option value="weekly">Cada semana (mismo día)</option>
         <option value="weekdays">Lunes a Viernes</option>
         <option value="daily">Todos los días</option>
       </select>
+    </div>
+    <div class="field" id="wplanUntilRow" style="display:none;">
+      <label>Hasta (opcional)</label>
+      <input type="date" id="wplanUntil" style="font-family:var(--mono);">
     </div>
     <button class="mbtn" onclick="confirmWplanEdit()">Guardar</button>
     <button class="det-btn del" onclick="removeWplanDay()" style="width:100%;padding:10px;margin-top:6px;">Quitar este día</button>
@@ -897,6 +903,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
     </div>
     <div class="field"><label>Nota (opcional)</label><textarea id="apNote" placeholder="¿Qué esperas lograr hoy con esta actividad?"></textarea></div>
     <button class="mbtn" onclick="confirmAddPlanned()">Agregar al plan del día</button>
+    <div id="apActivePlans" style="display:none;margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
+      <div style="font-size:9px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;font-family:var(--mono);margin-bottom:6px;">Ya planeado en:</div>
+      <div id="apActivePlansList"></div>
+    </div>
     <button class="mcancel" onclick="closeModal('addPlannedModal')">Cancelar</button>
   </div>
 </div>
@@ -1481,6 +1491,60 @@ function openAddPlanned(actId){
     subsList.dataset.items=JSON.stringify(allItems);
   } else if(subsSection){
     subsSection.style.display='none';
+  }
+  // Show existing active plans + recurrence info
+  const activePlansEl=document.getElementById('apActivePlans');
+  const activePlansList=document.getElementById('apActivePlansList');
+  const activePlans=S.planned.filter(p=>p.actId===actId&&!p.done);
+  // Find weekPlan recurrence entries for this activity
+  const recurrenceEntries=[];
+  if(S.weekPlan){
+    Object.entries(S.weekPlan).forEach(([dateKey,items])=>{
+      items.forEach((item,idx)=>{
+        if(item.actId===actId) recurrenceEntries.push({dateKey,idx,item});
+      });
+    });
+  }
+  recurrenceEntries.sort((a,b)=>a.dateKey.localeCompare(b.dateKey));
+
+  if(activePlansEl&&activePlansList){
+    let html='';
+    // Active planned items
+    activePlans.forEach(p=>{
+      const d=new Date(p.addedAt);
+      const lbl=d.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
+      html+=`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border2);">
+        <span style="font-size:11px;font-family:var(--mono);color:var(--teal);flex:1;">📅 ${lbl}</span>
+        <button onclick="removePlanned('${p.id}');openAddPlanned('${actId}');"
+          style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:0 4px;">✕</button>
+      </div>`;
+    });
+    // Recurrence summary — group by day of week
+    if(recurrenceEntries.length){
+      const dayNames=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+      // Group by day of week
+      const byDow={};
+      recurrenceEntries.forEach(({dateKey,idx,item})=>{
+        const dow=new Date(dateKey+'T12:00:00').getDay();
+        if(!byDow[dow]) byDow[dow]={dow,count:0,first:dateKey,last:dateKey,startH:item.startH,startM:item.startM,entries:[]};
+        byDow[dow].count++;
+        byDow[dow].entries.push({dateKey,idx});
+        if(dateKey>byDow[dow].last) byDow[dow].last=dateKey;
+      });
+      html+=`<div style="font-size:9px;color:var(--text3);letter-spacing:1px;font-family:var(--mono);margin-top:8px;margin-bottom:4px;">RECURRENCIAS EN CALENDARIO</div>`;
+      Object.values(byDow).forEach(g=>{
+        const timeStr=g.startH!==undefined?` · ${String(g.startH).padStart(2,'0')}:${String(g.startM||0).padStart(2,'0')}`:'';
+        const lastDt=new Date(g.last+'T12:00:00');
+        const lastLbl=`${lastDt.getDate()}/${lastDt.getMonth()+1}`;
+        html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border2);">
+          <span style="font-size:11px;color:var(--accent);flex:1;">↻ Cada ${dayNames[g.dow]}${timeStr} · ${g.count}x hasta ${lastLbl}</span>
+          <button onclick="removeWplanGroupByDow(${g.dow},'${actId}');openAddPlanned('${actId}');"
+            style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:0 4px;" title="Eliminar todas">✕</button>
+        </div>`;
+      });
+    }
+    if(html){activePlansList.innerHTML=html;activePlansEl.style.display='';}
+    else activePlansEl.style.display='none';
   }
   openModal('addPlannedModal');
 }
@@ -3032,22 +3096,18 @@ function renderActList(){
       <div class="act-info">
         <div class="act-name">${esc(a.name)}</div>
         <div class="act-wk">Semana: ${fmtS(a.weekTotal||0)}</div>
-        ${(()=>{
-          const activePlans=S.planned.filter(p=>p.actId===a.id&&!p.done);
-          if(!activePlans.length)return'';
-          return activePlans.map(p=>{
-            const d=new Date(p.addedAt);
-            const lbl=d.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'numeric'});
-            return`<span style="font-size:8px;font-family:var(--mono);color:var(--teal);cursor:pointer;margin-right:4px;"
-              title="Eliminar este plan"
-              onclick="event.stopPropagation();if(confirm('¿Eliminar plan del ${lbl}?')){removePlanned('${p.id}');}"
-            >📅 ${lbl} ✕</span>`;
-          }).join('');
-        })()}
+
       </div>
       <div class="act-btns">
         <button class="act-today-btn ${added?'added':''}" onclick="openAddPlanned('${a.id}')">
-          ${added?'✓ En plan':'+ Today'}
+          ${(()=>{
+            const activePlans=S.planned.filter(p=>p.actId===a.id&&!p.done);
+            // Check weekPlan recurrence
+            const hasRecurrence=S.weekPlan&&Object.values(S.weekPlan).some(items=>items.some(x=>x.actId===a.id));
+            if(activePlans.length) return '✓ Planeado';
+            if(hasRecurrence) return '↻ Recurrente';
+            return '+ Today';
+          })()}
         </button>
         <button class="act-edit-btn" onclick="openAddAct('${a.id}')" title="Editar">✎</button>
         <button class="act-del-btn" onclick="deleteActivity('${a.id}')" title="Eliminar">✕</button>
@@ -3947,7 +4007,7 @@ function renderWeekPlanWeek(el, refDate){
       </div>`;
     });
 
-    html+=`<div class="wplan-add" onclick="openWplanAdd('${dateKey}')">+</div>
+    html+=`<div class="wplan-add" onclick="event.stopPropagation();openWplanAdd('${dateKey}')">+</div>
       </div>
     </div>`;
   });
@@ -4022,7 +4082,7 @@ function renderWeekPlanMonth(el, refDate){
           </div>`;
         });
         if(!isOtherMonth){
-          html+=`<div class="wplan-add" onclick="openWplanAdd('${mDateKey}')">+</div>`;
+          html+=`<div class="wplan-add" onclick="event.stopPropagation();openWplanAdd('${mDateKey}')">+</div>`;
         }
         html+=`</div></div>`;
       });
@@ -4073,11 +4133,13 @@ function openWplanEdit(dateKey,idx){
   document.getElementById('wplanTitle').textContent=`${act.emoji} ${act.name}`;
   const dt=new Date(dateKey+'T12:00:00');
   const dayNames=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-  const dayLblEl2=dayLblEl||null;const dayLblEl=document.getElementById('wplanDayLbl');
-  dayLblEl.textContent=`${dayNames[dt.getDay()]} ${dt.getDate()}/${dt.getMonth()+1}`;
-  dayLblEl.style.cursor='pointer';
-  dayLblEl.title='Toca para cambiar la fecha';
-  dayLblEl.onclick=()=>openWplanDatePicker(dateKey);
+  const dayLblEl=document.getElementById('wplanDayLbl');
+  if(dayLblEl){
+    dayLblEl.textContent=`${dayNames[dt.getDay()]} ${dt.getDate()}/${dt.getMonth()+1}`;
+    dayLblEl.style.cursor='pointer';
+    dayLblEl.title='Toca para cambiar la fecha';
+    dayLblEl.onclick=()=>openWplanDatePicker(dateKey);
+  }
   document.getElementById('wplanStartH').value=item.startH!==undefined?String(item.startH):'';
   document.getElementById('wplanStartM').value=String(item.startM||0);
   const h=item.idealSecs?Math.floor(item.idealSecs/3600):0;
@@ -4146,30 +4208,30 @@ function confirmWplanEdit(){
   item.idealSecs=(ih*3600+im*60)||0;
 
   // Handle repeat
-  const repeat=document.getElementById('wplanRepeat')?.value;
+  const repeat=document.getElementById('wplanRepeat')?.value||'';
+  // Reset selector for next time
+  if(document.getElementById('wplanRepeat')) document.getElementById('wplanRepeat').value='';
+  if(document.getElementById('wplanUntilRow')) document.getElementById('wplanUntilRow').style.display='none';
   if(repeat){
     const baseDate=new Date(_wplanEditDay+'T12:00:00');
+    const untilVal=document.getElementById('wplanUntil')?.value;
+    const untilDate=untilVal?new Date(untilVal+'T23:59:59'):new Date(baseDate.getTime()+8*7*86400000);
     const dates=[];
-    // Generate dates for the next 8 weeks
-    for(let w=0;w<8;w++){
+    // Generate dates up to untilDate
+    let cur=new Date(baseDate);
+    while(cur<=untilDate){
       if(repeat==='weekly'){
-        const d=new Date(baseDate);d.setDate(baseDate.getDate()+w*7);
-        dates.push(d.toISOString().slice(0,10));
+        dates.push(cur.toISOString().slice(0,10));
+        cur.setDate(cur.getDate()+7);
       } else if(repeat==='weekdays'){
-        for(let day=1;day<=5;day++){
-          const d=new Date(baseDate);
-          const diff=day-baseDate.getDay();
-          d.setDate(baseDate.getDate()+diff+w*7);
-          if(d>=baseDate) dates.push(d.toISOString().slice(0,10));
-        }
+        const dow=cur.getDay();
+        if(dow>=1&&dow<=5) dates.push(cur.toISOString().slice(0,10));
+        cur.setDate(cur.getDate()+1);
       } else if(repeat==='daily'){
-        for(let day=0;day<7;day++){
-          const d=new Date(baseDate);d.setDate(baseDate.getDate()+day+w*7);
-          dates.push(d.toISOString().slice(0,10));
-        }
+        dates.push(cur.toISOString().slice(0,10));
+        cur.setDate(cur.getDate()+1);
       }
     }
-    // Add entry for each date (skip if already exists for this actId)
     dates.forEach(dateKey=>{
       if(!S.weekPlan[dateKey])S.weekPlan[dateKey]=[];
       if(!S.weekPlan[dateKey].find(x=>x.actId===item.actId)){
@@ -4186,6 +4248,39 @@ function removeWplanDay(){
   S.weekPlan[_wplanEditDay].splice(_wplanEditActId,1);
   if(!S.weekPlan[_wplanEditDay].length) delete S.weekPlan[_wplanEditDay];
   save();closeModal('wplanModal');renderWeekPlan();
+}
+
+function removeWplanEntry(dateKey,idx){
+  if(!S.weekPlan[dateKey])return;
+  S.weekPlan[dateKey].splice(idx,1);
+  if(!S.weekPlan[dateKey].length) delete S.weekPlan[dateKey];
+  save();renderWeekPlan();
+}
+
+function removeWplanGroup(entries){
+  const list=typeof entries==='string'?JSON.parse(entries):entries;
+  const byDate={};
+  list.forEach(e=>{
+    if(!byDate[e.dateKey]) byDate[e.dateKey]=[];
+    byDate[e.dateKey].push(e.idx);
+  });
+  Object.entries(byDate).forEach(([dateKey,idxs])=>{
+    if(!S.weekPlan[dateKey])return;
+    idxs.sort((a,b)=>b-a).forEach(i=>S.weekPlan[dateKey].splice(i,1));
+    if(!S.weekPlan[dateKey].length) delete S.weekPlan[dateKey];
+  });
+  save();renderWeekPlan();
+}
+
+function removeWplanGroupByDow(dow, actId){
+  // Remove all weekPlan entries for this actId on a given day of week
+  Object.keys(S.weekPlan).forEach(dateKey=>{
+    const dt=new Date(dateKey+'T12:00:00');
+    if(dt.getDay()!==dow) return;
+    S.weekPlan[dateKey]=S.weekPlan[dateKey].filter(x=>x.actId!==actId);
+    if(!S.weekPlan[dateKey].length) delete S.weekPlan[dateKey];
+  });
+  save();renderWeekPlan();
 }
 
 // Auto-add today's week plan items to planned
@@ -4228,99 +4323,67 @@ function applyWeekPlanToday(){
 })();
 var _iplanPxPerMin=4; // pixels per minute — adjustable via zoom
 
-function renderIdealPlan(){
-  const pStr=planDate.toDateString();
-  const isToday=pStr===new Date().toDateString();
-  const lbl=document.getElementById('planDateLbl');
-  if(lbl) lbl.textContent=isToday?'Hoy':planDate.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
-  const daysCount=parseInt(document.getElementById('planDaysCount')?.value||'1');
+function _buildDayPlans(pd){
+  // Get all plans for a given date — from S.planned AND S.weekPlan
+  const pdStr=pd.toDateString();
+  const pdIsToday=pdStr===new Date().toDateString();
+  const pdKey=pd.toISOString().slice(0,10);
 
-  // For multi-day: build array of dates
-  const planDates=[];
-  for(let i=0;i<daysCount;i++){
-    const d=new Date(planDate);d.setDate(planDate.getDate()+i);
-    planDates.push(d);
-  }
+  // From S.planned (real planned items)
+  const plans=S.planned.filter(p=>
+    new Date(p.addedAt).toDateString()===pdStr&&(pdIsToday?!p.done:true)
+  );
 
-  // Show planned items for this date
-  const plans=S.planned.filter(p=>new Date(p.addedAt).toDateString()===pStr&&p.idealSecs>0&&(isToday?!p.done:true));
-  
-  // Also include weekPlan items for this date that aren't already in planned
-  const planDateKey=planDate.toISOString().slice(0,10);
-  const wplanItems=S.weekPlan&&S.weekPlan[planDateKey]||[];
+  // From S.weekPlan (calendar entries) — include even without idealSecs
+  const wplanItems=(S.weekPlan&&S.weekPlan[pdKey])||[];
   wplanItems.forEach(item=>{
     const act=S.activities.find(a=>a.id===item.actId);
-    if(!act||!item.idealSecs)return;
-    // Check if already in planned
-    const already=plans.find(p=>p.actId===item.actId);
-    if(!already){
-      // Create a virtual planned item for display
-      plans.push({
-        id:'wpl_'+planDateKey+'_'+item.actId,
-        actId:item.actId,actName:act.name,actEmoji:act.emoji,
-        idealSecs:item.idealSecs,note:'',
-        subtasks:(item.subtasks||[]).map(s=>({id:'ws_'+s.text,text:s.text,done:false})),
-        done:false,addedAt:planDate.toISOString(),
-        _virtual:true // mark as virtual (from weekPlan)
-      });
-    }
+    if(!act)return;
+    if(plans.find(p=>p.actId===item.actId))return; // already in planned
+    plans.push({
+      id:'wpl_'+pdKey+'_'+item.actId,
+      actId:item.actId,actName:act.name,actEmoji:act.emoji,
+      idealSecs:item.idealSecs||60*60, // default 1h if not set
+      breakIdealSecs:0,note:'',
+      subtasks:(item.subtasks||[]).map(s=>({id:'ws_'+s.text,text:s.text,done:false})),
+      done:false,addedAt:pd.toISOString(),_virtual:true,
+      _wplanStartH:item.startH,_wplanStartM:item.startM||0
+    });
   });
+  return{plans,pdIsToday,pdKey};
+}
 
-  if(!plans.length){
-    const body=document.getElementById('diaPlanBody');
-    if(body) body.innerHTML=`<div class="iplan-empty">// Añade actividades con tiempo ideal ⏱ para visualizarlas aquí</div>`;
-    return;
-  }
-
-  const totalSecs=plans.reduce((t,p)=>t+(p.idealSecs||0)+(p.breakIdealSecs||0),0);
-  const sleepHHMM=getSleepTime()||'22:00';
-  const [slH,slM]=sleepHHMM.split(':').map(Number);
-  const sleepMins=slH*60+slM;
-
-  // Start time
-  let startHHMM=(S.prefs&&S.prefs.planStart)||null;
-  if(!startHHMM){
-    const now=new Date();
-    startHHMM=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
-    if(!S.prefs)S.prefs={};
-    S.prefs.planStart=startHHMM;
-  }
-  const [stH,stM]=startHHMM.split(':').map(Number);
-  const startMins=stH*60+stM;
-
-  // All blocks have absolute positions — startMins only sets the viewport
-  const offKey='po_'+pStr;
-  const planOffsets=(S.prefs&&S.prefs[offKey])||{};
+function _buildDayBlocks(plans, pdKey, pdStr, startMins){
+  const PX=_iplanPxPerMin;
+  const offKey='po_'+pdStr;
+  const pdOffsets=(S.prefs&&S.prefs[offKey])||{};
   const blocks=[];
   let cursor=startMins;
   plans.forEach(p=>{
-    const dur=Math.max(1,Math.round((p.idealSecs||0)/60));
+    const dur=Math.max(1,Math.round((p.idealSecs||3600)/60));
     const brk=Math.round((p.breakIdealSecs||0)/60);
-    // Always use saved absolute position if available
-    // First time a block appears: place sequentially and immediately save its absolute pos
     let blockStart;
-    if(planOffsets[p.id]&&typeof planOffsets[p.id]==='object'){
-      blockStart=planOffsets[p.id].abs;
+    if(pdOffsets[p.id]&&typeof pdOffsets[p.id]==='object'){
+      blockStart=pdOffsets[p.id].abs;
+    } else if(p._wplanStartH!==undefined){
+      blockStart=p._wplanStartH*60+(p._wplanStartM||0);
+      if(!S.prefs)S.prefs={};
+      if(!S.prefs[offKey])S.prefs[offKey]={};
+      S.prefs[offKey][p.id]={abs:blockStart};
     } else {
-      // First time: place sequentially and save permanently
       blockStart=cursor;
       if(!S.prefs)S.prefs={};
       if(!S.prefs[offKey])S.prefs[offKey]={};
       S.prefs[offKey][p.id]={abs:blockStart};
     }
     blocks.push({p,startMin:blockStart,dur,brk,color:actColor(p.actId)});
-    cursor+=dur+brk;
+    cursor=blockStart+dur+brk;
   });
+  return blocks;
+}
 
-  const endMins=Math.max(...blocks.map(b=>b.startMin+b.dur+b.brk),startMins+60);
-  // viewStart is exactly the selected start time — blocks before it are hidden
-  const viewStart=startMins;
-  const viewEnd=Math.max(endMins+30,sleepMins+30);
-  const viewSpan=viewEnd-viewStart;
-  const PX=_iplanPxPerMin;
-  const totalHeight=viewSpan*PX;
-
-  // Ruler
+function _renderDayCol(blocks, viewStart, viewEnd, PX, isToday, dateKey, showAdd){
+  const totalHeight=(viewEnd-viewStart)*PX;
   let rulerHtml='',linesHtml='';
   for(let h=Math.ceil(viewStart/60);h<=Math.floor(viewEnd/60);h++){
     const y=(h*60-viewStart)*PX;
@@ -4330,117 +4393,177 @@ function renderIdealPlan(){
     const y30=y+30*PX;
     if(y30<totalHeight) linesHtml+=`<div class="iplan-hour-line" style="top:${y30}px"></div>`;
   }
-
-  // Now line
   let nowHtml='';
-  const nowMins=new Date().getHours()*60+new Date().getMinutes();
-  if(nowMins>=viewStart&&nowMins<=viewEnd){
-    const nowY=(nowMins-viewStart)*PX;
-    nowHtml=`<div class="iplan-now-line" style="top:${nowY}px" id="iplan-now"><div class="iplan-now-dot"></div></div>`;
+  if(isToday){
+    const nowMins=new Date().getHours()*60+new Date().getMinutes();
+    if(nowMins>=viewStart&&nowMins<=viewEnd){
+      const nowY=(nowMins-viewStart)*PX;
+      nowHtml=`<div class="iplan-now-line" style="top:${nowY}px" id="iplan-now"><div class="iplan-now-dot"></div></div>`;
+    }
   }
-
-  // Sleep line
+  const sleepHHMM=getSleepTime()||'22:00';
+  const [slH,slM]=sleepHHMM.split(':').map(Number);
+  const sleepMins=slH*60+slM;
   let sleepHtml='';
   if(sleepMins>=viewStart&&sleepMins<=viewEnd){
     const slY=(sleepMins-viewStart)*PX;
-    sleepHtml=`<div style="position:absolute;left:0;right:0;top:${slY}px;height:2px;background:var(--accent);opacity:.4;pointer-events:none;"></div>
-    <div style="position:absolute;left:6px;top:${slY+4}px;font-size:8px;color:var(--accent);font-family:var(--mono);opacity:.6;pointer-events:none;">🌙 ${sleepHHMM}</div>`;
+    sleepHtml=`<div style="position:absolute;left:0;right:0;top:${slY}px;height:2px;background:var(--accent);opacity:.4;pointer-events:none;"></div>`;
   }
-
-  // Blocks
+  // Tap-to-add overlay
+  const tapAdd=showAdd?`<div style="position:absolute;inset:0;z-index:1;" onclick="iplanTapAdd(event,'${dateKey}',${viewStart},${PX})"></div>`:'';
   let blocksHtml='';
   blocks.forEach(({p,startMin,dur,brk,color})=>{
     const top=(startMin-viewStart)*PX;
     const height=Math.max(dur*PX,28);
-    const hStart=String(Math.floor(startMin/60)%24).padStart(2,'0');
-    const mStart=String(startMin%60).padStart(2,'0');
-    const hEnd=String(Math.floor((startMin+dur)/60)%24).padStart(2,'0');
-    const mEnd=String((startMin+dur)%60).padStart(2,'0');
-    const subs=p.subtasks.filter(s=>!s.done).slice(0,3).map(s=>s.text).join(' · ');
+    const hS=String(Math.floor(startMin/60)%24).padStart(2,'0');
+    const mS=String(startMin%60).padStart(2,'0');
+    const hE=String(Math.floor((startMin+dur)/60)%24).padStart(2,'0');
+    const mE=String((startMin+dur)%60).padStart(2,'0');
+    const subs=(p.subtasks||[]).filter(s=>!s.done).slice(0,2).map(s=>s.text).join(' · ');
     blocksHtml+=`<div class="iplan-block" id="ipb_${p.id}" data-pid="${p.id}" data-dur="${dur}"
-      style="top:${top}px;height:${height}px;background:${color}25;border:1.5px solid ${color};user-select:none;">
+      style="top:${top}px;height:${height}px;background:${color}25;border:1.5px solid ${color};user-select:none;z-index:2;">
       <div class="iplan-block-name" style="color:${color};">${p.actEmoji} ${esc(p.actName)}</div>
-      ${height>36?`<div class="iplan-block-time" style="color:${color};">${hStart}:${mStart} → ${hEnd}:${mEnd} · ${fmtM(p.idealSecs)}</div>`:''}
-      ${height>56&&subs?`<div class="iplan-block-sub" style="color:${color};">${esc(subs)}</div>`:''}
-      <div class="iplan-resize-handle" data-pid="${p.id}" style="position:absolute;bottom:0;left:0;right:0;height:10px;cursor:ns-resize;display:flex;align-items:center;justify-content:center;">
+      ${height>36?`<div class="iplan-block-time" style="color:${color};">${hS}:${mS} → ${hE}:${mE} · ${fmtM(p.idealSecs)}</div>`:''}
+      ${height>52&&subs?`<div class="iplan-block-sub" style="color:${color};">${esc(subs)}</div>`:''}
+      <div class="iplan-resize-handle" data-pid="${p.id}" style="position:absolute;bottom:0;left:0;right:0;height:10px;cursor:ns-resize;display:flex;align-items:center;justify-content:center;z-index:3;">
         <div style="width:20px;height:2px;background:${color};opacity:.5;border-radius:1px;"></div>
       </div>
     </div>`;
-    if(brk>0){
-      const bTop=top+height;
-      const bH=Math.max(brk*PX,8);
-      blocksHtml+=`<div style="position:absolute;left:6px;right:6px;top:${bTop}px;height:${bH}px;
-        background:var(--border);border-radius:4px;opacity:.35;pointer-events:none;"></div>
-        <div style="position:absolute;left:10px;top:${bTop+2}px;font-size:7px;font-family:var(--mono);color:var(--text3);opacity:.6;pointer-events:none;">descanso ${brk}m</div>`;
-    }
   });
+  return{rulerHtml,linesHtml,nowHtml,sleepHtml,tapAdd,blocksHtml,totalHeight};
+}
+
+// Tap on calendar to add activity at that time
+var _iplanTapDate='',_iplanTapMins=0;
+function iplanTapAdd(event,dateKey,viewStart,PX){
+  const col=event.currentTarget;
+  const rect=col.getBoundingClientRect();
+  const y=(event.clientY||event.touches?.[0]?.clientY)-rect.top;
+  const mins=Math.round(y/PX/5)*5+viewStart;
+  _iplanTapDate=dateKey;_iplanTapMins=Math.max(0,Math.min(1439,mins));
+  // Show activity picker
+  const h=Math.floor(_iplanTapMins/60);const m=_iplanTapMins%60;
+  const dayNames=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const dt=new Date(dateKey+'T12:00:00');
+  document.getElementById('wplanPickerTitle').textContent=
+    `${dayNames[dt.getDay()]} ${dt.getDate()}/${dt.getMonth()+1} · ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  document.getElementById('wplanPickerList').innerHTML=S.activities.map(a=>`
+    <div onclick="iplanTapAddConfirm('${a.id}')"
+      style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);">
+      <span style="font-size:16px;">${a.emoji}</span>
+      <span style="font-size:13px;">${esc(a.name)}</span>
+    </div>`).join('');
+  openModal('wplanPickerModal');
+}
+
+function iplanTapAddConfirm(actId){
+  closeModal('wplanPickerModal');
+  const act=S.activities.find(a=>a.id===actId);if(!act)return;
+  if(!S.weekPlan)S.weekPlan={};
+  if(!S.weekPlan[_iplanTapDate])S.weekPlan[_iplanTapDate]=[];
+  if(!S.weekPlan[_iplanTapDate].find(x=>x.actId===actId)){
+    S.weekPlan[_iplanTapDate].push({
+      actId,startH:Math.floor(_iplanTapMins/60),startM:_iplanTapMins%60,
+      idealSecs:act.defaultIdealH!==undefined?(act.defaultIdealH*3600+act.defaultIdealM*60):3600,
+      subtasks:[...(act.defaultSubtasks||[]).map(t=>({text:t}))]
+    });
+  }
+  save();renderIdealPlan();
+}
+
+function renderIdealPlan(){
+  const pStr=planDate.toDateString();
+  const isToday=pStr===new Date().toDateString();
+  const lbl=document.getElementById('planDateLbl');
+  if(lbl) lbl.textContent=isToday?'Hoy':planDate.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
+
+  const daysCount=parseInt(document.getElementById('planDaysCount')?.value||'1');
+  const planDates=[];
+  if(daysCount===5){
+    // 5d = Mon-Fri of the week containing planDate
+    const base=new Date(planDate);
+    const dow=base.getDay();
+    const diffToMon=dow===0?-6:1-dow;
+    base.setDate(base.getDate()+diffToMon);
+    for(let i=0;i<5;i++){
+      const d=new Date(base);d.setDate(base.getDate()+i);
+      planDates.push(d);
+    }
+  } else {
+    for(let i=0;i<daysCount;i++){
+      const d=new Date(planDate);d.setDate(planDate.getDate()+i);
+      planDates.push(d);
+    }
+  }
+
+  const PX=_iplanPxPerMin;
+  const sleepHHMM=getSleepTime()||'22:00';
+  const [slH]=sleepHHMM.split(':').map(Number);
+  const sleepMins=slH*60;
+  const viewStart=0; // always show full day from 0
+  const viewEnd=Math.max(sleepMins+60,1440);
 
   const el=document.getElementById('diaPlanBody');if(!el)return;
 
   if(daysCount===1){
+    const pdKey=planDate.toISOString().slice(0,10);
+    const {plans}=_buildDayPlans(planDate);
+    const blocks=_buildDayBlocks(plans,pdKey,pStr,viewStart);
+    const {rulerHtml,linesHtml,nowHtml,sleepHtml,tapAdd,blocksHtml,totalHeight}=
+      _renderDayCol(blocks,viewStart,viewEnd,PX,isToday,pdKey,true);
+
     el.innerHTML=`
-      <div style="display:flex;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:80px;" id="iplanScroll">
-        <div class="iplan-ruler" style="height:${totalHeight+40}px;position:relative;">${rulerHtml}</div>
+      <div style="display:flex;height:calc(100vh - 180px);overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;" id="iplanScroll">
+        <div class="iplan-ruler" style="height:${totalHeight+40}px;position:relative;flex-shrink:0;">${rulerHtml}</div>
         <div class="iplan-col" id="iplanCol" style="height:${totalHeight+40}px;position:relative;">
-          ${linesHtml}${nowHtml}${sleepHtml}${blocksHtml}
+          ${linesHtml}${nowHtml}${sleepHtml}${tapAdd}${blocksHtml}
         </div>
       </div>`;
+    _attachIplanInteractions(blocks,viewStart,PX);
   } else {
-    // Multi-day: build columns for each day
-    let multiHtml=`<div style="display:flex;overflow-x:auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:80px;height:calc(100vh - 160px);">
+    // Multi-day columns
+    const totalHeight=(viewEnd-viewStart)*PX;
+    // Build ruler (shared)
+    let rulerHtml='',linesHtml='';
+    for(let h=0;h<=Math.floor(viewEnd/60);h++){
+      const y=(h*60-viewStart)*PX;
+      rulerHtml+=`<div class="iplan-ruler-lbl" style="top:${y}px">${String(h%24).padStart(2,'0')}h</div>
+                  <div class="iplan-ruler-tick" style="top:${y}px"></div>`;
+      linesHtml+=`<div class="iplan-hour-line major" style="top:${y}px"></div>`;
+      const y30=y+30*PX;
+      if(y30<totalHeight) linesHtml+=`<div class="iplan-hour-line" style="top:${y30}px"></div>`;
+    }
+    let multiHtml=`<div style="display:flex;height:calc(100vh - 180px);overflow-x:auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;">
       <div class="iplan-ruler" style="height:${totalHeight+40}px;position:relative;flex-shrink:0;">${rulerHtml}</div>`;
-    planDates.forEach((pd,di)=>{
-      const pdStr=pd.toDateString();
-      const pdIsToday=pdStr===new Date().toDateString();
-      const pdPlans=S.planned.filter(p=>new Date(p.addedAt).toDateString()===pdStr&&p.idealSecs>0&&(pdIsToday?!p.done:true));
+
+    planDates.forEach(pd=>{
+      const pdStr2=pd.toDateString();
+      const pdIsToday=pdStr2===new Date().toDateString();
       const pdKey=pd.toISOString().slice(0,10);
-      const pdWplan=(S.weekPlan&&S.weekPlan[pdKey])||[];
-      pdWplan.forEach(item=>{
-        const act=S.activities.find(a=>a.id===item.actId);
-        if(!act||!item.idealSecs)return;
-        if(!pdPlans.find(p=>p.actId===item.actId)){
-          pdPlans.push({id:'wpl_'+pdKey+'_'+item.actId,actId:item.actId,actName:act.name,actEmoji:act.emoji,idealSecs:item.idealSecs,note:'',subtasks:(item.subtasks||[]).map(s=>({id:'ws_'+s.text,text:s.text,done:false})),done:false,addedAt:pd.toISOString(),_virtual:true});
-        }
-      });
-      // Build blocks for this day
-      const offKey='po_'+pdStr;
-      const pdOffsets=(S.prefs&&S.prefs[offKey])||{};
-      const pdBlocks=[];let pdCursor=startMins;
-      pdPlans.forEach(p=>{
-        const dur=Math.max(1,Math.round((p.idealSecs||0)/60));
-        const brk=Math.round((p.breakIdealSecs||0)/60);
-        let blockStart;
-        if(pdOffsets[p.id]&&typeof pdOffsets[p.id]==='object') blockStart=pdOffsets[p.id].abs;
-        else{blockStart=pdCursor;if(!S.prefs)S.prefs={};if(!S.prefs[offKey])S.prefs[offKey]={};S.prefs[offKey][p.id]={abs:blockStart};}
-        pdBlocks.push({p,startMin:blockStart,dur,brk,color:actColor(p.actId)});
-        pdCursor+=dur+brk;
-      });
-      let pdBlocksHtml='';
-      pdBlocks.forEach(({p,startMin,dur,brk,color})=>{
-        const top=(startMin-viewStart)*PX;
-        const height=Math.max(dur*PX,28);
-        pdBlocksHtml+=`<div class="iplan-block" style="top:${top}px;height:${height}px;background:${color}25;border:1.5px solid ${color};">
-          <div class="iplan-block-name" style="color:${color};">${p.actEmoji} ${esc(p.actName)}</div>
-          ${height>34?`<div class="iplan-block-time" style="color:${color};">${fmtM(p.idealSecs)}</div>`:''}
-        </div>`;
-      });
+      const {plans:pdPlans}=_buildDayPlans(pd);
+      const pdBlocks=_buildDayBlocks(pdPlans,pdKey,pdStr2,viewStart);
+      const {blocksHtml,tapAdd:tapA}=_renderDayCol(pdBlocks,viewStart,viewEnd,PX,pdIsToday,pdKey,true);
+      const nowMins=new Date().getHours()*60+new Date().getMinutes();
+      const nowY=(nowMins-viewStart)*PX;
+      const nowHtmlD=pdIsToday?`<div class="iplan-now-line" style="top:${nowY}px"><div class="iplan-now-dot"></div></div>`:'';
       const dayLabel=pd.toLocaleDateString('es-MX',{weekday:'short',day:'numeric'});
       multiHtml+=`<div style="flex:0 0 140px;display:flex;flex-direction:column;">
         <div style="text-align:center;font-size:9px;font-family:var(--mono);color:${pdIsToday?'var(--accent)':'var(--text3)'};padding:4px 0;border-bottom:1px solid var(--border);border-left:1px solid var(--border);">${dayLabel}</div>
-        <div class="iplan-col" style="height:${totalHeight}px;position:relative;flex:1;">${linesHtml}${pdIsToday?nowHtml:''}${pdBlocksHtml}</div>
+        <div class="iplan-col" style="height:${totalHeight}px;position:relative;flex:1;border-left:1px solid var(--border);">
+          ${linesHtml}${nowHtmlD}${tapA}${blocksHtml}
+        </div>
       </div>`;
     });
     multiHtml+=`</div>`;
     el.innerHTML=multiHtml;
   }
 
-  // Attach drag (move) and resize handlers
-  _attachIplanInteractions(blocks,viewStart,PX);
-
   setTimeout(()=>{
-    const n=document.getElementById('iplan-now');
-    if(n) n.scrollIntoView({behavior:'smooth',block:'center'});
-    else document.getElementById('iplanScroll')?.scrollTo({top:(startMins-viewStart)*PX-40,behavior:'smooth'});
+    const scroll=document.getElementById('iplanScroll');
+    const now=document.getElementById('iplan-now');
+    const target=now||null;
+    const scrollTarget=now?Math.max(0,now.offsetTop-150):viewStart*PX;
+    if(scroll) scroll.scrollTop=scrollTarget;
   },120);
 }
 
