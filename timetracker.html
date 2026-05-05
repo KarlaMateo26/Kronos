@@ -581,7 +581,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
     <div class="logo">KRONOS</div>
     <div style="display:flex;gap:6px;align-items:center;">
       <button class="csv-btn" onclick="exportCSV()" style="color:var(--green);border-color:var(--green);">↓ CSV</button>
+      <button class="csv-btn" onclick="exportFullBackup()" style="color:var(--teal);border-color:var(--teal);" title="Backup completo JSON">↓ JSON</button>
       <button class="csv-btn" onclick="openImport()" style="color:var(--amber);border-color:var(--amber);">↑ Importar</button>
+      <button class="csv-btn" onclick="confirmResetSessions()" style="color:var(--red);border-color:var(--red);" title="Eliminar registros históricos">⟳ Reset</button>
     </div>
   </div>
   <div class="hist-toolbar">
@@ -3961,6 +3963,26 @@ function getWkFromDate(d){
   return`${d.getFullYear()}-W${Math.ceil(((d-j)/86400000+j.getDay()+1)/7)}`;
 }
 
+function exportFullBackup(){
+  const data=JSON.stringify(S,null,2);
+  const blob=new Blob([data],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='kronos_backup_'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();URL.revokeObjectURL(url);
+}
+
+function confirmResetSessions(){
+  if(!confirm('\u00bfEliminar TODOS los registros de sesiones?\n\nSe conservar\u00e1n:\n\u2713 Actividades\n\u2713 Divisiones\n\u2713 Configuraci\u00f3n\n\u2713 Planeado\n\u2713 Calendario semanal\n\nEsto NO se puede deshacer.')) return;
+  if(!confirm('\u00bfConfirmas? Se eliminar\u00e1n '+S.sessions.length+' sesiones.')) return;
+  S.sessions=[];
+  S.deletedIds=[];
+  S.activities.forEach(a=>a.weekTotal=0);
+  save();forcePush();renderAll();renderHistory();
+  alert('Registros eliminados. Recomendamos hacer un backup JSON antes la pr\u00f3xima vez.');
+}
+
 function exportCSV(){
   const rows=[['Fecha','Planeado','Actividad','Subtarea','Sesión','Nombre Lap','Inicio','Fin','Duración','Descanso','Descanso(seg)','Real','Nota']];
   [...S.sessions].reverse().forEach(s=>{
@@ -4039,10 +4061,10 @@ function shiftDiaDate(d){
     renderMonthCalendar();
   } else {
     const daysCount=parseInt(document.getElementById('tlDaysCount')?.value||'1');
-    if(daysCount===5){
-      diaDate.setDate(diaDate.getDate()+d*7); // jump week
+    if(daysCount===7||daysCount===5){
+      diaDate.setDate(diaDate.getDate()+d*7); // navigate week by week
     } else {
-      diaDate.setDate(diaDate.getDate()+d*Math.max(1,daysCount));
+      diaDate.setDate(diaDate.getDate()+d);
     }
     renderTimeline();
   }
@@ -5293,7 +5315,7 @@ function _buildTlDayCol(pd, viewStart, viewEnd, PX){
 
   const rawSess=S.sessions.filter(s=>{
     const sd=new Date(s.startTime).toDateString();
-    return sd===pdStr||sd===prevStr;
+    return sd===pdStr; // only sessions that started on this date
   }).sort((a,b)=>new Date(a.startTime)-new Date(b.startTime));
 
   // Merge consecutive
@@ -5366,13 +5388,23 @@ function renderTimeline(){
 
   // Build date array
   let dates=[];
-  if(daysCount===5){
+  if(daysCount===7){
+    // Always show Mon-Sun of the week containing diaDate
     const base=new Date(diaDate);
-    const diff=base.getDay()===0?-6:1-base.getDay();
-    base.setDate(base.getDate()+diff);
+    const dow=base.getDay();
+    const diffToMon=dow===0?-6:1-dow;
+    base.setDate(base.getDate()+diffToMon);
+    for(let i=0;i<7;i++){const d=new Date(base);d.setDate(base.getDate()+i);dates.push(d);}
+  } else if(daysCount===5){
+    // Mon-Fri of the week containing diaDate
+    const base=new Date(diaDate);
+    const dow=base.getDay();
+    const diffToMon=dow===0?-6:1-dow;
+    base.setDate(base.getDate()+diffToMon);
     for(let i=0;i<5;i++){const d=new Date(base);d.setDate(base.getDate()+i);dates.push(d);}
   } else {
-    for(let i=0;i<daysCount;i++){const d=new Date(diaDate);d.setDate(diaDate.getDate()-daysCount+1+i);dates.push(d);}
+    // For 1,2,3 days: show diaDate and following days
+    for(let i=0;i<daysCount;i++){const d=new Date(diaDate);d.setDate(diaDate.getDate()+i);dates.push(d);}
   }
 
   if(daysCount===1){
