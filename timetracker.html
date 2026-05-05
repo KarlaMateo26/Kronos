@@ -1104,9 +1104,26 @@ let pendingSessKey=null; // for session name modal
 let activeDetailId=null;
 save();
 
+var _inPull=false; // flag: true while merging cloud data
+
 function save(){
+  // Prune old planOffsets (keep only last 30 days)
+  if(S.prefs){
+    const cutoff=new Date();cutoff.setDate(cutoff.getDate()-30);
+    Object.keys(S.prefs).forEach(k=>{
+      if(k.startsWith('po_')){
+        const dateStr=k.slice(3);
+        try{if(new Date(dateStr)<cutoff)delete S.prefs[k];}catch(e){}
+      }
+    });
+  }
   localStorage.setItem(SK,JSON.stringify(S));
-  syncToCloud();
+  if(!_inPull) syncToCloud(); // don't push during pull merge
+}
+
+function saveLocal(){
+  // Save to localStorage only — no cloud push (used during pull)
+  localStorage.setItem(SK,JSON.stringify(S));
 }
 
 function recalcWeekTotals(){
@@ -1130,7 +1147,10 @@ function syncToCloud(){
 
 function _pushToCloud(){
   if(!canWrite()) return; // not the primary device — don't write
-  var payload=JSON.stringify({state:S});
+  // Include running in push so other devices can see active sessions
+  // But strip startTime to prevent stale elapsed on pull — use lapTotal instead
+  var stateToSend=Object.assign({},S);
+  var payload=JSON.stringify({state:stateToSend});
   fetch(API_URL,{
     method:'POST',
     mode:'no-cors',
@@ -1180,6 +1200,7 @@ function pullFromCloud(){
       if(script.parentNode)script.parentNode.removeChild(script);
       if(data&&data.ok&&data.state){
         // Always process pull data — syncMode only affects push, not pull
+        _inPull=true; // prevent save() from pushing during merge
         var cloud=data.state;
         var localRunning=S.running||{};
         var cloudRunning=cloud.running||{};
@@ -1211,15 +1232,30 @@ function pullFromCloud(){
           }
         });
 
-        // Merge prefs — combine both, per-day keys, most recent wins
+        // Merge prefs — cloud base, then overlay local keys (local wins for user-set prefs)
         var localPrefs=S.prefs||{};
         var cloudPrefs=cloud.prefs||{};
-        var mergedPrefs={};
-        // merge sleep keys from both
-        var localSleep=localPrefs.sleep||{};
-        var cloudSleep=cloudPrefs.sleep||{};
-        var mergedSleep=Object.assign({},cloudSleep,localSleep); // local wins (was set most recently)
-        mergedPrefs.sleep=mergedSleep;
+        // Start with cloud, overlay local on top
+        var mergedPrefs=Object.assign({},cloudPrefs);
+        // Local-specific keys always win (user set them on this device)
+        var localWinsKeys=['planStart','sleep','sleepTime'];
+        localWinsKeys.forEach(function(k){if(localPrefs[k]!==undefined) mergedPrefs[k]=localPrefs[k];});
+        // Merge per-day plan offsets (po_*): union, local wins per plan id
+        Object.keys(localPrefs).forEach(function(k){
+          if(k.startsWith('po_')){
+            if(!mergedPrefs[k]) mergedPrefs[k]={};
+            Object.assign(mergedPrefs[k], cloudPrefs[k]||{}, localPrefs[k]);
+          }
+        });
+        Object.keys(cloudPrefs).forEach(function(k){
+          if(k.startsWith('po_')&&!mergedPrefs[k]){
+            mergedPrefs[k]=cloudPrefs[k];
+          }
+        });
+        // sleep object merge
+        if(localPrefs.sleep||cloudPrefs.sleep){
+          mergedPrefs.sleep=Object.assign({},cloudPrefs.sleep||{},localPrefs.sleep||{});
+        }
 
         // ── Merge deletedIds: union of both tombstone lists ──
         var localDeleted=S.deletedIds||[];
@@ -1303,7 +1339,30 @@ function pullFromCloud(){
             if(a.defaultSubtasks) actMap[a.id].defaultSubtasks=a.defaultSubtasks;
           }
         });
-        var mergedActs=Object.values(actMap);
+        // Preserve local activity order (user may have reordered)
+        var localActIds=localActs.map(function(a){return a.id;}).filter(function(id){return actMap[id];});
+        var cloudOnlyActIds=Object.keys(actMap).filter(function(id){return!localActIds.includes(id);});
+        var mergedActs=localActIds.map(function(id){return actMap[id];})
+          .concat(cloudOnlyActIds.map(function(id){return actMap[id];}));
+
+        // Merge weekPlan: union by date key, within each date union by actId index
+        var localWPlan=S.weekPlan||{};
+        var cloudWPlan=cloud.weekPlan||{};
+        var mergedWPlan=Object.assign({},cloudWPlan);
+        Object.keys(localWPlan).forEach(function(dateKey){
+          if(!mergedWPlan[dateKey]){
+            mergedWPlan[dateKey]=localWPlan[dateKey];
+          } else {
+            // Union by actId — don't duplicate
+            var existing=mergedWPlan[dateKey].map(function(x){return x.actId;});
+            localWPlan[dateKey].forEach(function(item){
+              if(!existing.includes(item.actId)) mergedWPlan[dateKey].push(item);
+            });
+          }
+        });
+
+        // Merge actDivisions: local wins (user reordered/renamed on this device)
+        var mergedActDivs=S.actDivisions&&S.actDivisions.length?S.actDivisions:(cloud.actDivisions||[]);
 
         S=Object.assign({},cloud,{
           running:mergedRunning,
@@ -1311,18 +1370,28 @@ function pullFromCloud(){
           sessions:mergedSessions,
           planned:mergedPlanned,
           activities:mergedActs,
+          weekPlan:mergedWPlan,
+          actDivisions:mergedActDivs,
+          divisions:mergedActDivs,
           deletedIds:[...deletedSet],
           deletedActIds:[...deletedActSet]
         });
         const wkPull=getWk();
-        if(S.currentWeek!==wkPull){S.activities.forEach(function(a){a.weekTotal=0;});S.currentWeek=wk;}
+        if(S.currentWeek!==wkPull){S.activities.forEach(function(a){a.weekTotal=0;});S.currentWeek=wkPull;}
         if(!S.sessions)S.sessions=[];
         if(!S.planned)S.planned=[];
         if(!S.running)S.running={};
         if(!S.prefs)S.prefs={};
         if(!S.deletedIds)S.deletedIds=[];
-        // actDivisions is the source of truth — divisions is just an alias set in renderPlanned
-        localStorage.setItem(SK,JSON.stringify(S));
+        if(!S.deletedActIds)S.deletedActIds=[];
+        if(!S.weekPlan)S.weekPlan={};
+        if(!S.actDivisions||!S.actDivisions.length)S.actDivisions=[
+          {id:'d_deberes',name:'Deberes'},{id:'d_daily',name:'Daily Advance'},{id:'d_otros',name:'Otros'}
+        ];
+        if(!S.activities)S.activities=[];
+        recalcWeekTotals();
+        _inPull=false; // merge complete
+        saveLocal(); // persist merged state locally only — don't push back to cloud
         // sync tick state — only start/stop if not already in correct state
         Object.keys(S.running).forEach(function(k){
           var ctx=S.running[k];
@@ -1393,30 +1462,14 @@ function forcePush(){
 }
 
 function forcePullAndRender(){
-  _updateSyncDot(null); // show loading
+  _updateSyncDot(null);
+  // Always use pullFromCloud which has proper merge logic
   pullFromCloud().then(()=>{
+    migrateDivisionIds();
     try{renderAll();}catch(e){console.warn(e);}
+    _updateSyncDot(true);
   }).catch(()=>{
-    // JSONP failed, try fetch directly
-    fetch(API_URL+'?t='+Date.now())
-      .then(r=>r.json())
-      .then(data=>{
-        if(data.ok&&data.state){
-          const cloud=data.state;
-          if(!S.deletedIds)S.deletedIds=[];
-          // Simple overwrite for readonly — just take cloud state
-          const localRunning=S.running;
-          S=Object.assign({},cloud);
-          S.running=localRunning; // keep local running
-          if(!S.sessions)S.sessions=[];
-          if(!S.planned)S.planned=[];
-          if(!S.deletedIds)S.deletedIds=[];
-          if(!S.divisions)S.divisions=S.actDivisions||[];
-          localStorage.setItem(SK,JSON.stringify(S));
-          try{renderAll();}catch(e){}
-          _updateSyncDot(true);
-        }
-      }).catch(()=>_updateSyncDot(false));
+    _updateSyncDot(false);
   });
 }
 
