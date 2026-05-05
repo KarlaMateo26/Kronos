@@ -1147,21 +1147,58 @@ function syncToCloud(){
 
 var _lastPushHash='';
 
+function _buildCompressedState(){
+  // Build a lean version of S for cloud storage
+  // Keep only what's needed — strip redundant/computed fields
+  var lean={
+    activities:(S.activities||[]).map(function(a){
+      var r={id:a.id,name:a.name,emoji:a.emoji,color:a.color,divisionId:a.divisionId};
+      if(a.defaultSubtasks&&a.defaultSubtasks.length) r.defaultSubtasks=a.defaultSubtasks;
+      if(a.defaultStartH!==undefined) r.defaultStartH=a.defaultStartH;
+      if(a.defaultStartM!==undefined) r.defaultStartM=a.defaultStartM;
+      if(a.defaultIdealH!==undefined) r.defaultIdealH=a.defaultIdealH;
+      if(a.defaultIdealM!==undefined) r.defaultIdealM=a.defaultIdealM;
+      return r;
+    }),
+    sessions:(S.sessions||[]).map(function(s){
+      var r={id:s.id,actId:s.actId,actName:s.actName,actEmoji:s.actEmoji,
+        startTime:s.startTime,endTime:s.endTime,duration:s.duration,
+        plannedId:s.plannedId,lapCount:s.lapCount};
+      if(s.note) r.note=s.note;
+      if(s.subtaskName) r.subtaskName=s.subtaskName;
+      if(s.breakTotal) r.breakTotal=s.breakTotal;
+      return r;
+    }),
+    planned:(S.planned||[]).filter(function(p){return!p.done;}).map(function(p){
+      return{id:p.id,actId:p.actId,actName:p.actName,actEmoji:p.actEmoji,
+        idealSecs:p.idealSecs,note:p.note,done:p.done,addedAt:p.addedAt,
+        divisionId:p.divisionId,subtasks:p.subtasks};
+    }),
+    running:S.running||{},
+    prefs:S.prefs||{},
+    weekPlan:S.weekPlan||{},
+    actDivisions:S.actDivisions||[],
+    deletedIds:(S.deletedIds||[]).slice(-200),
+    deletedActIds:(S.deletedActIds||[]).slice(-100),
+    currentWeek:S.currentWeek
+  };
+  return lean;
+}
+
 function _pushToCloud(){
   if(!canWrite()) return;
-  // Don't push if nothing changed since last push
   var pushHash=JSON.stringify({
-    acts:(S.activities||[]).map(a=>a.id+(a.divisionId||'')).join(''),
-    planned:(S.planned||[]).map(p=>p.id+(p.done?'1':'0')).join(''),
+    acts:(S.activities||[]).map(function(a){return a.id+(a.divisionId||'');}).join(''),
+    planned:(S.planned||[]).filter(function(p){return!p.done;}).map(function(p){return p.id;}).join(''),
     sessions:(S.sessions||[]).length,
-    running:JSON.stringify(S.running||{}),
-    weekPlan:JSON.stringify(Object.keys(S.weekPlan||{}))
+    running:JSON.stringify(S.running||{})
   });
-  if(pushHash===_lastPushHash){return;} // nothing changed
+  if(pushHash===_lastPushHash){return;}
   _lastPushHash=pushHash;
 
-  var payload=JSON.stringify({state:S});
-  _updateSyncDot(null); // loading while pushing
+  var lean=_buildCompressedState();
+  var payload=JSON.stringify({state:lean});
+  _updateSyncDot(null);
 
   fetch(API_URL,{
     method:'POST',
@@ -1408,7 +1445,7 @@ function pullFromCloud(){
           {id:'d_deberes',name:'Deberes'},{id:'d_daily',name:'Daily Advance'},{id:'d_otros',name:'Otros'}
         ];
         if(!S.activities)S.activities=[];
-        recalcWeekTotals();
+        recalcWeekTotals(); // recalc since cloud state has lean activities without weekTotal
         _inPull=false; // merge complete
         saveLocal(); // persist merged state locally only — don't push back to cloud
         console.log('[KRONOS] Merge complete. Final acts:',
