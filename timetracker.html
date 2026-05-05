@@ -1117,6 +1117,7 @@ function save(){
       }
     });
   }
+  S._lastModified=Date.now(); // track when state was last changed locally
   localStorage.setItem(SK,JSON.stringify(S));
   if(!_inPull) syncToCloud(); // don't push during pull merge
 }
@@ -1180,7 +1181,8 @@ function _buildCompressedState(){
     actDivisions:S.actDivisions||[],
     deletedIds:(S.deletedIds||[]).slice(-200),
     deletedActIds:(S.deletedActIds||[]).slice(-100),
-    currentWeek:S.currentWeek
+    currentWeek:S.currentWeek,
+    _lastModified:S._lastModified||Date.now()
   };
   return lean;
 }
@@ -1188,10 +1190,14 @@ function _buildCompressedState(){
 function _pushToCloud(){
   if(!canWrite()) return;
   var pushHash=JSON.stringify({
-    acts:(S.activities||[]).map(function(a){return a.id+(a.divisionId||'');}).join(''),
-    planned:(S.planned||[]).filter(function(p){return!p.done;}).map(function(p){return p.id;}).join(''),
+    acts:(S.activities||[]).map(function(a){return a.id+(a.divisionId||'')+(a.name||'');}).join(''),
+    planned:(S.planned||[]).filter(function(p){return!p.done;}).map(function(p){
+      return p.id+(p.idealSecs||0)+(p.divisionId||'')+(p.subtasks||[]).length;
+    }).join(''),
     sessions:(S.sessions||[]).length,
-    running:JSON.stringify(S.running||{})
+    running:JSON.stringify(S.running||{}),
+    divs:(S.actDivisions||[]).map(function(d){return d.id+d.name;}).join(''),
+    weekPlanKeys:Object.keys(S.weekPlan||{}).sort().join(',')
   });
   if(pushHash===_lastPushHash){return;}
   _lastPushHash=pushHash;
@@ -1361,7 +1367,7 @@ function pullFromCloud(){
             // local wins for idealSecs and note if set
             if(p.idealSecs) merged.idealSecs=p.idealSecs;
             if(p.note) merged.note=p.note;
-            if(p.done) merged.done=p.done;
+            if(p.done||merged.done) merged.done=true; // done is permanent
             planMap[p.id]=merged;
           }
         });
@@ -1374,7 +1380,11 @@ function pullFromCloud(){
         var cloudDelActs=cloud.deletedActIds||[];
         var deletedActSet=new Set([...localDelActs,...cloudDelActs]);
 
-        // ── Merge activities: respect tombstones ──
+        // ── Merge activities: use timestamps to resolve conflicts ──
+        var localModified=S._lastModified||0;
+        var cloudModified=cloud._lastModified||0;
+        var localNewer=localModified>cloudModified;
+
         var localActs=S.activities||[];
         var cloudActs=cloud.activities||[];
         var actMap={};
@@ -1382,14 +1392,26 @@ function pullFromCloud(){
           if(!deletedActSet.has(a.id)) actMap[a.id]=Object.assign({},a);
         });
         localActs.forEach(function(a){
-          if(deletedActSet.has(a.id)) return; // deleted — skip
-          if(!actMap[a.id]) actMap[a.id]=a;
-          else {
-            if(a.color) actMap[a.id].color=a.color;
-            if(a.name!==actMap[a.id].name&&a.name) actMap[a.id].name=a.name;
-            if(a.emoji!==actMap[a.id].emoji&&a.emoji) actMap[a.id].emoji=a.emoji;
-            if(a.divisionId) actMap[a.id].divisionId=a.divisionId;
-            if(a.defaultSubtasks) actMap[a.id].defaultSubtasks=a.defaultSubtasks;
+          if(deletedActSet.has(a.id)) return;
+          if(!actMap[a.id]){
+            actMap[a.id]=a; // local-only activity
+          } else {
+            // Local wins if locally modified more recently
+            if(localNewer||timers[Object.keys(S.running||{})[0]]){
+              // Local device made changes — apply them
+              actMap[a.id]=Object.assign({},actMap[a.id],{
+                name:a.name||actMap[a.id].name,
+                emoji:a.emoji||actMap[a.id].emoji,
+                color:a.color||actMap[a.id].color,
+                divisionId:a.divisionId||actMap[a.id].divisionId,
+                defaultSubtasks:a.defaultSubtasks||actMap[a.id].defaultSubtasks,
+                defaultStartH:a.defaultStartH,defaultStartM:a.defaultStartM,
+                defaultIdealH:a.defaultIdealH,defaultIdealM:a.defaultIdealM
+              });
+            } else {
+              // Cloud is newer — apply cloud fields but keep local divisionId if set
+              if(a.divisionId) actMap[a.id].divisionId=a.divisionId;
+            }
           }
         });
         // Preserve local activity order (user may have reordered)
@@ -1414,8 +1436,14 @@ function pullFromCloud(){
           }
         });
 
-        // Merge actDivisions: local wins (user reordered/renamed on this device)
-        var mergedActDivs=S.actDivisions&&S.actDivisions.length?S.actDivisions:(cloud.actDivisions||[]);
+        // Merge actDivisions: newer device wins; if same timestamp, local wins
+        var mergedActDivs;
+        if(S.actDivisions&&S.actDivisions.length&&(localNewer||!cloud.actDivisions||!cloud.actDivisions.length)){
+          mergedActDivs=S.actDivisions;
+        } else {
+          mergedActDivs=cloud.actDivisions&&cloud.actDivisions.length?cloud.actDivisions:
+            (S.actDivisions||[{id:'d_deberes',name:'Deberes'},{id:'d_daily',name:'Daily Advance'},{id:'d_otros',name:'Otros'}]);
+        }
 
         // Build final merged state
         // Cloud wins for everything EXCEPT what we explicitly merged
