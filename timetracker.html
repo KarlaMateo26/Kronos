@@ -1186,11 +1186,16 @@ function pullFromCloud(){
 
         // Merge running: protect locally ticking sessions from being overwritten
         var isPrimaryDevice=(_syncMode==='primary');
+        var isReadonly=(_syncMode==='readonly');
         var mergedRunning={};
         var allKeys=new Set(Object.keys(localRunning).concat(Object.keys(cloudRunning)));
         allKeys.forEach(function(k){
           var loc=localRunning[k], cld=cloudRunning[k];
-          if(loc&&cld){
+          if(isReadonly){
+            // Readonly: cloud is always the truth for running sessions
+            if(cld) mergedRunning[k]=cld;
+            // If only local (shouldn't happen in readonly) — drop it
+          } else if(loc&&cld){
             // If this device is ticking this session — always keep local to preserve startTime
             if(timers[k]||isPrimaryDevice){
               mergedRunning[k]=loc;
@@ -1200,12 +1205,9 @@ function pullFromCloud(){
               mergedRunning[k]=cldTs>=locTs?cld:loc;
             }
           } else if(cld&&!loc){
-            // Started on another device — adopt it (readonly will show it)
             mergedRunning[k]=cld;
           } else if(loc&&!cld){
-            // Not in cloud yet — keep if we're ticking it (push pending) or primary
             if(timers[k]||isPrimaryDevice) mergedRunning[k]=loc;
-            // else: ended on another device → drop
           }
         });
 
@@ -1312,16 +1314,14 @@ function pullFromCloud(){
           deletedIds:[...deletedSet],
           deletedActIds:[...deletedActSet]
         });
-        var wk=getWk();
-        if(S.currentWeek!==wk){S.activities.forEach(function(a){a.weekTotal=0;});S.currentWeek=wk;}
+        const wkPull=getWk();
+        if(S.currentWeek!==wkPull){S.activities.forEach(function(a){a.weekTotal=0;});S.currentWeek=wk;}
         if(!S.sessions)S.sessions=[];
         if(!S.planned)S.planned=[];
         if(!S.running)S.running={};
         if(!S.prefs)S.prefs={};
         if(!S.deletedIds)S.deletedIds=[];
-        if(!S.divisions||!S.divisions.length)S.divisions=[
-          {id:'d1',name:'Deberes'},{id:'d2',name:'Daily Advance'},{id:'d3',name:'Otros'}
-        ];
+        // actDivisions is the source of truth — divisions is just an alias set in renderPlanned
         localStorage.setItem(SK,JSON.stringify(S));
         // sync tick state — only start/stop if not already in correct state
         Object.keys(S.running).forEach(function(k){
@@ -1330,9 +1330,8 @@ function pullFromCloud(){
           if(ctx.paused){
             if(timers[k]){clearInterval(timers[k]);delete timers[k];}
           } else {
-            // Only start tick if not already ticking
+            // Start tick for any active session (including ones from cloud in readonly)
             if(!timers[k]) startTick(k);
-            // Don't restart if already running — would reset display
           }
         });
         // stop ticks for sessions removed from running
@@ -1452,10 +1451,22 @@ function toggleSyncMode(){
 }
 
 // Legacy stubs (no-op)
-function setSyncSource(){}
-function autoDeclarePrimaryIfNone(){}
+// setSyncSource / autoDeclarePrimaryIfNone removed (replaced by setSyncMode)
 
 // ── MIGRATION: fix old division IDs ──
+function pruneOldData(){
+  // Remove weekPlan entries older than 90 days
+  if(S.weekPlan){
+    const cutoff=new Date();cutoff.setDate(cutoff.getDate()-90);
+    Object.keys(S.weekPlan).forEach(k=>{
+      try{if(new Date(k)<cutoff)delete S.weekPlan[k];}catch(e){}
+    });
+  }
+  // Keep deletedIds/deletedActIds manageable
+  if(S.deletedIds&&S.deletedIds.length>1000) S.deletedIds=S.deletedIds.slice(-500);
+  if(S.deletedActIds&&S.deletedActIds.length>500) S.deletedActIds=S.deletedActIds.slice(-200);
+}
+
 function migrateDivisionIds(){
   // Map old IDs to new ones
   const idMap={'d1':'d_deberes','d2':'d_daily','d3':'d_otros'};
@@ -3098,6 +3109,13 @@ function deleteActivity(actId){
   if(!S.deletedActIds)S.deletedActIds=[];
   S.deletedActIds.push(actId);
   if(S.deletedActIds.length>200)S.deletedActIds=S.deletedActIds.slice(-200);
+  // Also clean up weekPlan entries for this activity
+  if(S.weekPlan){
+    Object.keys(S.weekPlan).forEach(dateKey=>{
+      S.weekPlan[dateKey]=(S.weekPlan[dateKey]||[]).filter(x=>x.actId!==actId);
+      if(!S.weekPlan[dateKey].length) delete S.weekPlan[dateKey];
+    });
+  }
   save();forcePush();renderAll();
 }
 
@@ -4425,12 +4443,12 @@ function applyWeekPlanToday(){
   setTimeout(()=>{
     const todayStr=new Date().toDateString();
     const lastApplied=localStorage.getItem('wplan_applied');
-    if(lastApplied!==todayStr){
+    if(lastApplied!==todayStr&&_syncMode!=='readonly'){
       applyWeekPlanToday();
       localStorage.setItem('wplan_applied',todayStr);
-      save();renderPlanned();
+      save();forcePush();renderPlanned();
     }
-  },2000); // after pull completes
+  },3000); // after pull completes
 })();
 var _iplanPxPerMin=4; // pixels per minute — adjustable via zoom
 
@@ -5435,6 +5453,7 @@ if(_savedRaw){
 
 // Render immediately from local data
 migrateDivisionIds();
+pruneOldData();
 try{renderAll();}catch(e){console.warn('Initial render:',e);}
 Object.keys(S.running).forEach(k=>{
   const ctx=S.running[k];
