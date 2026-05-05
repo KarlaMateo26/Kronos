@@ -1184,28 +1184,29 @@ function pullFromCloud(){
         var localRunning=S.running||{};
         var cloudRunning=cloud.running||{};
 
-        // Merge running: cloud is the authority on ended sessions
-        // If a session exists locally but NOT in cloud → it was ended on another device → remove it
-        // If a session exists in cloud but NOT locally → it was started on another device → add it
-        // If it exists in both → use most recently modified state
+        // Merge running: protect locally ticking sessions from being overwritten
+        var isPrimaryDevice=(_syncMode==='primary');
         var mergedRunning={};
         var allKeys=new Set(Object.keys(localRunning).concat(Object.keys(cloudRunning)));
         allKeys.forEach(function(k){
           var loc=localRunning[k], cld=cloudRunning[k];
           if(loc&&cld){
-            // Both have it — use most recent action timestamp
-            var locTs=new Date(loc.pausedAt||loc.startTime).getTime();
-            var cldTs=new Date(cld.pausedAt||cld.startTime).getTime();
-            if(cldTs>=locTs){
-              mergedRunning[k]=cld; // cloud is newer (pause/resume happened there)
+            // If this device is ticking this session — always keep local to preserve startTime
+            if(timers[k]||isPrimaryDevice){
+              mergedRunning[k]=loc;
             } else {
-              mergedRunning[k]=loc; // local is newer
+              var locTs=new Date(loc.pausedAt||loc.startTime).getTime();
+              var cldTs=new Date(cld.pausedAt||cld.startTime).getTime();
+              mergedRunning[k]=cldTs>=locTs?cld:loc;
             }
           } else if(cld&&!loc){
-            // Started on another device — adopt it
+            // Started on another device — adopt it (readonly will show it)
             mergedRunning[k]=cld;
+          } else if(loc&&!cld){
+            // Not in cloud yet — keep if we're ticking it (push pending) or primary
+            if(timers[k]||isPrimaryDevice) mergedRunning[k]=loc;
+            // else: ended on another device → drop
           }
-          // If loc&&!cld → session was ended on another device → do NOT include it
         });
 
         // Merge prefs — combine both, per-day keys, most recent wins
@@ -1322,18 +1323,19 @@ function pullFromCloud(){
           {id:'d1',name:'Deberes'},{id:'d2',name:'Daily Advance'},{id:'d3',name:'Otros'}
         ];
         localStorage.setItem(SK,JSON.stringify(S));
-        // sync tick state: start for running, stop for paused
+        // sync tick state — only start/stop if not already in correct state
         Object.keys(S.running).forEach(function(k){
           var ctx=S.running[k];
           if(!ctx)return;
           if(ctx.paused){
-            // stop tick if running
             if(timers[k]){clearInterval(timers[k]);delete timers[k];}
           } else {
-            if(!timers[k])startTick(k);
+            // Only start tick if not already ticking
+            if(!timers[k]) startTick(k);
+            // Don't restart if already running — would reset display
           }
         });
-        // stop ticks for sessions that were removed (ended on other device)
+        // stop ticks for sessions removed from running
         Object.keys(timers).forEach(function(k){
           if(!S.running[k]){clearInterval(timers[k]);delete timers[k];}
         });
@@ -2192,7 +2194,9 @@ function smartRenderAfterPull(){
   const hash=JSON.stringify({
     acts:S.activities.map(a=>a.id+(a.divisionId||'')+(a.weekTotal||0)+(a.color||'')).join(','),
     planned:S.planned.map(p=>p.id+(p.done?'1':'0')+(p.divisionId||'')+(p.subtasks||[]).length).join(','),
-    running:Object.keys(S.running).sort().join(','),
+    running:Object.keys(S.running).sort().map(k=>{
+      const r=S.running[k];return k+(r?r.paused?'p':'r':'');
+    }).join(','),
     sessions:S.sessions.length,
     actDivs:(S.actDivisions||[]).map(d=>d.id+d.name).join(',')
   });
@@ -2787,7 +2791,8 @@ function buildRunCard(rKey,isTop){
 }
 
 function updateRunCard(rKey){
-  const ctx=S.running[rKey];if(!ctx)return;
+  const ctx=S.running[rKey];
+  if(!ctx){stopTick(rKey);return;} // session ended — stop tick safely
   const isBreaking=!!ctx.breakStart;
   const isPaused=ctx.paused;
 
@@ -4050,20 +4055,37 @@ function renderWeekPlanWeek(el, refDate){
       </div>
       <div class="wplan-items" id="wpi_${day}">`;
 
-    // Show planned items for this specific date
+    // Show items for this specific date: weekPlan + S.planned
     const dateKey=dayDate.toISOString().slice(0,10);
     const dayItems=S.weekPlan[dateKey]||[];
-    const sortedItems=[...dayItems].sort((a,b)=>(a.startH||0)-(b.startH||0));
+    // Also include S.planned items for this date
+    const plannedItems=S.planned.filter(p=>
+      new Date(p.addedAt).toDateString()===dayDate.toDateString()&&!p.done
+    );
+    // Build combined list, deduplicate by actId
+    const shownActIds=new Set();
+    const allItems=[];
+    dayItems.forEach((item,idx)=>{allItems.push({item,idx,source:'wplan'});shownActIds.add(item.actId);});
+    plannedItems.forEach(p=>{
+      if(!shownActIds.has(p.actId)){
+        allItems.push({item:{actId:p.actId,startH:p._wplanStartH,startM:p._wplanStartM||0,idealSecs:p.idealSecs},idx:-1,source:'planned',pid:p.id});
+        shownActIds.add(p.actId);
+      }
+    });
+    allItems.sort((a,b)=>(a.item.startH||0)-(b.item.startH||0));
 
-    sortedItems.forEach(item=>{
+    allItems.forEach(({item,idx,source,pid})=>{
       const act=S.activities.find(a=>a.id===item.actId);
       if(!act)return;
       const color=actColor(act.id);
       const timeStr=item.startH!==undefined
         ?`${String(item.startH).padStart(2,'0')}:${String(item.startM||0).padStart(2,'0')}`:'';
       const subsStr=(item.subtasks||[]).slice(0,2).map(s=>s.text).join(', ');
-      html+=`<div class="wplan-block" style="background:${color}22;border-color:${color};"
-        onclick="openWplanEdit('${dateKey}',${dayItems.indexOf(item)})">
+      const clickFn=source==='wplan'
+        ?`openWplanEdit('${dateKey}',${idx})`
+        :`openAddPlanned('${item.actId}')`;
+      html+=`<div class="wplan-block" style="background:${color}22;border-color:${color};${source==='planned'?'border-style:dashed;':''}"
+        onclick="${clickFn}">
         <div class="wplan-block-name" style="color:${color};">${act.emoji} ${esc(act.name)}</div>
         ${timeStr?`<div class="wplan-block-time" style="color:${color};">${timeStr}${item.idealSecs?' · '+fmtM(item.idealSecs):''}</div>`:''}
         ${subsStr?`<div class="wplan-block-subs" style="color:${color};">${esc(subsStr)}</div>`:''}
@@ -4126,7 +4148,14 @@ function renderWeekPlanMonth(el, refDate){
         const dayNum=dayDate.getDate();
         const mDateKey=dayDate.toISOString().slice(0,10);
         const mItems=S.weekPlan[mDateKey]||[];
-        const mSorted=[...mItems].sort((a,b)=>(a.startH||0)-(b.startH||0));
+        const mPlanned=S.planned.filter(p=>
+          new Date(p.addedAt).toDateString()===dayDate.toDateString()&&!p.done
+        );
+        const mShown=new Set();
+        const mAll=[];
+        mItems.forEach((item,idx)=>{mAll.push({item,idx,source:'wplan'});mShown.add(item.actId);});
+        mPlanned.forEach(p=>{if(!mShown.has(p.actId)){mAll.push({item:{actId:p.actId,startH:p._wplanStartH,idealSecs:p.idealSecs},idx:-1,source:'planned'});mShown.add(p.actId);}});
+        mAll.sort((a,b)=>(a.item.startH||0)-(b.item.startH||0));
 
         html+=`<div class="wplan-col ${isPast?'wplan-past':''}">
           <div class="wplan-day-hdr ${isToday?'today':''}" style="opacity:${isOtherMonth?0.3:1};">
@@ -4134,14 +4163,15 @@ function renderWeekPlanMonth(el, refDate){
           </div>
           <div class="wplan-items">`;
 
-        mSorted.forEach((item,idx)=>{
+        mAll.forEach(({item,idx,source})=>{
           const act=S.activities.find(a=>a.id===item.actId);
           if(!act)return;
           const color=actColor(act.id);
-          html+=`<div class="wplan-block" style="background:${color}22;border-color:${color};"
-            onclick="openWplanEdit('${mDateKey}',${idx})">
+          const clickFn=source==='wplan'?`openWplanEdit('${mDateKey}',${idx})`:`openAddPlanned('${item.actId}')`;
+          html+=`<div class="wplan-block" style="background:${color}22;border-color:${color};${source==='planned'?'border-style:dashed;':''}"
+            onclick="${clickFn}">
             <div class="wplan-block-name" style="color:${color};font-size:9px;">${act.emoji} ${esc(act.name)}</div>
-            ${item.startH!==undefined?`<div class="wplan-block-time" style="color:${color};">${String(item.startH).padStart(2,'0')}:${String(item.startM||0).padStart(2,'0')}</div>`:''}
+            ${item.startH!==undefined?`<div class="wplan-block-time" style="color:${color};font-size:8px;">${String(item.startH).padStart(2,'0')}:${String(item.startM||0).padStart(2,'0')}</div>`:''}
           </div>`;
         });
         if(!isOtherMonth){
@@ -4179,9 +4209,21 @@ function openWplanAdd(dateKey){
 
 function openWplanEditByDate(actId, dateKey){
   closeModal('wplanPickerModal');
+  if(!S.weekPlan) S.weekPlan={};
   if(!S.weekPlan[dateKey]) S.weekPlan[dateKey]=[];
+  // Allow multiple entries for same actId on same day — check by exact match
   const existing=S.weekPlan[dateKey].find(x=>x.actId===actId);
-  if(!existing) S.weekPlan[dateKey].push({actId,startH:undefined,startM:0,idealSecs:0,subtasks:[]});
+  if(!existing){
+    // Get defaults from activity
+    const act=S.activities.find(a=>a.id===actId);
+    S.weekPlan[dateKey].push({
+      actId,
+      startH:act&&act.defaultStartH!==undefined?act.defaultStartH:undefined,
+      startM:act&&act.defaultStartM||0,
+      idealSecs:act&&act.defaultIdealH!==undefined?(act.defaultIdealH*3600+(act.defaultIdealM||0)*60):0,
+      subtasks:[]
+    });
+  }
   const idx=S.weekPlan[dateKey].findIndex(x=>x.actId===actId);
   openWplanEdit(dateKey, idx);
 }
@@ -4261,8 +4303,14 @@ function addWplanSub(){
 }
 
 function confirmWplanEdit(){
-  const item=S.weekPlan[_wplanEditDay]&&S.weekPlan[_wplanEditDay][_wplanEditActId];
-  if(!item)return;
+  if(!S.weekPlan[_wplanEditDay]){S.weekPlan[_wplanEditDay]=[];}
+  // _wplanEditActId is the index — find item safely
+  let item=S.weekPlan[_wplanEditDay][_wplanEditActId];
+  if(!item){
+    // Item may have been pushed — try finding by matching context
+    console.warn('wplanEdit: item not found at index',_wplanEditActId);
+    return;
+  }
   const sh=document.getElementById('wplanStartH').value;
   item.startH=sh!==''?parseInt(sh):undefined;
   item.startM=parseInt(document.getElementById('wplanStartM').value)||0;
