@@ -978,8 +978,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
       <div style="font-size:10px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;font-family:var(--mono);margin-bottom:7px;">Subtareas</div>
       <div id="apSubsList" style="display:flex;flex-direction:column;gap:5px;"></div>
     </div>
+    <div class="field">
+      <label>Fecha (opcional — por defecto hoy)</label>
+      <input type="date" id="apDate" style="font-family:var(--mono);">
+    </div>
     <div class="field"><label>Nota (opcional)</label><textarea id="apNote" placeholder="¿Qué esperas lograr hoy con esta actividad?"></textarea></div>
-    <button class="mbtn" onclick="confirmAddPlanned()">Agregar al plan del día</button>
+    <button class="mbtn" onclick="confirmAddPlanned()">Agregar al plan</button>
     <div id="apActivePlans" style="display:none;margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
       <div style="font-size:9px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;font-family:var(--mono);margin-bottom:6px;">Ya planeado en:</div>
       <div id="apActivePlansList"></div>
@@ -1694,11 +1698,13 @@ function openAddPlanned(actId){
   const act=S.activities.find(a=>a.id===actId);if(!act)return;
   pendingActId=actId;
   document.getElementById('apTitle').textContent=`${act.emoji} ${act.name}`;
-  // Pre-fill ideal time from last used value (stored on activity)
   const defH=act.defaultIdealH!==undefined?act.defaultIdealH:0;
   const defM=act.defaultIdealM!==undefined?act.defaultIdealM:0;
   document.getElementById('apHours').value=defH||'';
   document.getElementById('apMins').value=defM||'';
+  // Default date = today, but user can change
+  const apDateEl=document.getElementById('apDate');
+  if(apDateEl) apDateEl.value=new Date().toISOString().slice(0,10);
   document.getElementById('apNote').value='';
   // Pre-fill start time from activity default if set
   const defStart=act.defaultStartH!==undefined?act.defaultStartH:null;
@@ -1823,12 +1829,15 @@ function confirmAddPlanned(){
   const apStartHVal=document.getElementById('apStartH')?.value;
   const apStartMVal=document.getElementById('apStartM')?.value||'0';
   const hasStartTime=apStartHVal!==''&&apStartHVal!==undefined&&apStartHVal!==null;
+  // Use selected date or today
+  const apDateVal=document.getElementById('apDate')?.value;
+  const planAddedAt=apDateVal?new Date(apDateVal+'T09:00:00').toISOString():new Date().toISOString();
   const newPlan={
     id:genId(),actId:act.id,actName:act.name,actEmoji:act.emoji,
     idealSecs:ideal,note:noteVal,
     subtasks:allSubs,
-    done:false,addedAt:new Date().toISOString(),
-    divisionId:act.divisionId||'d_otros' // inherit from activity
+    done:false,addedAt:planAddedAt,
+    divisionId:act.divisionId||'d_otros'
   };
   S.planned.push(newPlan);
 
@@ -4765,10 +4774,14 @@ function _renderDayCol(blocks, viewStart, viewEnd, PX, isToday, dateKey, showAdd
     const hE=String(Math.floor((startMin+dur)/60)%24).padStart(2,'0');
     const mE=String((startMin+dur)%60).padStart(2,'0');
     const subs=(p.subtasks||[]).filter(s=>!s.done).slice(0,2).map(s=>s.text).join(' · ');
-    blocksHtml+=`<div class="iplan-block" id="ipb_${p.id}" data-pid="${p.id}" data-dur="${dur}"
+    blocksHtml+=`<div class="iplan-block" id="ipb_${p.id}" data-pid="${p.id}" data-dur="${dur}" data-virtual="${p._virtual?'1':'0'}" data-actid="${p.actId}"
       onclick="openIplanBlockEdit('${p.id}','${p._virtual?'wpl':'plan'}',${startMin},${dur})"
       style="top:${top}px;height:${height}px;background:${color}25;border:1.5px solid ${color};user-select:none;z-index:2;cursor:pointer;">
-      <div class="iplan-block-name" style="color:${color};">${p.actEmoji} ${esc(p.actName)}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:2px;">
+        <div class="iplan-block-name" style="color:${color};flex:1;">${p.actEmoji} ${esc(p.actName)}</div>
+        <button onclick="event.stopPropagation();iplanDeleteBlock('${p.id}','${p._virtual?'wpl':'plan'}','${dateKey}')"
+          style="background:none;border:none;color:${color};opacity:.6;cursor:pointer;font-size:10px;padding:0 2px;flex-shrink:0;">✕</button>
+      </div>
       ${height>36?`<div class="iplan-block-time" style="color:${color};">${hS}:${mS} → ${hE}:${mE} · ${fmtM(p.idealSecs)}</div>`:''}
       ${height>52&&subs?`<div class="iplan-block-sub" style="color:${color};">${esc(subs)}</div>`:''}
       <div class="iplan-resize-handle" data-pid="${p.id}" style="position:absolute;bottom:0;left:0;right:0;height:10px;cursor:ns-resize;display:flex;align-items:center;justify-content:center;z-index:3;">
@@ -4777,6 +4790,28 @@ function _renderDayCol(blocks, viewStart, viewEnd, PX, isToday, dateKey, showAdd
     </div>`;
   });
   return{rulerHtml,linesHtml,nowHtml,sleepHtml,tapAdd,blocksHtml,totalHeight};
+}
+
+function iplanDeleteBlock(pid, type, dateKey){
+  if(type==='plan'){
+    // Remove from S.planned
+    if(!confirm('¿Eliminar este bloque planeado?')) return;
+    S.planned=S.planned.filter(p=>p.id!==pid);
+    if(!S.deletedIds) S.deletedIds=[];
+    S.deletedIds.push(pid);
+  } else {
+    // Remove from S.weekPlan
+    if(!confirm('¿Eliminar este bloque del calendario?')) return;
+    const actId=pid.replace('wpl_'+dateKey+'_','');
+    if(S.weekPlan&&S.weekPlan[dateKey]){
+      S.weekPlan[dateKey]=S.weekPlan[dateKey].filter(x=>x.actId!==actId);
+      if(!S.weekPlan[dateKey].length) delete S.weekPlan[dateKey];
+    }
+  }
+  // Also clean offset
+  const offKey='po_'+planDate.toDateString();
+  if(S.prefs&&S.prefs[offKey]) delete S.prefs[offKey][pid];
+  save();renderIdealPlan();renderPlanned();
 }
 
 function iplanScrollToNow(){
@@ -4806,7 +4841,8 @@ function openIplanBlockEdit(pid,type,startMin,dur){
   document.getElementById('iplanEditTitle').textContent=label;
   document.getElementById('iplanEditH').value=String(Math.floor(startMin/60)%24);
   document.getElementById('iplanEditM').value=String(Math.round((startMin%60)/5)*5%60);
-  document.getElementById('iplanEditDurH').value=Math.floor(dur/60)||'';
+  // dur is in minutes — show correctly
+  document.getElementById('iplanEditDurH').value=dur>=60?Math.floor(dur/60):'';
   document.getElementById('iplanEditDurM').value=dur%60||'';
   openModal('iplanEditModal');
 }
@@ -4817,7 +4853,8 @@ function confirmIplanEdit(){
   const dh=parseInt(document.getElementById('iplanEditDurH').value)||0;
   const dm=parseInt(document.getElementById('iplanEditDurM').value)||0;
   const newStart=h*60+m;
-  const newDur=dh*60+dm;
+  const newDurMins=dh*60+dm;
+  const newDurSecs=newDurMins>0?newDurMins*60:3600; // default 1h only if truly empty
 
   // Update position offset
   const offKey='po_'+_iplanEditDateStr;
@@ -4825,20 +4862,32 @@ function confirmIplanEdit(){
   if(!S.prefs[offKey])S.prefs[offKey]={};
   S.prefs[offKey][_iplanEditPid]={abs:newStart};
 
-  // Update duration in planned or weekPlan
+  // Update duration in planned
   const plan=S.planned.find(p=>p.id===_iplanEditPid);
-  if(plan&&newDur>0) plan.idealSecs=newDur*60;
-
-  // If virtual (weekPlan), update there too
-  if(_iplanEditType==='wpl'&&newDur>0){
-    const pdKey=new Date(_iplanEditDateStr).toISOString().slice(0,10);
-    const items=(S.weekPlan&&S.weekPlan[pdKey])||[];
-    const actId=_iplanEditPid.replace('wpl_'+pdKey+'_','');
-    const item=items.find(x=>x.actId===actId);
-    if(item){item.startH=h;item.startM=m;item.idealSecs=newDur*60;}
+  if(plan){
+    plan.idealSecs=newDurSecs;
   }
 
-  save();closeModal('iplanEditModal');renderIdealPlan();
+  // If virtual (weekPlan), update there too
+  const pdKey=new Date(_iplanEditDateStr).toISOString().slice(0,10);
+  if(_iplanEditType==='wpl'){
+    if(!S.weekPlan) S.weekPlan={};
+    if(!S.weekPlan[pdKey]) S.weekPlan[pdKey]=[];
+    const actId=_iplanEditPid.replace('wpl_'+pdKey+'_','');
+    let item=S.weekPlan[pdKey].find(x=>x.actId===actId);
+    if(!item){
+      // Create new weekPlan entry
+      const act=S.activities.find(a=>a.id===actId);
+      if(act){
+        item={actId,startH:h,startM:m,idealSecs:newDurSecs,subtasks:[]};
+        S.weekPlan[pdKey].push(item);
+      }
+    } else {
+      item.startH=h;item.startM=m;item.idealSecs=newDurSecs;
+    }
+  }
+
+  save();closeModal('iplanEditModal');renderIdealPlan();renderPlanned();
 }
 
 // Tap on calendar to add activity at that time
