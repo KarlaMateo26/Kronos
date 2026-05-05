@@ -463,6 +463,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .iplan-hour-line.major{opacity:.8;}
 .iplan-block{position:absolute;left:4px;right:4px;border-radius:8px;overflow:hidden;cursor:pointer;transition:opacity .15s;display:flex;flex-direction:column;justify-content:flex-start;padding:4px 8px;min-height:20px;}
 .iplan-block:active{opacity:.7;}
+.iplan-hour-line.half{opacity:.25;}
+.iplan-ruler-lbl{font-size:7px;}
 .iplan-block-name{font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .iplan-block-time{font-size:8px;font-family:var(--mono);opacity:.8;}
 .iplan-block-sub{font-size:8px;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -538,7 +540,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
     <button class="date-nav-btn" onclick="shiftDiaDate(-1)">‹</button>
     <div class="date-nav-lbl" id="diaDateLbl" style="cursor:pointer;" onclick="diaDate=new Date();renderTimeline()">—</div>
     <button class="date-nav-btn" onclick="shiftDiaDate(+1)">›</button>
-    <button class="tl-zoom-btn" id="tlViewBtn" onclick="toggleTlView()" style="margin-left:6px;font-size:9px;">Mes</button>
+    <button class="tl-zoom-btn" onclick="tlScrollToNow()" style="font-size:9px;">⬤ ahora</button>
+    <select id="tlDaysCount" onchange="renderTimeline()"
+      style="background:var(--s0);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:10px;padding:2px 4px;outline:none;cursor:pointer;">
+      <option value="1" selected>1d</option>
+      <option value="2">2d</option>
+      <option value="3">3d</option>
+      <option value="5">5d</option>
+      <option value="7">7d</option>
+    </select>
+    <button class="tl-zoom-btn" id="tlViewBtn" onclick="toggleTlView()" style="margin-left:2px;font-size:9px;">Mes</button>
   </div>
   <div id="diaMonthContent" style="display:none;"></div>
   <!-- content -->
@@ -550,6 +561,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
       <button class="date-nav-btn" onclick="shiftPlanDate(-1)">‹</button>
       <div id="planDateLbl" style="flex:1;text-align:center;font-size:11px;font-family:var(--mono);color:var(--text3);cursor:pointer;" onclick="planDate=new Date();renderIdealPlan()">Hoy</div>
       <button class="date-nav-btn" onclick="shiftPlanDate(+1)">›</button>
+      <button class="tl-zoom-btn" onclick="iplanScrollToNow()" title="Ir a ahora">⬤ ahora</button>
       <select id="planDaysCount" onchange="renderIdealPlan()"
         style="background:var(--s0);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:10px;padding:3px 4px;outline:none;cursor:pointer;">
         <option value="1">1d</option>
@@ -4024,12 +4036,16 @@ function shiftDiaDate(d){
   diaDate=new Date(diaDate);
   if(_tlViewMode==='month'){
     diaDate.setMonth(diaDate.getMonth()+d);
+    renderMonthCalendar();
   } else {
-    diaDate.setDate(diaDate.getDate()+d);
+    const daysCount=parseInt(document.getElementById('tlDaysCount')?.value||'1');
+    if(daysCount===5){
+      diaDate.setDate(diaDate.getDate()+d*7); // jump week
+    } else {
+      diaDate.setDate(diaDate.getDate()+d*Math.max(1,daysCount));
+    }
+    renderTimeline();
   }
-  if(diaDate>new Date()&&_tlViewMode==='day') diaDate=new Date();
-  if(_tlViewMode==='month') renderMonthCalendar();
-  else renderTimeline();
 }
 
 function renderMonthCalendar(){
@@ -4598,7 +4614,7 @@ function applyWeekPlanToday(){
     }
   },3000); // after pull completes
 })();
-var _iplanPxPerMin=4; // pixels per minute — adjustable via zoom
+var _iplanPxPerMin=1; // pixels per minute (1px/min = compact view)
 
 function _buildDayPlans(pd){
   // Get all plans for a given date — from S.planned AND S.weekPlan
@@ -4691,8 +4707,15 @@ function _renderDayCol(blocks, viewStart, viewEnd, PX, isToday, dateKey, showAdd
     rulerHtml+=`<div class="iplan-ruler-lbl" style="top:${y}px">${String(h%24).padStart(2,'0')}h</div>
                 <div class="iplan-ruler-tick" style="top:${y}px"></div>`;
     linesHtml+=`<div class="iplan-hour-line major" style="top:${y}px"></div>`;
-    const y30=y+30*PX;
-    if(y30<totalHeight) linesHtml+=`<div class="iplan-hour-line" style="top:${y30}px"></div>`;
+    // 15-min divisions
+    for(let q=1;q<=3;q++){
+      const yq=y+q*15*PX;
+      if(yq<totalHeight){
+        const is30=(q===2);
+        linesHtml+=`<div class="iplan-hour-line${is30?' half':''}" style="top:${yq}px"></div>`;
+        if(is30) rulerHtml+=`<div class="iplan-ruler-lbl" style="top:${yq}px;font-size:6px;opacity:.5;">:30</div>`;
+      }
+    }
   }
   let nowHtml='';
   if(isToday){
@@ -4710,7 +4733,6 @@ function _renderDayCol(blocks, viewStart, viewEnd, PX, isToday, dateKey, showAdd
     const slY=(sleepMins-viewStart)*PX;
     sleepHtml=`<div style="position:absolute;left:0;right:0;top:${slY}px;height:2px;background:var(--accent);opacity:.4;pointer-events:none;"></div>`;
   }
-  // Tap-to-add overlay
   const tapAdd=showAdd?`<div style="position:absolute;inset:0;z-index:1;" onclick="iplanTapAdd(event,'${dateKey}',${viewStart},${PX})"></div>`:'';
   let blocksHtml='';
   blocks.forEach(({p,startMin,dur,brk,color})=>{
@@ -4733,6 +4755,19 @@ function _renderDayCol(blocks, viewStart, viewEnd, PX, isToday, dateKey, showAdd
     </div>`;
   });
   return{rulerHtml,linesHtml,nowHtml,sleepHtml,tapAdd,blocksHtml,totalHeight};
+}
+
+function iplanScrollToNow(){
+  const el=document.getElementById('iplan-now');
+  const scroll=document.getElementById('iplanScroll');
+  if(el&&scroll){
+    scroll.scrollTo({top:Math.max(0,el.offsetTop-150),behavior:'smooth'});
+  } else if(scroll){
+    // scroll to current time
+    const PX=_iplanPxPerMin;
+    const nowMins=new Date().getHours()*60+new Date().getMinutes();
+    scroll.scrollTo({top:Math.max(0,(nowMins-30)*PX),behavior:'smooth'});
+  }
 }
 
 // ── IPLAN BLOCK EDIT ──
@@ -4912,9 +4947,11 @@ function renderIdealPlan(){
   setTimeout(()=>{
     const scroll=document.getElementById('iplanScroll');
     const now=document.getElementById('iplan-now');
-    const target=now||null;
-    const scrollTarget=now?Math.max(0,now.offsetTop-150):viewStart*PX;
-    if(scroll) scroll.scrollTop=scrollTarget;
+    if(scroll){
+      const scrollTarget=now?Math.max(0,now.offsetTop-150):
+        Math.max(0,(new Date().getHours()*60-30)*_iplanPxPerMin);
+      scroll.scrollTop=scrollTarget;
+    }
   },120);
 }
 
@@ -5234,135 +5271,164 @@ function setTlZoom(idx){
   if(idx>0) setTimeout(scrollToNow,100);
 }
 
-function scrollToNow(){
-  const n=document.getElementById('tl-now-line')||document.getElementById('iplan-now');
-  if(n) n.scrollIntoView({behavior:'smooth',block:'center'});
+function scrollToNow(){tlScrollToNow();}
+
+function tlScrollToNow(){
+  const el=document.getElementById('tl-now-line');
+  const scroll=document.getElementById('tlScroll');
+  if(el&&scroll) scroll.scrollTo({top:Math.max(0,el.offsetTop-150),behavior:'smooth'});
+  else if(scroll){
+    const PX=_iplanPxPerMin;
+    const nowMins=new Date().getHours()*60+new Date().getMinutes();
+    scroll.scrollTo({top:Math.max(0,(nowMins-30)*PX),behavior:'smooth'});
+  }
+}
+
+function _buildTlDayCol(pd, viewStart, viewEnd, PX){
+  const pdStr=pd.toDateString();
+  const pdIsToday=pdStr===new Date().toDateString();
+  const prevDate=new Date(pd);prevDate.setDate(pd.getDate()-1);
+  const prevStr=prevDate.toDateString();
+  const totalHeight=(viewEnd-viewStart)*PX;
+
+  const rawSess=S.sessions.filter(s=>{
+    const sd=new Date(s.startTime).toDateString();
+    return sd===pdStr||sd===prevStr;
+  }).sort((a,b)=>new Date(a.startTime)-new Date(b.startTime));
+
+  // Merge consecutive
+  const merged=[];
+  rawSess.forEach(s=>{
+    const last=merged[merged.length-1];
+    const gap=last?Math.floor((new Date(s.startTime)-new Date(last.endTime))/60000):999;
+    if(last&&last.actId===s.actId&&gap<5){last.endTime=s.endTime;last.duration+=s.duration;}
+    else merged.push({...s});
+  });
+
+  // Assign lanes
+  const lanes=[];
+  merged.forEach(s=>{
+    const sm=new Date(s.startTime).getHours()*60+new Date(s.startTime).getMinutes();
+    const em=new Date(s.endTime).getHours()*60+new Date(s.endTime).getMinutes();
+    let lane=0;
+    while(lanes[lane]&&lanes[lane]>sm) lane++;
+    lanes[lane]=em;s._lane=lane;
+  });
+  const maxLanes=Math.max(1,merged.reduce((m,s)=>Math.max(m,s._lane+1),1));
+
+  // Grid lines
+  let linesHtml='';
+  for(let h=Math.ceil(viewStart/60);h<=Math.floor(viewEnd/60);h++){
+    const y=(h*60-viewStart)*PX;
+    linesHtml+=`<div class="iplan-hour-line major" style="top:${y}px"></div>`;
+    for(let q=1;q<=3;q++){
+      const yq=y+q*15*PX;
+      if(yq<totalHeight) linesHtml+=`<div class="iplan-hour-line${q===2?' half':''}" style="top:${yq}px"></div>`;
+    }
+  }
+
+  // Now line
+  let nowHtml='';
+  if(pdIsToday){
+    const nm=new Date().getHours()*60+new Date().getMinutes();
+    if(nm>=viewStart&&nm<=viewEnd){
+      const ny=(nm-viewStart)*PX;
+      nowHtml=`<div class="iplan-now-line" style="top:${ny}px" id="tl-now-line"><div class="iplan-now-dot"></div></div>`;
+    }
+  }
+
+  // Blocks
+  let blocksHtml='';
+  merged.forEach(s=>{
+    const sm=new Date(s.startTime).getHours()*60+new Date(s.startTime).getMinutes();
+    const em=new Date(s.endTime).getHours()*60+new Date(s.endTime).getMinutes();
+    const top=Math.max(0,(sm-viewStart)*PX);
+    const height=Math.max((em-sm)*PX,8);
+    const color=actColor(s.actId);
+    const laneW=100/maxLanes;
+    const left=s._lane*laneW;
+    const hS=String(Math.floor(sm/60)%24).padStart(2,'0');
+    const mS=String(sm%60).padStart(2,'0');
+    blocksHtml+=`<div class="iplan-block" style="top:${top}px;height:${height}px;left:${left}%;width:${laneW}%;background:${color}25;border:1.5px solid ${color};" onclick="openDetail('${s.id}')">
+      <div class="iplan-block-name" style="color:${color};">${s.actEmoji} ${esc(s.actName)}</div>
+      ${height>20?`<div class="iplan-block-time" style="color:${color};">${hS}:${mS} · ${fmtM(s.duration)}</div>`:''}
+    </div>`;
+  });
+
+  return{linesHtml,nowHtml,blocksHtml,totalSecs:rawSess.reduce((t,s)=>t+s.duration,0),count:rawSess.length};
 }
 
 function renderTimeline(){
   const el=document.getElementById('diaTimelineContent');
   const lbl=document.getElementById('diaDateLbl');
+  const daysCount=parseInt(document.getElementById('tlDaysCount')?.value||'1');
   const isToday=diaDate.toDateString()===new Date().toDateString();
-  lbl.textContent=isToday?'Hoy':diaDate.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
 
-  const dStr=diaDate.toDateString();
-  const prevDate=new Date(diaDate);prevDate.setDate(prevDate.getDate()-1);
-  const prevStr=prevDate.toDateString();
-
-  const rawSessions=S.sessions.filter(s=>{
-    const sd=new Date(s.startTime).toDateString();
-    return sd===dStr||sd===prevStr;
-  }).sort((a,b)=>new Date(a.startTime)-new Date(b.startTime));
-
-  if(!rawSessions.length){
-    el.innerHTML=`<div class="iplan-empty">// sin registros este día</div>`;
-    return;
+  // Build date array
+  let dates=[];
+  if(daysCount===5){
+    const base=new Date(diaDate);
+    const diff=base.getDay()===0?-6:1-base.getDay();
+    base.setDate(base.getDate()+diff);
+    for(let i=0;i<5;i++){const d=new Date(base);d.setDate(base.getDate()+i);dates.push(d);}
+  } else {
+    for(let i=0;i<daysCount;i++){const d=new Date(diaDate);d.setDate(diaDate.getDate()-daysCount+1+i);dates.push(d);}
   }
 
-  // Merge consecutive sessions of same actId within 5min gap
-  function mergeAct(sessions){
-    const merged=[];
-    sessions.forEach(s=>{
-      const last=merged[merged.length-1];
-      const gap=last?Math.floor((new Date(s.startTime)-new Date(last.endTime))/60000):999;
-      if(last&&last.actId===s.actId&&gap<5){
-        last.endTime=s.endTime;last.duration+=s.duration;
-      } else merged.push({...s});
-    });
-    return merged;
+  if(daysCount===1){
+    lbl.textContent=isToday?'Hoy':diaDate.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
+  } else {
+    const first=dates[0],last=dates[dates.length-1];
+    lbl.textContent=`${first.getDate()}/${first.getMonth()+1} — ${last.getDate()}/${last.getMonth()+1}`;
   }
-  const sessions=mergeAct(rawSessions);
-
-  // Find full day range
-  const firstSess=sessions[0];
-  const lastSess=sessions[sessions.length-1];
-  const dayStartMins=new Date(firstSess.startTime).getHours()*60+new Date(firstSess.startTime).getMinutes();
-  const dayEndMins=new Date(lastSess.endTime).getHours()*60+new Date(lastSess.endTime).getMinutes();
-  const viewStart=Math.max(0,dayStartMins-30);
-  const viewEnd=Math.min(1440,dayEndMins+30);
 
   const PX=_iplanPxPerMin;
+  const viewStart=0;
+  const viewEnd=1440;
   const totalHeight=(viewEnd-viewStart)*PX;
 
-  // Assign lanes for overlapping sessions
-  function assignLanesVert(sessions){
-    const lanes=[];
-    sessions.forEach(s=>{
-      const sm=new Date(s.startTime).getHours()*60+new Date(s.startTime).getMinutes();
-      const em=new Date(s.endTime).getHours()*60+new Date(s.endTime).getMinutes();
-      let lane=0;
-      while(lanes[lane]&&lanes[lane]>sm) lane++;
-      lanes[lane]=em;
-      s._lane=lane;s._totalLanes=1;
-    });
-    const maxLane=sessions.reduce((m,s)=>Math.max(m,s._lane),0)+1;
-    sessions.forEach(s=>s._totalLanes=maxLane);
-    return sessions;
-  }
-  assignLanesVert(sessions);
-  const maxLanes=sessions.reduce((m,s)=>Math.max(m,s._totalLanes),1);
-
-  // Ruler
-  let rulerHtml='',linesHtml='';
-  for(let h=Math.ceil(viewStart/60);h<=Math.floor(viewEnd/60);h++){
+  // Shared ruler
+  let rulerHtml='';
+  for(let h=0;h<24;h++){
     const y=(h*60-viewStart)*PX;
-    rulerHtml+=`<div class="iplan-ruler-lbl" style="top:${y}px">${String(h%24).padStart(2,'0')}h</div>
+    rulerHtml+=`<div class="iplan-ruler-lbl" style="top:${y}px">${String(h).padStart(2,'0')}h</div>
                 <div class="iplan-ruler-tick" style="top:${y}px"></div>`;
-    linesHtml+=`<div class="iplan-hour-line major" style="top:${y}px"></div>`;
     const y30=y+30*PX;
-    if(y30<totalHeight) linesHtml+=`<div class="iplan-hour-line" style="top:${y30}px"></div>`;
+    if(y30<totalHeight) rulerHtml+=`<div class="iplan-ruler-lbl" style="top:${y30}px;font-size:6px;opacity:.5;">:30</div>`;
   }
 
-  // Now line
-  let nowHtml='';
-  if(isToday){
-    const nowMins=new Date().getHours()*60+new Date().getMinutes();
-    if(nowMins>=viewStart&&nowMins<=viewEnd){
-      const nowY=(nowMins-viewStart)*PX;
-      nowHtml=`<div class="iplan-now-line" style="top:${nowY}px" id="tl-now-line"><div class="iplan-now-dot"></div></div>`;
-    }
-  }
-
-  // Session blocks
-  let blocksHtml='';
-  sessions.forEach(s=>{
-    const sm=new Date(s.startTime).getHours()*60+new Date(s.startTime).getMinutes();
-    const em=new Date(s.endTime).getHours()*60+new Date(s.endTime).getMinutes();
-    const top=(sm-viewStart)*PX;
-    const height=Math.max((em-sm)*PX,20);
-    const color=actColor(s.actId);
-    const laneW=100/maxLanes;
-    const left=s._lane*laneW;
-    const hStart=String(Math.floor(sm/60)%24).padStart(2,'0');
-    const mStart=String(sm%60).padStart(2,'0');
-    blocksHtml+=`<div class="iplan-block" style="
-        top:${top}px;height:${height}px;
-        left:${left}%;width:${laneW}%;
-        background:${color}25;border:1.5px solid ${color};"
-      onclick="openDetail('${s.id}')">
-      <div class="iplan-block-name" style="color:${color};">${s.actEmoji} ${esc(s.actName)}</div>
-      ${height>34?`<div class="iplan-block-time" style="color:${color};">${hStart}:${mStart} · ${fmtM(s.duration)}</div>`:''}
-      ${s.subtaskName&&height>50?`<div class="iplan-block-sub" style="color:${color};">↳ ${esc(s.subtaskName)}</div>`:''}
+  let totalSecs=0,totalCount=0;
+  let colsHtml='';
+  dates.forEach(pd=>{
+    const{linesHtml,nowHtml,blocksHtml,totalSecs:ts,count}=_buildTlDayCol(pd,viewStart,viewEnd,PX);
+    totalSecs+=ts;totalCount+=count;
+    const pdIsToday=pd.toDateString()===new Date().toDateString();
+    const dayLbl=pd.toLocaleDateString('es-MX',{weekday:'short',day:'numeric'});
+    const colW=daysCount===1?'flex:1':'flex:0 0 140px';
+    colsHtml+=`<div style="${colW};display:flex;flex-direction:column;min-width:${daysCount===1?'auto':'120px'}">
+      ${daysCount>1?`<div style="text-align:center;font-size:9px;font-family:var(--mono);color:${pdIsToday?'var(--accent)':'var(--text3)'};padding:3px 0;border-bottom:1px solid var(--border);border-left:1px solid var(--border);">${dayLbl}</div>`:''}
+      <div class="iplan-col" style="height:${totalHeight}px;position:relative;${daysCount>1?'border-left:1px solid var(--border);':''}">
+        ${linesHtml}${nowHtml}${blocksHtml}
+      </div>
     </div>`;
   });
 
   el.innerHTML=`
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 16px 6px;border-bottom:1px solid var(--border);">
-      <span style="font-size:10px;color:var(--text3);font-family:var(--mono);">${rawSessions.length} registros · ${fmtM(rawSessions.reduce((t,s)=>t+s.duration,0))}</span>
-      <button class="tl-zoom-btn" onclick="scrollToNow()" style="margin-left:auto;font-size:9px;">⬤ ahora</button>
+    <div style="display:flex;align-items:center;gap:6px;padding:6px 16px;border-bottom:1px solid var(--border);">
+      <span style="font-size:10px;color:var(--text3);font-family:var(--mono);">${totalCount} registros · ${fmtM(totalSecs)}</span>
     </div>
-    <div style="display:flex;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:80px;" id="tlScroll">
-      <div class="iplan-ruler" style="height:${totalHeight+40}px;position:relative;">
-        ${rulerHtml}
-      </div>
-      <div class="iplan-col" style="height:${totalHeight+40}px;position:relative;">
-        ${linesHtml}${nowHtml}${blocksHtml}
-      </div>
+    <div style="display:flex;height:calc(100vh - 200px);overflow-x:auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:20px;" id="tlScroll">
+      <div class="iplan-ruler" style="height:${totalHeight+10}px;position:relative;flex-shrink:0;">${rulerHtml}</div>
+      <div style="display:flex;flex:1;">${colsHtml}</div>
     </div>`;
 
   setTimeout(()=>{
+    const scroll=document.getElementById('tlScroll');
     const n=document.getElementById('tl-now-line');
-    if(n) n.scrollIntoView({behavior:'smooth',block:'center'});
+    if(scroll){
+      const t=n?Math.max(0,n.offsetTop-150):Math.max(0,(new Date().getHours()*60-30)*PX);
+      scroll.scrollTop=t;
+    }
   },100);
 }
 
