@@ -4724,7 +4724,7 @@ function _buildDayBlocks(plans, pdKey, pdStr, startMins){
       if(!S.prefs[offKey])S.prefs[offKey]={};
       S.prefs[offKey][p.id]={abs:blockStart};
     }
-    blocks.push({p,startMin:blockStart,dur,brk,color:actColor(p.actId)});
+    blocks.push({p,startMin:blockStart,dur,brk,color:actColor(p.actId),dateKey:pdKey});
     cursor=blockStart+dur+brk;
   });
   return blocks;
@@ -4972,7 +4972,7 @@ function renderIdealPlan(){
     el.innerHTML=`
       <div style="display:flex;height:calc(100vh - 180px);overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:40px;" id="iplanScroll">
         <div class="iplan-ruler" style="height:${totalHeight+40}px;position:relative;flex-shrink:0;">${rulerHtml}</div>
-        <div class="iplan-col" id="iplanCol" style="height:${totalHeight+40}px;position:relative;">
+        <div class="iplan-col" id="iplanCol" data-datekey="${pdKey}" style="height:${totalHeight+40}px;position:relative;">
           ${linesHtml}${nowHtml}${sleepHtml}${tapAdd}${blocksHtml}
         </div>
       </div>`;
@@ -5006,13 +5006,23 @@ function renderIdealPlan(){
       const dayLabel=pd.toLocaleDateString('es-MX',{weekday:'short',day:'numeric'});
       multiHtml+=`<div style="flex:0 0 140px;display:flex;flex-direction:column;">
         <div style="text-align:center;font-size:9px;font-family:var(--mono);color:${pdIsToday?'var(--accent)':'var(--text3)'};padding:4px 0;border-bottom:1px solid var(--border);border-left:1px solid var(--border);">${dayLabel}</div>
-        <div class="iplan-col" style="height:${totalHeight}px;position:relative;flex:1;border-left:1px solid var(--border);">
+        <div class="iplan-col" data-datekey="${pdKey}" style="height:${totalHeight}px;position:relative;flex:1;border-left:1px solid var(--border);">
           ${linesHtml}${nowHtmlD}${tapA}${blocksHtml}
         </div>
       </div>`;
     });
     multiHtml+=`</div>`;
     el.innerHTML=multiHtml;
+  // Gather all blocks from all days and attach interactions
+  const allBlocks=[];
+  planDates.forEach(pd=>{
+    const pdStr2=pd.toDateString();
+    const{plans:pdPlans2}=_buildDayPlans(pd);
+    const pdKey2=pd.toISOString().slice(0,10);
+    const pdBlocks2=_buildDayBlocks(pdPlans2,pdKey2,pdStr2,0);
+    allBlocks.push(...pdBlocks2);
+  });
+  _attachIplanInteractions(allBlocks,0,PX);
   }
 
   setTimeout(()=>{
@@ -5043,81 +5053,168 @@ function setIplanStartHM(){
 }
 
 function _attachIplanInteractions(blocks,viewStart,PX){
-  const col=document.getElementById('iplanCol');
-  if(!col)return;
+  // For single-day view: attach to iplanCol
+  // For multi-day: attach to each column separately
+  const cols=document.querySelectorAll('.iplan-col[data-datekey]');
+  const singleCol=document.getElementById('iplanCol');
+  const targets=cols.length>0?Array.from(cols):(singleCol?[singleCol]:[]);
+  if(!targets.length)return;
 
   let _drag=null;
 
   function getY(e){return e.clientY!==undefined?e.clientY:(e.touches&&e.touches[0]?e.touches[0].clientY:0);}
+  function getX(e){return e.clientX!==undefined?e.clientX:(e.touches&&e.touches[0]?e.touches[0].clientX:0);}
 
-  col.addEventListener('pointerdown',function(e){
+  function onPointerDown(e){
     const handle=e.target.closest('.iplan-resize-handle');
     const block=e.target.closest('.iplan-block[data-pid]');
     if(!block&&!handle)return;
+    // Don't start drag if clicking the delete button
+    if(e.target.closest('button'))return;
     const pid=(handle||block).dataset.pid;
     const blk=blocks.find(b=>b.p.id===pid);if(!blk)return;
     e.preventDefault();
-    try{col.setPointerCapture(e.pointerId);}catch(ex){}
-    _drag={pid,blk,type:handle?'resize':'move',startY:getY(e),origDur:blk.dur,origStartMin:blk.startMin};
-  },{passive:false});
+    e.stopPropagation();
+    try{e.currentTarget.setPointerCapture(e.pointerId);}catch(ex){}
+    const blockEl=document.getElementById('ipb_'+pid);
+    _drag={
+      pid,blk,
+      type:handle?'resize':'move',
+      startY:getY(e),startX:getX(e),
+      origDur:blk.dur,origStartMin:blk.startMin,
+      origDateKey:blk.dateKey||planDate.toISOString().slice(0,10),
+      currentDateKey:blk.dateKey||planDate.toISOString().slice(0,10),
+      blockEl,moved:false
+    };
+    if(blockEl){blockEl.style.opacity='0.6';blockEl.style.zIndex='100';}
+  }
 
-  col.addEventListener('pointermove',function(e){
+  function onPointerMove(e){
     if(!_drag)return;
     e.preventDefault();
     const deltaY=getY(e)-_drag.startY;
     const deltaMins=Math.round(deltaY/PX/5)*5;
-    const blockEl=document.getElementById('ipb_'+_drag.pid);if(!blockEl)return;
+    const{blockEl}=_drag;
+    if(!blockEl)return;
+    _drag.moved=true;
 
     if(_drag.type==='resize'){
-      const newDur=Math.max(5,_drag.origDur+deltaMins);
-      const newH=Math.max(newDur*PX,28);
-      blockEl.style.height=newH+'px';
+      const newDur=Math.max(15,_drag.origDur+deltaMins);
+      blockEl.style.height=Math.max(newDur*PX,12)+'px';
       const timeEl=blockEl.querySelector('.iplan-block-time');
       if(timeEl) timeEl.textContent=fmtM(newDur*60);
     } else {
-      // move ONLY this block — independent, can overlap
-      const newStart=Math.max(0,_drag.origStartMin+deltaMins);
+      // Move vertically (time)
+      const newStart=Math.max(0,Math.min(1410,_drag.origStartMin+deltaMins));
       blockEl.style.top=((newStart-viewStart)*PX)+'px';
       const timeEl=blockEl.querySelector('.iplan-block-time');
       if(timeEl){
         const hh=String(Math.floor(newStart/60)%24).padStart(2,'0');
         const mm=String(newStart%60).padStart(2,'0');
-        const endMin=newStart+_drag.blk.dur;
+        const endMin=newStart+_drag.origDur;
         const eh=String(Math.floor(endMin/60)%24).padStart(2,'0');
         const em=String(endMin%60).padStart(2,'0');
-        timeEl.textContent=`${hh}:${mm} → ${eh}:${em} · ${fmtM(_drag.blk.dur*60)}`;
+        timeEl.textContent=`${hh}:${mm} → ${eh}:${em} · ${fmtM(_drag.origDur*60)}`;
+      }
+
+      // Check if dragged over a different day column
+      const allCols=document.querySelectorAll('.iplan-col[data-datekey]');
+      if(allCols.length>1){
+        const mx=getX(e);
+        allCols.forEach(col=>{
+          const r=col.getBoundingClientRect();
+          if(mx>=r.left&&mx<=r.right){
+            const newDateKey=col.dataset.datekey;
+            if(newDateKey&&newDateKey!==_drag.currentDateKey){
+              _drag.currentDateKey=newDateKey;
+              // Visually move block to new column
+              col.appendChild(blockEl);
+            }
+          }
+        });
       }
     }
-  },{passive:false});
+  }
 
-  col.addEventListener('pointerup',function(e){
+  function onPointerUp(e){
     if(!_drag)return;
     const deltaY=getY(e)-_drag.startY;
     const deltaMins=Math.round(deltaY/PX/5)*5;
-    const plan=S.planned.find(x=>x.id===_drag.pid);
-    if(plan){
-      if(_drag.type==='resize'){
-        const newDur=Math.max(5,_drag.origDur+deltaMins);
-        plan.idealSecs=newDur*60;
-        // Update block height in DOM permanently
-        const blockEl=document.getElementById('ipb_'+_drag.pid);
-        if(blockEl) blockEl.style.height=Math.max(newDur*PX,28)+'px';
-      } else {
-        if(!S.prefs)S.prefs={};
-        const _offKey='po_'+planDate.toDateString();
-        if(!S.prefs[_offKey])S.prefs[_offKey]={};
-        const newStart=Math.max(0,_drag.origStartMin+deltaMins);
-        S.prefs[_offKey][_drag.pid]={abs:newStart};
-        const blockEl=document.getElementById('ipb_'+_drag.pid);
-        if(blockEl) blockEl.style.top=((newStart-viewStart)*PX)+'px';
-      }
-      save(); // save but DO NOT re-render — position already correct in DOM
-    }
-    _drag=null;
-    // no renderIdealPlan() here — avoids snapping back
-  });
+    const{blockEl,pid}=_drag;
+    if(blockEl){blockEl.style.opacity='';blockEl.style.zIndex='';}
 
-  col.addEventListener('pointercancel',function(){_drag=null;});
+    if(!_drag.moved){_drag=null;return;} // was a click — let onclick handle it
+
+    // Find plan (real or virtual)
+    const plan=S.planned.find(x=>x.id===pid);
+    const newDateKey=_drag.currentDateKey;
+    const newDateStr=new Date(newDateKey+'T12:00:00').toDateString();
+
+    if(_drag.type==='resize'){
+      const newDur=Math.max(15,_drag.origDur+deltaMins);
+      // Update planned
+      if(plan) plan.idealSecs=newDur*60;
+      // Update weekPlan virtual
+      if(!plan){
+        const actId=pid.replace('wpl_'+_drag.origDateKey+'_','');
+        const items=(S.weekPlan&&S.weekPlan[_drag.origDateKey])||[];
+        const item=items.find(x=>x.actId===actId);
+        if(item) item.idealSecs=newDur*60;
+      }
+    } else {
+      const newStart=Math.max(0,Math.min(1410,_drag.origStartMin+deltaMins));
+      const movedDay=newDateKey!==_drag.origDateKey;
+
+      // Save new time offset
+      if(!S.prefs)S.prefs={};
+      const offKey='po_'+newDateStr;
+      if(!S.prefs[offKey])S.prefs[offKey]={};
+      S.prefs[offKey][pid]={abs:newStart};
+
+      // Remove from old day offset if moved
+      if(movedDay){
+        const oldOffKey='po_'+new Date(_drag.origDateKey+'T12:00:00').toDateString();
+        if(S.prefs[oldOffKey]) delete S.prefs[oldOffKey][pid];
+      }
+
+      // Move planned item to new date
+      if(plan&&movedDay){
+        plan.addedAt=new Date(newDateKey+'T09:00:00').toISOString();
+      }
+      // Move weekPlan virtual to new date
+      if(!plan&&movedDay){
+        const actId=pid.replace('wpl_'+_drag.origDateKey+'_','');
+        const oldItems=S.weekPlan&&S.weekPlan[_drag.origDateKey];
+        if(oldItems){
+          const idx=oldItems.findIndex(x=>x.actId===actId);
+          if(idx>=0){
+            const [item]=oldItems.splice(idx,1);
+            if(!oldItems.length) delete S.weekPlan[_drag.origDateKey];
+            item.startH=Math.floor(newStart/60);item.startM=newStart%60;
+            if(!S.weekPlan[newDateKey])S.weekPlan[newDateKey]=[];
+            S.weekPlan[newDateKey].push(item);
+          }
+        }
+      }
+    }
+
+    save();
+    _drag=null;
+    // Small delay then re-render to sync everything
+    setTimeout(()=>renderIdealPlan(),50);
+  }
+
+  function onPointerCancel(){
+    if(_drag&&_drag.blockEl){_drag.blockEl.style.opacity='';_drag.blockEl.style.zIndex='';}
+    _drag=null;
+  }
+
+  targets.forEach(col=>{
+    col.addEventListener('pointerdown',onPointerDown,{passive:false});
+    col.addEventListener('pointermove',onPointerMove,{passive:false});
+    col.addEventListener('pointerup',onPointerUp);
+    col.addEventListener('pointercancel',onPointerCancel);
+  });
 }
 
 function openEditPlannedStart(pid){
