@@ -487,8 +487,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   <div class="hdr">
     <div class="logo">KRONOS</div>
     <div style="display:flex;align-items:center;gap:8px;">
-      <span id="syncDot" title="Sync" onclick="forcePullAndRender()" 
+      <span id="syncDot" title="Toca para sincronizar ahora" onclick="manualSync()" 
         style="font-size:16px;color:var(--text3);cursor:pointer;font-family:var(--mono);padding:4px 8px;-webkit-tap-highlight-color:transparent;touch-action:manipulation;">●</span>
+      <button id="syncAutoBtn" onclick="setSyncAuto(!_syncAuto)"
+        style="background:none;border:1px solid var(--border);border-radius:5px;font-family:var(--mono);font-size:8px;padding:2px 6px;cursor:pointer;outline:none;color:var(--green);">
+        ⟳ Auto
+      </button>
       <button id="primaryBtn" onclick="toggleSyncMode()"
         style="background:none;border:none;font-family:var(--mono);font-size:8px;padding:0 3px;cursor:pointer;outline:none;color:var(--text3);">
         🔄 Compartido
@@ -1139,7 +1143,7 @@ function save(){
   }
   S._lastModified=Date.now(); // track when state was last changed locally
   localStorage.setItem(SK,JSON.stringify(S));
-  if(!_inPull) syncToCloud(); // don't push during pull merge
+  if(!_inPull&&_syncAuto) syncToCloud(); // only auto-push if auto mode
 }
 
 function saveLocal(){
@@ -1571,6 +1575,53 @@ var _syncMode=(function(){
   return localStorage.getItem('kronos_sync_mode')||'shared';
 })();
 
+// Auto vs Manual sync
+var _syncAuto=localStorage.getItem('kronos_sync_auto')!=='0'; // default: auto
+
+function setSyncAuto(val){
+  _syncAuto=val;
+  localStorage.setItem('kronos_sync_auto',val?'1':'0');
+  updateSyncAutoBtn();
+  if(val){
+    // Switched to auto — push immediately
+    _pushToCloud();
+    if(_syncAuto){
+  startAutoPull();
+} else {
+  // Manual mode — don't start auto pull
+  updateSyncAutoBtn();
+}
+  } else {
+    stopAutoPull();
+  }
+}
+
+function updateSyncAutoBtn(){
+  const btn=document.getElementById('syncAutoBtn');
+  if(!btn)return;
+  if(_syncAuto){
+    btn.textContent='⟳ Auto';
+    btn.style.color='var(--green)';
+    btn.title='Sync automático activo. Toca para cambiar a manual.';
+  } else {
+    btn.textContent='↑↓ Manual';
+    btn.style.color='var(--amber)';
+    btn.title='Sync manual. Toca para cambiar a automático.';
+  }
+}
+
+function manualSync(){
+  // Push local state up, then pull cloud state
+  const btn=document.getElementById('syncDot');
+  _pushToCloud();
+  setTimeout(()=>{
+    pullFromCloud().then(()=>{
+      migrateDivisionIds();
+      try{renderAll();}catch(e){}
+    });
+  },800); // wait for push to complete first
+}
+
 function setSyncMode(mode){
   _syncMode=mode;
   localStorage.setItem('kronos_sync_mode',mode);
@@ -1582,6 +1633,7 @@ function canWrite(){
 }
 
 function forcePush(){
+  // Always push regardless of auto/manual mode (explicit user action)
   const orig=_syncMode;
   _syncMode='primary';
   _pushToCloud();
@@ -2388,6 +2440,7 @@ function setDeviation(rKey,realActId){
 function renderAll(){
   renderWeekBadge();renderPlanned();renderRunning();renderWeekGrid();renderActList();renderDayMeta();
   updateDeviceUI();
+  updateSyncAutoBtn();
   if(document.getElementById('page-history').classList.contains('active'))renderHistory();
 }
 
@@ -5927,9 +5980,9 @@ document.addEventListener('focusout',function(e){
 function startAutoPull(){
   if(_autoPullInterval)return;
   _autoPullInterval=setInterval(function(){
+    if(!_syncAuto)return; // manual mode — don't auto-pull
     if(document.hidden)return;
     if(_userTyping)return;
-    // Always pull regardless of sync mode — readonly just blocks push
     pullFromCloud();
   },5000);
 }
@@ -5939,8 +5992,9 @@ function stopAutoPull(){
 }
 startAutoPull();
 
-// In readonly mode: more aggressive pull every 10s
+// In readonly mode: pull every 10s (only in auto mode)
 setInterval(function(){
+  if(!_syncAuto)return;
   if(_syncMode==='readonly'&&!document.hidden&&!_userTyping){
     pullFromCloud();
   }
