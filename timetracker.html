@@ -570,6 +570,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
         <option value="5">5d</option>
         <option value="7" selected>7d</option>
       </select>
+      <button class="tl-zoom-btn" id="planWeekStartBtn" onclick="togglePlanWeekStart()"
+        style="font-size:9px;" title="Inicio de semana">L</button>
     </div>
     <div id="diaPlanBody" style="overflow-x:auto;-webkit-overflow-scrolling:touch;"></div>
   </div>
@@ -4654,9 +4656,13 @@ function _buildDayPlans(pd){
   const pdKey=pd.toISOString().slice(0,10);
 
   // From S.planned (real planned items)
-  const plans=S.planned.filter(p=>
-    new Date(p.addedAt).toDateString()===pdStr&&(pdIsToday?!p.done:true)
-  );
+  const plans=S.planned.filter(p=>{
+    const planDate2=new Date(p.addedAt).toDateString();
+    const isPlanToday=planDate2===pdStr;
+    // Also include if isTodayWindow applies (for today/yesterday after midnight)
+    const isTodayWin=pdIsToday&&isTodayWindow(planDate2);
+    return (isPlanToday||isTodayWin)&&!p.done;
+  });
 
   // From S.weekPlan (calendar entries)
   const wplanItems=(S.weekPlan&&S.weekPlan[pdKey])||[];
@@ -4708,24 +4714,27 @@ function _buildDayBlocks(plans, pdKey, pdStr, startMins){
   const blocks=[];
   let cursor=startMins;
   plans.forEach(p=>{
-    // Use saved duration from prefs if available (from drag resize)
     const savedOffset=pdOffsets[p.id];
-    const savedDur=savedOffset&&savedOffset.dur?savedOffset.dur:null;
-    const dur=savedDur||Math.max(1,Math.round((p.idealSecs||3600)/60));
+    // Duration: prefs.dur > plan.idealSecs > weekPlan.idealSecs > 60min default
+    let dur;
+    if(savedOffset&&savedOffset.dur) dur=savedOffset.dur;
+    else dur=Math.max(1,Math.round((p.idealSecs||3600)/60));
+
     const brk=Math.round((p.breakIdealSecs||0)/60);
     let blockStart;
-    if(savedOffset&&typeof savedOffset==='object'&&savedOffset.abs!==undefined){
-      blockStart=savedOffset.abs;
+    if(savedOffset&&savedOffset.abs!==undefined){
+      blockStart=savedOffset.abs; // use saved position
     } else if(p._wplanStartH!==undefined){
       blockStart=p._wplanStartH*60+(p._wplanStartM||0);
+      // Save it so future renders use the same position
       if(!S.prefs)S.prefs={};
       if(!S.prefs[offKey])S.prefs[offKey]={};
-      S.prefs[offKey][p.id]={abs:blockStart};
+      if(!S.prefs[offKey][p.id]) S.prefs[offKey][p.id]={abs:blockStart};
     } else {
       blockStart=cursor;
       if(!S.prefs)S.prefs={};
       if(!S.prefs[offKey])S.prefs[offKey]={};
-      S.prefs[offKey][p.id]={abs:blockStart};
+      if(!S.prefs[offKey][p.id]) S.prefs[offKey][p.id]={abs:blockStart};
     }
     blocks.push({p,startMin:blockStart,dur,brk,color:actColor(p.actId),dateKey:pdKey});
     cursor=blockStart+dur+brk;
@@ -4815,6 +4824,15 @@ function iplanDeleteBlock(pid, type, dateKey){
   const offKey='po_'+planDate.toDateString();
   if(S.prefs&&S.prefs[offKey]) delete S.prefs[offKey][pid];
   save();renderIdealPlan();renderPlanned();
+}
+
+var _planStartOnMonday=localStorage.getItem('plan_start_monday')!=='0';
+function togglePlanWeekStart(){
+  _planStartOnMonday=!_planStartOnMonday;
+  localStorage.setItem('plan_start_monday',_planStartOnMonday?'1':'0');
+  const btn=document.getElementById('planWeekStartBtn');
+  if(btn) btn.textContent=_planStartOnMonday?'L':'Hoy';
+  renderIdealPlan();
 }
 
 function iplanScrollToNow(){
@@ -4946,6 +4964,16 @@ function renderIdealPlan(){
     const diffToMon=dow===0?-6:1-dow;
     base.setDate(base.getDate()+diffToMon);
     for(let i=0;i<5;i++){
+      const d=new Date(base);d.setDate(base.getDate()+i);
+      planDates.push(d);
+    }
+  } else if(daysCount===7&&_planStartOnMonday){
+    // 7d = Mon-Sun of week containing planDate
+    const base=new Date(planDate);
+    const dow=base.getDay();
+    const diffToMon=dow===0?-6:1-dow;
+    base.setDate(base.getDate()+diffToMon);
+    for(let i=0;i<7;i++){
       const d=new Date(base);d.setDate(base.getDate()+i);
       planDates.push(d);
     }
@@ -5207,10 +5235,10 @@ function _attachIplanInteractions(blocks,viewStart,PX){
       }
     }
 
-    save();
     _drag=null;
-    // Small delay then re-render to sync everything
-    setTimeout(()=>renderIdealPlan(),50);
+    // Save first, then render — prevents snap-back
+    save();
+    renderIdealPlan();
   }
 
   function onPointerCancel(){
