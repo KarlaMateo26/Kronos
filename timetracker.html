@@ -4708,11 +4708,14 @@ function _buildDayBlocks(plans, pdKey, pdStr, startMins){
   const blocks=[];
   let cursor=startMins;
   plans.forEach(p=>{
-    const dur=Math.max(1,Math.round((p.idealSecs||3600)/60));
+    // Use saved duration from prefs if available (from drag resize)
+    const savedOffset=pdOffsets[p.id];
+    const savedDur=savedOffset&&savedOffset.dur?savedOffset.dur:null;
+    const dur=savedDur||Math.max(1,Math.round((p.idealSecs||3600)/60));
     const brk=Math.round((p.breakIdealSecs||0)/60);
     let blockStart;
-    if(pdOffsets[p.id]&&typeof pdOffsets[p.id]==='object'){
-      blockStart=pdOffsets[p.id].abs;
+    if(savedOffset&&typeof savedOffset==='object'&&savedOffset.abs!==undefined){
+      blockStart=savedOffset.abs;
     } else if(p._wplanStartH!==undefined){
       blockStart=p._wplanStartH*60+(p._wplanStartM||0);
       if(!S.prefs)S.prefs={};
@@ -5152,13 +5155,19 @@ function _attachIplanInteractions(blocks,viewStart,PX){
 
     if(_drag.type==='resize'){
       const newDur=Math.max(15,_drag.origDur+deltaMins);
+      const offKey2='po_'+new Date(_drag.origDateKey+'T12:00:00').toDateString();
+      if(!S.prefs)S.prefs={};
+      if(!S.prefs[offKey2])S.prefs[offKey2]={};
+      // Save duration in prefs so it survives re-render
+      if(!S.prefs[offKey2][pid]) S.prefs[offKey2][pid]={abs:_drag.origStartMin};
+      S.prefs[offKey2][pid].dur=newDur; // save duration in minutes
+
       // Update planned
       if(plan) plan.idealSecs=newDur*60;
-      // Update weekPlan virtual
-      if(!plan){
-        const actId=pid.replace('wpl_'+_drag.origDateKey+'_','');
-        const items=(S.weekPlan&&S.weekPlan[_drag.origDateKey])||[];
-        const item=items.find(x=>x.actId===actId);
+      // Update weekPlan
+      const actId2=pid.includes('wpl_')?pid.replace('wpl_'+_drag.origDateKey+'_',''):plan&&plan.actId;
+      if(actId2&&S.weekPlan&&S.weekPlan[_drag.origDateKey]){
+        const item=S.weekPlan[_drag.origDateKey].find(x=>x.actId===actId2);
         if(item) item.idealSecs=newDur*60;
       }
     } else {
