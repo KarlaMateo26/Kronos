@@ -690,7 +690,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
       <div class="modal-title" id="wplanTitle" style="font-size:14px;margin:0;flex:1;"></div>
       <span style="font-size:11px;font-family:var(--mono);color:var(--accent);background:var(--accent-dim);padding:3px 8px;border-radius:6px;" id="wplanDayLbl"></span>
     </div>
-    <div class="field"><label>Hora de inicio (opcional)</label>
+    <div class="field"><label>Hora de inicio <span style="font-size:9px;color:var(--text3);">(para dormir nocturno usa 22h o 23h y ajusta duración)</span></label>
       <div style="display:flex;gap:6px;align-items:center;">
         <select id="wplanStartH" style="flex:1;background:var(--s0);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:13px;padding:8px 6px;outline:none;">
           <option value="">--</option>
@@ -4555,19 +4555,19 @@ function confirmWplanEdit(){
         if(dow===baseDate.getDay()) dates.push(cur.toISOString().slice(0,10));
         cur.setDate(cur.getDate()+1);
       } else if(repeat==='weekdays'){
-        // Mon-Fri ONLY (dow 1-5)
-        if(dow>=1&&dow<=5) dates.push(cur.toISOString().slice(0,10));
+        // Mon-Fri ONLY: explicitly check 1,2,3,4,5
+        if(dow===1||dow===2||dow===3||dow===4||dow===5)
+          dates.push(cur.toISOString().slice(0,10));
         cur.setDate(cur.getDate()+1);
       } else if(repeat==='daily'){
         dates.push(cur.toISOString().slice(0,10));
         cur.setDate(cur.getDate()+1);
       }
     }
+    console.log('[KRONOS] Repeat generating dates:',dates.map(d=>d+' ('+['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][new Date(d+'T12:00:00').getDay()]+')'));
     dates.forEach(dateKey=>{
       if(!S.weekPlan[dateKey])S.weekPlan[dateKey]=[];
-      // Don't duplicate same actId on same date
       if(!S.weekPlan[dateKey].find(x=>x.actId===item.actId)){
-        // Use the exact startH/startM from the item being repeated
         S.weekPlan[dateKey].push({
           actId:item.actId,
           startH:item.startH,
@@ -4612,14 +4612,13 @@ function removeWplanGroup(entries){
 }
 
 function removeWplanGroupByDow(dow, actId){
-  // Remove all weekPlan entries for this actId on a given day of week
   Object.keys(S.weekPlan).forEach(dateKey=>{
     const dt=new Date(dateKey+'T12:00:00');
     if(dt.getDay()!==dow) return;
     S.weekPlan[dateKey]=S.weekPlan[dateKey].filter(x=>x.actId!==actId);
     if(!S.weekPlan[dateKey].length) delete S.weekPlan[dateKey];
   });
-  save();renderWeekPlan();
+  save();forcePush();renderWeekPlan();
 }
 
 // Auto-add today's week plan items to planned
@@ -4694,6 +4693,29 @@ function _buildDayPlans(pd){
     });
   });
 
+  // Include weekPlan blocks from PREVIOUS day that extend past midnight
+  const prevDate2=new Date(pd);prevDate2.setDate(pd.getDate()-1);
+  const prevKey2=prevDate2.toISOString().slice(0,10);
+  const prevItems2=(S.weekPlan&&S.weekPlan[prevKey2])||[];
+  prevItems2.forEach(item=>{
+    const act=S.activities.find(a=>a.id===item.actId);
+    if(!act)return;
+    if(item.startH===undefined)return;
+    const startMins=item.startH*60+(item.startM||0);
+    const durMins=Math.round((item.idealSecs||3600)/60);
+    if(startMins+durMins>1440){ // crosses midnight into this day
+      const carryMins=(startMins+durMins)-1440; // how many minutes carry into this day
+      if(plans.find(p=>p.actId===item.actId))return; // already added
+      const overId='ovr_'+pdKey+'_'+item.actId;
+      plans.push({
+        id:overId,actId:item.actId,actName:act.name,actEmoji:act.emoji,
+        idealSecs:carryMins*60,breakIdealSecs:0,note:'',subtasks:[],
+        done:false,addedAt:pd.toISOString(),_virtual:true,
+        _wplanStartH:0,_wplanStartM:0 // starts at midnight
+      });
+    }
+  });
+
   // From real sessions — show unplanned activity blocks
   const daySessions=S.sessions.filter(s=>new Date(s.startTime).toDateString()===pdStr);
   // Group by actId, use earliest start
@@ -4749,8 +4771,10 @@ function _buildDayBlocks(plans, pdKey, pdStr, startMins){
       if(!S.prefs[offKey])S.prefs[offKey]={};
       if(!S.prefs[offKey][p.id]) S.prefs[offKey][p.id]={abs:blockStart};
     }
-    blocks.push({p,startMin:blockStart,dur,brk,color:actColor(p.actId),dateKey:pdKey});
-    cursor=blockStart+dur+brk;
+    // Clip block at midnight (1440 mins)
+    const clippedDur=Math.min(dur, 1440-blockStart);
+    blocks.push({p,startMin:blockStart,dur:clippedDur,brk,color:actColor(p.actId),dateKey:pdKey});
+    cursor=blockStart+clippedDur+brk;
   });
   return blocks;
 }
