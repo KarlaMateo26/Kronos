@@ -4805,22 +4805,23 @@ function _renderDayCol(blocks, viewStart, viewEnd, PX, isToday, dateKey, showAdd
 }
 
 function iplanDeleteBlock(pid, type, dateKey){
+  if(!confirm('¿Eliminar este bloque?')) return;
   if(type==='plan'){
-    // Remove from S.planned
-    if(!confirm('¿Eliminar este bloque planeado?')) return;
     S.planned=S.planned.filter(p=>p.id!==pid);
     if(!S.deletedIds) S.deletedIds=[];
     S.deletedIds.push(pid);
+    // Also remove from weekPlan if exists
+    const actId=S.activities.find(a=>S.planned.some&&pid)?null:null; // find via session
   } else {
-    // Remove from S.weekPlan
-    if(!confirm('¿Eliminar este bloque del calendario?')) return;
-    const actId=pid.replace('wpl_'+dateKey+'_','');
-    if(S.weekPlan&&S.weekPlan[dateKey]){
+    // Virtual block — extract actId from pid: wpl_DATEKEY_ACTID
+    const prefix='wpl_'+dateKey+'_';
+    const actId=pid.startsWith(prefix)?pid.slice(prefix.length):null;
+    if(actId&&S.weekPlan&&S.weekPlan[dateKey]){
       S.weekPlan[dateKey]=S.weekPlan[dateKey].filter(x=>x.actId!==actId);
       if(!S.weekPlan[dateKey].length) delete S.weekPlan[dateKey];
     }
   }
-  // Also clean offset
+  // Clean up prefs offset
   const offKey='po_'+planDate.toDateString();
   if(S.prefs&&S.prefs[offKey]) delete S.prefs[offKey][pid];
   save();renderIdealPlan();renderPlanned();
@@ -4854,17 +4855,33 @@ var _iplanEditPid=null,_iplanEditDateStr=null,_iplanEditType=null;
 function openIplanBlockEdit(pid,type,startMin,dur){
   _iplanEditPid=pid;_iplanEditType=type;
   _iplanEditDateStr=planDate.toDateString();
-  // Find plan to get name
-  let plan=S.planned.find(p=>p.id===pid);
+
+  // Find real duration — check weekPlan first for virtual blocks
+  let realDur=dur;
   let label='Editar bloque';
-  if(plan) label=`${plan.actEmoji} ${plan.actName}`;
+  if(type==='wpl'){
+    const pdKey=planDate.toISOString().slice(0,10);
+    const prefix='wpl_'+pdKey+'_';
+    const actId=pid.startsWith(prefix)?pid.slice(prefix.length):null;
+    if(actId&&S.weekPlan&&S.weekPlan[pdKey]){
+      const item=S.weekPlan[pdKey].find(x=>x.actId===actId);
+      if(item&&item.idealSecs) realDur=Math.round(item.idealSecs/60);
+    }
+    const act=actId?S.activities.find(a=>a.id===actId):null;
+    if(act) label=`${act.emoji} ${act.name}`;
+  } else {
+    const plan=S.planned.find(p=>p.id===pid);
+    if(plan){
+      label=`${plan.actEmoji} ${plan.actName}`;
+      if(plan.idealSecs) realDur=Math.round(plan.idealSecs/60);
+    }
+  }
 
   document.getElementById('iplanEditTitle').textContent=label;
   document.getElementById('iplanEditH').value=String(Math.floor(startMin/60)%24);
   document.getElementById('iplanEditM').value=String(Math.round((startMin%60)/5)*5%60);
-  // dur is in minutes — show correctly
-  document.getElementById('iplanEditDurH').value=dur>=60?Math.floor(dur/60):'';
-  document.getElementById('iplanEditDurM').value=dur%60||'';
+  document.getElementById('iplanEditDurH').value=realDur>=60?Math.floor(realDur/60):'';
+  document.getElementById('iplanEditDurM').value=realDur%60||'';
   openModal('iplanEditModal');
 }
 
@@ -5169,74 +5186,88 @@ function _attachIplanInteractions(blocks,viewStart,PX){
 
   function onPointerUp(e){
     if(!_drag)return;
-    const deltaY=getY(e)-_drag.startY;
-    const deltaMins=Math.round(deltaY/PX/5)*5;
     const{blockEl,pid}=_drag;
     if(blockEl){blockEl.style.opacity='';blockEl.style.zIndex='';}
+    if(!_drag.moved){_drag=null;return;}
 
-    if(!_drag.moved){_drag=null;return;} // was a click — let onclick handle it
-
-    // Find plan (real or virtual)
-    const plan=S.planned.find(x=>x.id===pid);
+    const deltaY=getY(e)-_drag.startY;
+    const deltaMins=Math.round(deltaY/PX/5)*5;
+    const origDateKey=_drag.origDateKey;
     const newDateKey=_drag.currentDateKey;
-    const newDateStr=new Date(newDateKey+'T12:00:00').toDateString();
+    const movedDay=newDateKey!==origDateKey;
+
+    // Determine actId — virtual pids are wpl_DATEKEY_ACTID
+    const isVirtual=pid.startsWith('wpl_');
+    const actId=isVirtual?pid.slice(('wpl_'+origDateKey+'_').length):
+      (S.planned.find(x=>x.id===pid)||{}).actId;
 
     if(_drag.type==='resize'){
       const newDur=Math.max(15,_drag.origDur+deltaMins);
-      const offKey2='po_'+new Date(_drag.origDateKey+'T12:00:00').toDateString();
-      if(!S.prefs)S.prefs={};
-      if(!S.prefs[offKey2])S.prefs[offKey2]={};
-      // Save duration in prefs so it survives re-render
-      if(!S.prefs[offKey2][pid]) S.prefs[offKey2][pid]={abs:_drag.origStartMin};
-      S.prefs[offKey2][pid].dur=newDur; // save duration in minutes
+      const newSecs=newDur*60;
 
-      // Update planned
-      if(plan) plan.idealSecs=newDur*60;
-      // Update weekPlan
-      const actId2=pid.includes('wpl_')?pid.replace('wpl_'+_drag.origDateKey+'_',''):plan&&plan.actId;
-      if(actId2&&S.weekPlan&&S.weekPlan[_drag.origDateKey]){
-        const item=S.weekPlan[_drag.origDateKey].find(x=>x.actId===actId2);
-        if(item) item.idealSecs=newDur*60;
+      // 1. Update S.planned if exists
+      const plan=S.planned.find(x=>x.id===pid);
+      if(plan) plan.idealSecs=newSecs;
+
+      // 2. Always update S.weekPlan for this actId+date
+      if(actId){
+        if(!S.weekPlan)S.weekPlan={};
+        if(!S.weekPlan[origDateKey])S.weekPlan[origDateKey]=[];
+        let item=S.weekPlan[origDateKey].find(x=>x.actId===actId);
+        if(!item){item={actId,startH:Math.floor(_drag.origStartMin/60),startM:_drag.origStartMin%60,idealSecs:newSecs,subtasks:[]};S.weekPlan[origDateKey].push(item);}
+        else item.idealSecs=newSecs;
       }
+
+      // 3. Save in prefs too as backup
+      const offKey='po_'+new Date(origDateKey+'T12:00:00').toDateString();
+      if(!S.prefs)S.prefs={};if(!S.prefs[offKey])S.prefs[offKey]={};
+      if(!S.prefs[offKey][pid])S.prefs[offKey][pid]={abs:_drag.origStartMin};
+      S.prefs[offKey][pid].dur=newDur;
+
     } else {
       const newStart=Math.max(0,Math.min(1410,_drag.origStartMin+deltaMins));
-      const movedDay=newDateKey!==_drag.origDateKey;
+      const newH=Math.floor(newStart/60);
+      const newM=newStart%60;
 
-      // Save new time offset
-      if(!S.prefs)S.prefs={};
-      const offKey='po_'+newDateStr;
-      if(!S.prefs[offKey])S.prefs[offKey]={};
-      S.prefs[offKey][pid]={abs:newStart};
-
-      // Remove from old day offset if moved
-      if(movedDay){
-        const oldOffKey='po_'+new Date(_drag.origDateKey+'T12:00:00').toDateString();
-        if(S.prefs[oldOffKey]) delete S.prefs[oldOffKey][pid];
-      }
-
-      // Move planned item to new date
-      if(plan&&movedDay){
-        plan.addedAt=new Date(newDateKey+'T09:00:00').toISOString();
-      }
-      // Move weekPlan virtual to new date
-      if(!plan&&movedDay){
-        const actId=pid.replace('wpl_'+_drag.origDateKey+'_','');
-        const oldItems=S.weekPlan&&S.weekPlan[_drag.origDateKey];
-        if(oldItems){
-          const idx=oldItems.findIndex(x=>x.actId===actId);
+      // 1. Update S.weekPlan startH/startM (same or new date)
+      if(actId){
+        if(!S.weekPlan)S.weekPlan={};
+        // Remove from old date if moved
+        if(movedDay&&S.weekPlan[origDateKey]){
+          const idx=S.weekPlan[origDateKey].findIndex(x=>x.actId===actId);
           if(idx>=0){
-            const [item]=oldItems.splice(idx,1);
-            if(!oldItems.length) delete S.weekPlan[_drag.origDateKey];
-            item.startH=Math.floor(newStart/60);item.startM=newStart%60;
+            const[item]=S.weekPlan[origDateKey].splice(idx,1);
+            if(!S.weekPlan[origDateKey].length)delete S.weekPlan[origDateKey];
+            item.startH=newH;item.startM=newM;
             if(!S.weekPlan[newDateKey])S.weekPlan[newDateKey]=[];
             S.weekPlan[newDateKey].push(item);
           }
+        } else {
+          // Same day — just update startH/startM
+          if(!S.weekPlan[origDateKey])S.weekPlan[origDateKey]=[];
+          let item=S.weekPlan[origDateKey].find(x=>x.actId===actId);
+          if(!item){item={actId,startH:newH,startM:newM,idealSecs:_drag.origDur*60,subtasks:[]};S.weekPlan[origDateKey].push(item);}
+          else{item.startH=newH;item.startM=newM;}
         }
+      }
+
+      // 2. Update S.planned addedAt if moved day
+      const plan=S.planned.find(x=>x.id===pid);
+      if(plan&&movedDay) plan.addedAt=new Date(newDateKey+'T09:00:00').toISOString();
+
+      // 3. Save absolute position in prefs
+      const newDateStr=new Date(newDateKey+'T12:00:00').toDateString();
+      const offKey='po_'+newDateStr;
+      if(!S.prefs)S.prefs={};if(!S.prefs[offKey])S.prefs[offKey]={};
+      S.prefs[offKey][pid]={abs:newStart,dur:_drag.origDur};
+      // Remove old offset if moved
+      if(movedDay){
+        const oldOffKey='po_'+new Date(origDateKey+'T12:00:00').toDateString();
+        if(S.prefs[oldOffKey])delete S.prefs[oldOffKey][pid];
       }
     }
 
     _drag=null;
-    // Save first, then render — prevents snap-back
     save();
     renderIdealPlan();
   }
