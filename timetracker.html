@@ -541,7 +541,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
     <div class="date-nav-lbl" id="diaDateLbl" style="cursor:pointer;" onclick="diaDate=new Date();renderTimeline()">—</div>
     <button class="date-nav-btn" onclick="shiftDiaDate(+1)">›</button>
     <button class="tl-zoom-btn" onclick="tlScrollToNow()" style="font-size:9px;">⬤ ahora</button>
-    <select id="tlDaysCount" onchange="renderTimeline()"
+    <select id="tlDaysCount" onchange="localStorage.setItem('tl_days',this.value);renderTimeline()"
       style="background:var(--s0);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:10px;padding:2px 4px;outline:none;cursor:pointer;">
       <option value="1" selected>1d</option>
       <option value="2">2d</option>
@@ -562,13 +562,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
       <div id="planDateLbl" style="flex:1;text-align:center;font-size:11px;font-family:var(--mono);color:var(--text3);cursor:pointer;" onclick="planDate=new Date();renderIdealPlan()">Hoy</div>
       <button class="date-nav-btn" onclick="shiftPlanDate(+1)">›</button>
       <button class="tl-zoom-btn" onclick="iplanScrollToNow()" title="Ir a ahora">⬤ ahora</button>
-      <select id="planDaysCount" onchange="renderIdealPlan()"
+      <select id="planDaysCount" onchange="localStorage.setItem('plan_days',this.value);renderIdealPlan()"
         style="background:var(--s0);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:10px;padding:3px 4px;outline:none;cursor:pointer;">
         <option value="1">1d</option>
         <option value="2">2d</option>
         <option value="3">3d</option>
         <option value="5">5d</option>
-        <option value="7" selected>7d</option>
+        <option value="7">7d</option>
       </select>
       <button class="tl-zoom-btn" id="planWeekStartBtn" onclick="togglePlanWeekStart()"
         style="font-size:9px;" title="Inicio de semana">L</button>
@@ -4071,7 +4071,10 @@ function shiftDiaDate(d){
     diaDate.setMonth(diaDate.getMonth()+d);
     renderMonthCalendar();
   } else {
-    const daysCount=parseInt(document.getElementById('tlDaysCount')?.value||'1');
+    const savedTlDays=localStorage.getItem('tl_days')||'1';
+  const tlDaysSel=document.getElementById('tlDaysCount');
+  if(tlDaysSel&&tlDaysSel.value!==savedTlDays) tlDaysSel.value=savedTlDays;
+  const daysCount=parseInt(tlDaysSel?.value||savedTlDays);
     if(daysCount===7||daysCount===5){
       diaDate.setDate(diaDate.getDate()+d*7); // navigate week by week
     } else {
@@ -4535,7 +4538,6 @@ function confirmWplanEdit(){
 
   // Handle repeat
   const repeat=document.getElementById('wplanRepeat')?.value||'';
-  // Reset selector for next time
   if(document.getElementById('wplanRepeat')) document.getElementById('wplanRepeat').value='';
   if(document.getElementById('wplanUntilRow')) document.getElementById('wplanUntilRow').style.display='none';
   if(repeat){
@@ -4543,14 +4545,17 @@ function confirmWplanEdit(){
     const untilVal=document.getElementById('wplanUntil')?.value;
     const untilDate=untilVal?new Date(untilVal+'T23:59:59'):new Date(baseDate.getTime()+8*7*86400000);
     const dates=[];
-    // Generate dates up to untilDate
     let cur=new Date(baseDate);
+    // Start from NEXT day to avoid duplicating the current entry
+    cur.setDate(cur.getDate()+1);
     while(cur<=untilDate){
+      const dow=cur.getDay();
       if(repeat==='weekly'){
-        dates.push(cur.toISOString().slice(0,10));
-        cur.setDate(cur.getDate()+7);
+        // Same weekday as base
+        if(dow===baseDate.getDay()) dates.push(cur.toISOString().slice(0,10));
+        cur.setDate(cur.getDate()+1);
       } else if(repeat==='weekdays'){
-        const dow=cur.getDay();
+        // Mon-Fri ONLY (dow 1-5)
         if(dow>=1&&dow<=5) dates.push(cur.toISOString().slice(0,10));
         cur.setDate(cur.getDate()+1);
       } else if(repeat==='daily'){
@@ -4560,8 +4565,16 @@ function confirmWplanEdit(){
     }
     dates.forEach(dateKey=>{
       if(!S.weekPlan[dateKey])S.weekPlan[dateKey]=[];
+      // Don't duplicate same actId on same date
       if(!S.weekPlan[dateKey].find(x=>x.actId===item.actId)){
-        S.weekPlan[dateKey].push({...item,day:new Date(dateKey+'T12:00:00').getDay()});
+        // Use the exact startH/startM from the item being repeated
+        S.weekPlan[dateKey].push({
+          actId:item.actId,
+          startH:item.startH,
+          startM:item.startM,
+          idealSecs:item.idealSecs,
+          subtasks:[...(item.subtasks||[])]
+        });
       }
     });
   }
@@ -4972,7 +4985,11 @@ function renderIdealPlan(){
   const lbl=document.getElementById('planDateLbl');
   if(lbl) lbl.textContent=isToday?'Hoy':planDate.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
 
-  const daysCount=parseInt(document.getElementById('planDaysCount')?.value||'1');
+  // Restore saved days count
+  const savedPlanDays=localStorage.getItem('plan_days')||'7';
+  const planDaysSel=document.getElementById('planDaysCount');
+  if(planDaysSel&&planDaysSel.value!==savedPlanDays) planDaysSel.value=savedPlanDays;
+  const daysCount=parseInt(planDaysSel?.value||savedPlanDays);
   const planDates=[];
   if(daysCount===5){
     // 5d = Mon-Fri of the week containing planDate
@@ -5597,7 +5614,10 @@ function _buildTlDayCol(pd, viewStart, viewEnd, PX){
 function renderTimeline(){
   const el=document.getElementById('diaTimelineContent');
   const lbl=document.getElementById('diaDateLbl');
-  const daysCount=parseInt(document.getElementById('tlDaysCount')?.value||'1');
+  const savedTlDays=localStorage.getItem('tl_days')||'1';
+  const tlDaysSel=document.getElementById('tlDaysCount');
+  if(tlDaysSel&&tlDaysSel.value!==savedTlDays) tlDaysSel.value=savedTlDays;
+  const daysCount=parseInt(tlDaysSel?.value||savedTlDays);
   const isToday=diaDate.toDateString()===new Date().toDateString();
 
   // Build date array
