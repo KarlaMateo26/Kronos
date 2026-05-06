@@ -1201,6 +1201,7 @@ function _buildCompressedState(){
     actDivisions:S.actDivisions||[],
     deletedIds:(S.deletedIds||[]).slice(-200),
     deletedActIds:(S.deletedActIds||[]).slice(-100),
+    deletedWplan:(S.deletedWplan||[]).slice(-500),
     currentWeek:S.currentWeek,
     _lastModified:S._lastModified||Date.now()
   };
@@ -1440,20 +1441,36 @@ function pullFromCloud(){
         var mergedActs=localActIds.map(function(id){return actMap[id];})
           .concat(cloudOnlyActIds.map(function(id){return actMap[id];}));
 
-        // Merge weekPlan: union by date key, within each date union by actId index
+        // Merge deletedWplan tombstones
+        var localDelWplan=S.deletedWplan||[];
+        var cloudDelWplan=cloud.deletedWplan||[];
+        var deletedWplanSet=new Set([...localDelWplan,...cloudDelWplan]);
+
+        // Merge weekPlan: union by date key, respecting tombstones
         var localWPlan=S.weekPlan||{};
         var cloudWPlan=cloud.weekPlan||{};
-        var mergedWPlan=Object.assign({},cloudWPlan);
+        var mergedWPlan={};
+        // Start from cloud, filter tombstoned entries
+        Object.keys(cloudWPlan).forEach(function(dateKey){
+          var filtered=cloudWPlan[dateKey].filter(function(item){
+            return!deletedWplanSet.has(dateKey+'_'+item.actId);
+          });
+          if(filtered.length) mergedWPlan[dateKey]=filtered;
+        });
+        // Add local entries not in cloud, skip tombstoned
         Object.keys(localWPlan).forEach(function(dateKey){
-          if(!mergedWPlan[dateKey]){
-            mergedWPlan[dateKey]=localWPlan[dateKey];
-          } else {
-            // Union by actId — don't duplicate
-            var existing=mergedWPlan[dateKey].map(function(x){return x.actId;});
-            localWPlan[dateKey].forEach(function(item){
-              if(!existing.includes(item.actId)) mergedWPlan[dateKey].push(item);
-            });
-          }
+          localWPlan[dateKey].forEach(function(item){
+            var key=dateKey+'_'+item.actId;
+            if(deletedWplanSet.has(key)) return; // deleted
+            if(!mergedWPlan[dateKey]) mergedWPlan[dateKey]=[];
+            if(!mergedWPlan[dateKey].find(function(x){return x.actId===item.actId;})){
+              mergedWPlan[dateKey].push(item);
+            } else {
+              // Update existing with local version (local wins for startH/idealSecs)
+              var idx=mergedWPlan[dateKey].findIndex(function(x){return x.actId===item.actId;});
+              if(idx>=0) mergedWPlan[dateKey][idx]=item;
+            }
+          });
         });
 
         // Merge actDivisions: newer device wins; if same timestamp, local wins
@@ -1479,6 +1496,7 @@ function pullFromCloud(){
         finalState.divisions=mergedActDivs;
         finalState.deletedIds=[...deletedSet];
         finalState.deletedActIds=[...deletedActSet];
+        finalState.deletedWplan=[...deletedWplanSet];
         S=finalState;
         const wkPull=getWk();
         if(S.currentWeek!==wkPull){S.activities.forEach(function(a){a.weekTotal=0;});S.currentWeek=wkPull;}
@@ -1489,6 +1507,7 @@ function pullFromCloud(){
         if(!S.deletedIds)S.deletedIds=[];
         if(!S.deletedActIds)S.deletedActIds=[];
         if(!S.weekPlan)S.weekPlan={};
+        if(!S.deletedWplan)S.deletedWplan=[];
         if(!S.actDivisions||!S.actDivisions.length)S.actDivisions=[
           {id:'d_deberes',name:'Deberes'},{id:'d_daily',name:'Daily Advance'},{id:'d_otros',name:'Otros'}
         ];
@@ -4591,9 +4610,14 @@ function removeWplanDay(){
 
 function removeWplanEntry(dateKey,idx){
   if(!S.weekPlan[dateKey])return;
+  const item=S.weekPlan[dateKey][idx];
+  if(item){
+    if(!S.deletedWplan) S.deletedWplan=[];
+    S.deletedWplan.push(dateKey+'_'+item.actId);
+  }
   S.weekPlan[dateKey].splice(idx,1);
   if(!S.weekPlan[dateKey].length) delete S.weekPlan[dateKey];
-  save();renderWeekPlan();
+  save();forcePush();renderWeekPlan();
 }
 
 function removeWplanGroup(entries){
@@ -4612,12 +4636,16 @@ function removeWplanGroup(entries){
 }
 
 function removeWplanGroupByDow(dow, actId){
+  if(!S.deletedWplan) S.deletedWplan=[];
   Object.keys(S.weekPlan).forEach(dateKey=>{
     const dt=new Date(dateKey+'T12:00:00');
     if(dt.getDay()!==dow) return;
     S.weekPlan[dateKey]=S.weekPlan[dateKey].filter(x=>x.actId!==actId);
     if(!S.weekPlan[dateKey].length) delete S.weekPlan[dateKey];
+    // Add tombstone so merge never restores it
+    S.deletedWplan.push(dateKey+'_'+actId);
   });
+  if(S.deletedWplan.length>500) S.deletedWplan=S.deletedWplan.slice(-300);
   save();forcePush();renderWeekPlan();
 }
 
@@ -4850,12 +4878,15 @@ function iplanDeleteBlock(pid, type, dateKey){
     // Also remove from weekPlan if exists
     const actId=S.activities.find(a=>S.planned.some&&pid)?null:null; // find via session
   } else {
-    // Virtual block — extract actId from pid: wpl_DATEKEY_ACTID
     const prefix='wpl_'+dateKey+'_';
     const actId=pid.startsWith(prefix)?pid.slice(prefix.length):null;
-    if(actId&&S.weekPlan&&S.weekPlan[dateKey]){
-      S.weekPlan[dateKey]=S.weekPlan[dateKey].filter(x=>x.actId!==actId);
-      if(!S.weekPlan[dateKey].length) delete S.weekPlan[dateKey];
+    if(actId){
+      if(!S.deletedWplan) S.deletedWplan=[];
+      S.deletedWplan.push(dateKey+'_'+actId);
+      if(S.weekPlan&&S.weekPlan[dateKey]){
+        S.weekPlan[dateKey]=S.weekPlan[dateKey].filter(x=>x.actId!==actId);
+        if(!S.weekPlan[dateKey].length) delete S.weekPlan[dateKey];
+      }
     }
   }
   // Clean up prefs offset
