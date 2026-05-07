@@ -2172,10 +2172,11 @@ function startActivity(actId, plannedId, subtaskId){
     resolvedPlannedId=autoplan.id;
   }
 
+  const _now=new Date().toISOString();
   S.running[rKey]={
     rKey,actId,actName:act.name,actEmoji:act.emoji,
     plannedId:resolvedPlannedId,subtaskId:subtaskId||null,
-    sessionName:'',startTime:new Date().toISOString(),
+    sessionName:'',startTime:_now,lapStartTime:_now, // lapStartTime = real start, never reset on pause
     lapTotal:0,lapCount:0,paused:false,pausedAt:null,
     breakStart:null,breakTotal:0,breaks:[],realActId:null,
     subTotals:{},subSwitches:[],
@@ -2254,21 +2255,23 @@ function _doSaveLap(rKey,lapName,overrideSubId){
   const buckets=Object.entries(ctx.subTotals).filter(([,v])=>v>1);
   if(buckets.length===0){
     // no subtasks — single session
-    _commitLap(ctx,ctx.startTime,liveEnd,totalLapSecs,lapName);
+    _commitLap(ctx,ctx.lapStartTime||ctx.startTime,liveEnd,totalLapSecs,lapName);
   } else {
     // one session per subtask (preserving subtask attribution)
     buckets.forEach(([stKey,dur])=>{
       const stId=stKey==='__none__'?null:stKey;
       const origSub=ctx.subtaskId;
       ctx.subtaskId=stId;
-      _commitLap(ctx,ctx.startTime,liveEnd,dur,lapName);
+      _commitLap(ctx,ctx.lapStartTime||ctx.startTime,liveEnd,dur,lapName);
       ctx.subtaskId=origSub;
     });
   }
   // reset lap
-  ctx.startTime=new Date().toISOString();
+  const _newLapTime=new Date().toISOString();
+  ctx.startTime=_newLapTime;
+  ctx.lapStartTime=_newLapTime; // new lap starts now
   ctx.lapTotal=0;ctx.subTotals={};ctx.subSwitches=[];
-  ctx.breakTotal=0;ctx.breaks=[];ctx.breakStart=null; // reset breaks per lap
+  ctx.breakTotal=0;ctx.breaks=[];ctx.breakStart=null;
   ctx.lapCount=(ctx.lapCount||0)+1;ctx.paused=false;ctx.pausedAt=null;
   save();startTick(rKey);renderAll();
 }
@@ -2277,7 +2280,7 @@ function endSession(rKey){
   const ctx=S.running[rKey];if(!ctx)return;
   const liveSecs=ctx.paused?0:elapsed(ctx.startTime);
   const totalSecs=(ctx.lapTotal||0)+liveSecs;
-  if(totalSecs>1) _commitLap(ctx,ctx.startTime,new Date().toISOString(),totalSecs,'');
+  if(totalSecs>1) _commitLap(ctx,ctx.lapStartTime||ctx.startTime,new Date().toISOString(),totalSecs,'');
   stopTick(rKey);
   delete S.running[rKey];
   save();
