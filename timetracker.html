@@ -2798,20 +2798,36 @@ function renderPlanned(){
     unplannedRunning.forEach(ctx=>{
       // Get all subtasks associated with this activity (from subTotals + sessions)
       const subMap={}; // id -> {text, done}
-      // from subTotals keys
+      // First: load from ctx.plannedId (today's plan has the subtasks)
+      const runPlan=ctx.plannedId?S.planned.find(p=>p.id===ctx.plannedId):null;
+      // Also find today's plan for this activity (may differ from ctx.plannedId if it's yesterday's)
+      const todayPlan=S.planned.find(p=>p.actId===ctx.actId&&!p.done&&
+        (isTodayWindow(new Date(p.addedAt).toDateString())||p.addedAt==='2099-01-01T00:00:00.000Z'));
+      const effectivePlan=runPlan||todayPlan;
+      // If ctx.plannedId is stale (yesterday's), update it to today's
+      if(todayPlan&&ctx.plannedId!==todayPlan.id&&!runPlan){
+        ctx.plannedId=todayPlan.id;
+      }
+      // Load subtasks from effective plan
+      if(effectivePlan){
+        (effectivePlan.subtasks||[]).forEach(st=>{
+          subMap[st.id]={text:st.text,done:st.done};
+        });
+      }
+      // from subTotals keys (previously used subtasks)
       if(ctx.subTotals){
         Object.keys(ctx.subTotals).filter(k=>k!=='__none__').forEach(sid=>{
-          subMap[sid]=subMap[sid]||{text:sid,done:false};
+          if(!subMap[sid]) subMap[sid]={text:sid,done:false};
         });
       }
       // from current subtaskId
-      if(ctx.subtaskId) subMap[ctx.subtaskId]=subMap[ctx.subtaskId]||{text:ctx.subtaskId,done:false};
-      // from today's sessions
+      if(ctx.subtaskId&&!subMap[ctx.subtaskId]) subMap[ctx.subtaskId]={text:ctx.subtaskId,done:false};
+      // from today's sessions for this act
       S.sessions.filter(s=>s.actId===ctx.actId&&s.subtaskId&&new Date(s.startTime).toDateString()===new Date().toDateString())
         .forEach(s=>{
-          subMap[s.subtaskId]={text:s.subtaskName||s.subtaskId,done:false};
+          if(!subMap[s.subtaskId]) subMap[s.subtaskId]={text:s.subtaskName||s.subtaskId,done:false};
         });
-      // resolve names from planned items
+      // resolve names from all planned items (in case subMap has IDs without names)
       S.planned.forEach(p=>{
         (p.subtasks||[]).forEach(st=>{
           if(subMap[st.id]) subMap[st.id]={text:st.text,done:st.done};
@@ -2821,10 +2837,15 @@ function renderPlanned(){
       const noSubT=noSubSpent(ctx.actId,null);
       const subItems=Object.entries(subMap).map(([sid,st])=>{
         const t=subtaskSpent(sid);
-        return`<div class="subtask-item">
+        const isActive=ctx.subtaskId===sid&&!ctx.paused;
+        return`<div class="subtask-item" style="${isActive?'background:var(--accent-dim);border-radius:6px;':''}">
           <div class="subtask-check ${st.done?'done':''}" onclick="toggleSubtaskByIdFromCard('${ctx.rKey}','${sid}')"></div>
-          <span class="subtask-name ${st.done?'done-text':''}" style="${st.done?'':'color:var(--teal)'};">${esc(st.text)}</span>
+          <span class="subtask-name ${st.done?'done-text':''}" 
+            style="${isActive?'color:var(--accent);font-weight:600;':'color:var(--teal);'}cursor:pointer;"
+            onclick="setRunSubtask('${ctx.rKey}','${sid}')"
+            title="Toca para seleccionar esta subtarea">${esc(st.text)}</span>
           <span style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-right:4px;" id="st_t_${sid}">${fmtS(t)}</span>
+          ${isActive?`<span style="font-size:8px;color:var(--accent);font-family:var(--mono);">▶ activa</span>`:''}
         </div>`;
       }).join('');
 
