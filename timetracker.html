@@ -2289,16 +2289,21 @@ function endSession(rKey){
 }
 
 function _commitLap(ctx,startISO,endISO,secs,lapName){
-  const act=S.activities.find(a=>a.id===ctx.actId);
+  // Use realAct if set (user ran a different activity than planned)
+  const realAct=ctx.realActId?S.activities.find(a=>a.id===ctx.realActId):null;
+  const effectiveActId=realAct?realAct.id:ctx.actId;
+  const effectiveActName=realAct?realAct.name:ctx.actName;
+  const effectiveActEmoji=realAct?realAct.emoji:ctx.actEmoji;
+
+  const act=S.activities.find(a=>a.id===effectiveActId);
   if(act) act.weekTotal=(act.weekTotal||0)+secs;
   const planned=ctx.plannedId?S.planned.find(p=>p.id===ctx.plannedId):null;
   const subtask=planned&&ctx.subtaskId?planned.subtasks.find(s=>s.id===ctx.subtaskId):null;
-  const realAct=ctx.realActId?S.activities.find(a=>a.id===ctx.realActId):null;
-  // Stable ID: based on startTime + actId + lapCount so both devices agree on same session
-  const stableId='s_'+ctx.actId.slice(-6)+'_'+new Date(startISO).getTime()+'_'+(ctx.lapCount||0);
+
+  const stableId='s_'+effectiveActId.slice(-6)+'_'+new Date(startISO).getTime()+'_'+(ctx.lapCount||0);
   S.sessions.unshift({
     id:stableId,groupId:ctx.rKey,
-    actId:ctx.actId,actName:ctx.actName,actEmoji:ctx.actEmoji,
+    actId:effectiveActId,actName:effectiveActName,actEmoji:effectiveActEmoji,
     plannedId:ctx.plannedId||null,
     subtaskId:ctx.subtaskId||null,subtaskName:subtask?subtask.text:null,
     sessionName:ctx.sessionName||null,
@@ -2307,7 +2312,9 @@ function _commitLap(ctx,startISO,endISO,secs,lapName){
     startTime:startISO,endTime:endISO,duration:secs,
     breakTotal:ctx.breakTotal||0,
     breaks:ctx.breaks||[],
-    realActId:ctx.realActId||null,realActName:realAct?realAct.name:null,
+    // Keep reference to original planned act if different
+    plannedActId:realAct?ctx.actId:null,
+    plannedActName:realAct?ctx.actName:null,
     note:''
   });
   if(S.sessions.length>3000)S.sessions=S.sessions.slice(0,3000);
