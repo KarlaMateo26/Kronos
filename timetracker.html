@@ -985,8 +985,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
       <div id="apSubsList" style="display:flex;flex-direction:column;gap:5px;"></div>
     </div>
     <div class="field">
-      <label>Fecha (opcional — por defecto hoy)</label>
-      <input type="date" id="apDate" style="font-family:var(--mono);">
+      <label style="display:flex;align-items:center;gap:8px;">
+        <span>Fecha</span>
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);cursor:pointer;">
+          <input type="checkbox" id="apNoDate" onchange="document.getElementById('apDateWrap').style.display=this.checked?'none':'block'">
+          Sin fecha (no date)
+        </label>
+      </label>
+      <div id="apDateWrap">
+        <input type="date" id="apDate" style="font-family:var(--mono);">
+      </div>
     </div>
     <div class="field"><label>Nota (opcional)</label><textarea id="apNote" placeholder="¿Qué esperas lograr hoy con esta actividad?"></textarea></div>
     <button class="mbtn" onclick="confirmAddPlanned()">Agregar al plan</button>
@@ -1038,13 +1046,36 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
     </div>
     <div class="dfield" id="dtSubRow" style="display:none"><div class="dlbl">Subtarea</div><div class="dval" id="dtSub"></div></div>
     <div class="dfield" id="dtDevRow" style="display:none"><div class="dlbl">Real (desviación)</div><div class="dval" id="dtDev" style="color:var(--pink)"></div></div>
-    <div class="dfield" id="dtBreaksRow" style="display:none"><div class="dlbl">Descansos</div><div class="dval" id="dtBreaks" style="color:var(--amber);font-size:11px;line-height:1.6;"></div></div>
+    <div class="dfield" id="dtBreaksRow" style="display:none">
+      <div class="dlbl">Descansos</div>
+      <div class="dval" id="dtBreaks" style="color:var(--amber);font-size:11px;line-height:1.6;"></div>
+    </div>
+    <div class="dfield" id="dtBreakEditRow">
+      <div class="dlbl">Ajustar descanso</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+        <input type="number" id="dtBreakH" placeholder="0" min="0" style="width:68px;font-family:var(--mono);text-align:center;">
+        <span style="font-size:10px;color:var(--text3);">h</span>
+        <input type="number" id="dtBreakM" placeholder="0" min="0" max="59" style="width:68px;font-family:var(--mono);text-align:center;">
+        <span style="font-size:10px;color:var(--text3);">min</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+        <div>
+          <div style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-bottom:3px;">INICIO DESCANSO</div>
+          <input type="time" id="dtBreakStart" style="background:var(--s0);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:11px;padding:4px 6px;width:100%;outline:none;">
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-bottom:3px;">FIN DESCANSO</div>
+          <input type="time" id="dtBreakEnd" style="background:var(--s0);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:11px;padding:4px 6px;width:100%;outline:none;">
+        </div>
+      </div>
+      <div style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-top:4px;">Al ingresar inicio y fin se calculará la duración automáticamente</div>
+    </div>
     <div class="dfield" id="dtDurRow">
       <div class="dlbl">Ajustar duración</div>
       <div style="display:flex;gap:6px;align-items:center;">
-        <input type="number" id="dtDurH" placeholder="0" min="0" style="width:56px;font-family:var(--mono);text-align:center;">
+        <input type="number" id="dtDurH" placeholder="0" min="0" style="width:68px;font-family:var(--mono);text-align:center;">
         <span style="font-size:10px;color:var(--text3);">h</span>
-        <input type="number" id="dtDurM" placeholder="0" min="0" max="59" style="width:56px;font-family:var(--mono);text-align:center;">
+        <input type="number" id="dtDurM" placeholder="0" min="0" max="59" style="width:68px;font-family:var(--mono);text-align:center;">
         <span style="font-size:10px;color:var(--text3);">min</span>
       </div>
     </div>
@@ -1078,12 +1109,11 @@ const DEFAULT_ACTS=[
 // ═══════════════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════════════
-// "Today" window: current day OR if it's before 4am, also yesterday
 function isTodayWindow(dateStr){
+  if(dateStr==='Mon Jan 01 2099') return true; // backlog always visible
   const now=new Date();
   const today=now.toDateString();
   if(dateStr===today) return true;
-  // before 4am: also show yesterday's plans
   if(now.getHours()<4){
     const yesterday=new Date(now);yesterday.setDate(yesterday.getDate()-1);
     if(dateStr===yesterday.toDateString()) return true;
@@ -1775,9 +1805,12 @@ function openAddPlanned(actId){
   const defM=act.defaultIdealM!==undefined?act.defaultIdealM:0;
   document.getElementById('apHours').value=defH||'';
   document.getElementById('apMins').value=defM||'';
-  // Default date = today, but user can change
   const apDateEl=document.getElementById('apDate');
   if(apDateEl) apDateEl.value=new Date().toISOString().slice(0,10);
+  const apNoDate=document.getElementById('apNoDate');
+  if(apNoDate){apNoDate.checked=false;}
+  const apDateWrap=document.getElementById('apDateWrap');
+  if(apDateWrap) apDateWrap.style.display='block';
   document.getElementById('apNote').value='';
   // Pre-fill start time from activity default if set
   const defStart=act.defaultStartH!==undefined?act.defaultStartH:null;
@@ -1902,9 +1935,11 @@ function confirmAddPlanned(){
   const apStartHVal=document.getElementById('apStartH')?.value;
   const apStartMVal=document.getElementById('apStartM')?.value||'0';
   const hasStartTime=apStartHVal!==''&&apStartHVal!==undefined&&apStartHVal!==null;
-  // Use selected date or today
+  const apNoDateChecked=document.getElementById('apNoDate')?.checked;
   const apDateVal=document.getElementById('apDate')?.value;
-  const planAddedAt=apDateVal?new Date(apDateVal+'T09:00:00').toISOString():new Date().toISOString();
+  // No date = far future placeholder (backlog)
+  const planAddedAt=apNoDateChecked?'2099-01-01T00:00:00.000Z':
+    (apDateVal?new Date(apDateVal+'T09:00:00').toISOString():new Date().toISOString());
   const newPlan={
     id:genId(),actId:act.id,actName:act.name,actEmoji:act.emoji,
     idealSecs:ideal,note:noteVal,
@@ -2496,7 +2531,15 @@ function renderPlanned(){
     _expandedPlans.add(pid);
   });
   // Show all non-done planned items — they stay until explicitly finished/removed
-  const todayPlanned=S.planned.filter(p=>!p.done);
+  const nowMs=new Date().getTime();
+  // Show: backlog + past/today undone + next 7 days upcoming
+  const todayPlanned=S.planned.filter(p=>{
+    if(p.done) return false;
+    if(p.addedAt==='2099-01-01T00:00:00.000Z') return true; // no date
+    const planMs=new Date(p.addedAt).getTime();
+    const sevenDaysMs=7*24*60*60*1000;
+    return planMs<=nowMs+sevenDaysMs; // show up to 7 days ahead
+  });
   document.getElementById('plannedCount').textContent=todayPlanned.length?`(${todayPlanned.length})`:'';
 
   // Ensure actDivisions exists with defaults
@@ -2619,7 +2662,12 @@ function renderPlanned(){
       <div class="pc-header">
         <div class="pc-emoji">${p.actEmoji}</div>
         <div class="pc-info">
-          <div class="pc-name">${esc(p.actName)}${p.auto?` <span style="font-size:9px;color:var(--text3);font-family:var(--mono);font-style:italic;">new</span>`:''}</div>
+          <div class="pc-name">${esc(p.actName)}${p.auto?` <span style="font-size:9px;color:var(--text3);font-family:var(--mono);font-style:italic;">new</span>`:''}
+            ${p.addedAt==='2099-01-01T00:00:00.000Z'?
+              `<span style="font-size:8px;font-family:var(--mono);color:var(--text3);margin-left:4px;cursor:pointer;" onclick="editPlannedDate('${p.id}')">no date</span>`:
+              `<span style="font-size:8px;font-family:var(--mono);color:var(--text3);margin-left:4px;cursor:pointer;" onclick="editPlannedDate('${p.id}')" title="Cambiar fecha">${new Date(p.addedAt).toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'numeric'})}</span>`
+            }
+          </div>
           <div class="pc-meta">${metaBadges}</div>
         </div>
         <div class="pc-icon-btns">
@@ -2817,6 +2865,20 @@ function renderPlanned(){
     if(card&&wrap){card.classList.add('pc-expanded');wrap.classList.add('open');}
   });
   } catch(e){ console.error('renderPlanned error:',e); }
+}
+
+function editPlannedDate(pid){
+  const p=S.planned.find(x=>x.id===pid);if(!p)return;
+  const isBacklog=p.addedAt==='2099-01-01T00:00:00.000Z';
+  const cur=isBacklog?new Date().toISOString().slice(0,10):new Date(p.addedAt).toISOString().slice(0,10);
+  const newDate=prompt('Nueva fecha (YYYY-MM-DD) o vacío para backlog:',isBacklog?'':cur);
+  if(newDate===null)return; // cancelled
+  if(newDate.trim()===''){
+    p.addedAt='2099-01-01T00:00:00.000Z';
+  } else if(newDate.match(/^\d{4}-\d{2}-\d{2}$/)){
+    p.addedAt=new Date(newDate+'T09:00:00').toISOString();
+  } else return;
+  save();renderPlanned();
 }
 
 function setPlannedDivision(pid, divId){
@@ -3627,7 +3689,27 @@ function openDetail(id){
   } else {
     breaksRow.style.display='none';
   }
-  // Build lap selector — all laps in same group + "Sin lap" option
+  // Populate break editor
+  const breakEditRow=document.getElementById('dtBreakEditRow');
+  if(breakEditRow){
+    const bt=s.breakTotal||0;
+    document.getElementById('dtBreakH').value=Math.floor(bt/3600)||'';
+    document.getElementById('dtBreakM').value=Math.floor((bt%3600)/60)||'';
+    // Populate break start/end if breaks exist
+    const bsEl=document.getElementById('dtBreakStart');
+    const beEl=document.getElementById('dtBreakEnd');
+    if(bsEl&&beEl){
+      if(s.breaks&&s.breaks.length){
+        // Use first break start and last break end
+        const firstBreak=s.breaks[0];
+        const lastBreak=s.breaks[s.breaks.length-1];
+        bsEl.value=new Date(firstBreak.start).toTimeString().slice(0,5);
+        beEl.value=new Date(lastBreak.end).toTimeString().slice(0,5);
+      } else {
+        bsEl.value='';beEl.value='';
+      }
+    }
+  }
   const grpSessions=S.sessions.filter(x=>x.groupId===s.groupId).sort((a,b)=>new Date(a.startTime)-new Date(b.startTime));
   const lapSel=document.getElementById('dtLapSel');
   lapSel.innerHTML='';
@@ -3673,6 +3755,24 @@ function saveDetailNote(){
       const act=S.activities.find(a=>a.id===s.actId);
       if(act) act.weekTotal=Math.max(0,(act.weekTotal||0)+diff);
     }
+  }
+  // Save break time — if start+end provided, calculate from those
+  const bsVal=document.getElementById('dtBreakStart')?.value;
+  const beVal=document.getElementById('dtBreakEnd')?.value;
+  if(bsVal&&beVal){
+    // Calculate from time range
+    const sessionDate=new Date(s.startTime).toDateString();
+    const bsDate=new Date(sessionDate+' '+bsVal);
+    let beDate=new Date(sessionDate+' '+beVal);
+    if(beDate<bsDate) beDate.setDate(beDate.getDate()+1); // crosses midnight
+    const calcBreak=Math.max(0,Math.floor((beDate-bsDate)/1000));
+    s.breakTotal=calcBreak;
+    // Update breaks array
+    s.breaks=[{start:bsDate.toISOString(),end:beDate.toISOString(),dur:calcBreak}];
+  } else {
+    const bh=parseInt(document.getElementById('dtBreakH')?.value)||0;
+    const bm=parseInt(document.getElementById('dtBreakM')?.value)||0;
+    s.breakTotal=bh*3600+bm*60;
   }
   save();renderHistory();renderWeekGrid();closeModal('detailModal');
 }
