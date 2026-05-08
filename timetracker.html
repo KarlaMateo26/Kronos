@@ -1806,7 +1806,9 @@ function openAddPlanned(actId){
   document.getElementById('apHours').value=defH||'';
   document.getElementById('apMins').value=defM||'';
   const apDateEl=document.getElementById('apDate');
-  if(apDateEl) apDateEl.value=new Date().toISOString().slice(0,10);
+  const _ld=new Date();
+  const _localDate=`${_ld.getFullYear()}-${String(_ld.getMonth()+1).padStart(2,'0')}-${String(_ld.getDate()).padStart(2,'0')}`;
+  if(apDateEl) apDateEl.value=_localDate;
   const apNoDate=document.getElementById('apNoDate');
   if(apNoDate){apNoDate.checked=false;}
   const apDateWrap=document.getElementById('apDateWrap');
@@ -1910,8 +1912,10 @@ function confirmAddPlanned(){
   if(ideal>0){act.defaultIdealH=h;act.defaultIdealM=m;}
 
   // Check for active (not done) entry — only block if same date AND not auto
+  const _n2=new Date();
+  const _tdl=_n2.getFullYear()+'-'+String(_n2.getMonth()+1).padStart(2,'0')+'-'+String(_n2.getDate()).padStart(2,'0');
   const selectedDate=apNoDateChecked?'2099-01-01':
-    (document.getElementById('apDate')?.value||new Date().toISOString().slice(0,10));
+    (document.getElementById('apDate')?.value||_tdl);
   const existing=S.planned.find(p=>{
     if(p.actId!==pendingActId||p.done) return false;
     if(p.addedAt==='2099-01-01T00:00:00.000Z') return selectedDate==='2099-01-01';
@@ -1947,8 +1951,16 @@ function confirmAddPlanned(){
   const apNoDateChecked=document.getElementById('apNoDate')?.checked;
   const apDateVal=document.getElementById('apDate')?.value;
   // No date = far future placeholder (backlog)
-  const planAddedAt=apNoDateChecked?'2099-01-01T00:00:00.000Z':
-    (apDateVal?new Date(apDateVal+'T09:00:00').toISOString():new Date().toISOString());
+  let planAddedAt;
+  if(apNoDateChecked){
+    planAddedAt='2099-01-01T00:00:00.000Z';
+  } else if(apDateVal){
+    const [py,pm,pd]=apDateVal.split('-').map(Number);
+    const localNoon=new Date(py,pm-1,pd,12,0,0);
+    planAddedAt=localNoon.toISOString();
+  } else {
+    planAddedAt=new Date().toISOString();
+  }
   const newPlan={
     id:genId(),actId:act.id,actName:act.name,actEmoji:act.emoji,
     idealSecs:ideal,note:noteVal,
@@ -4405,12 +4417,15 @@ function getCalendarItemsForDate(date){
   });
 
   // 2. S.planned items for this date (dashed border)
+  // Use local date comparison to avoid UTC timezone shift
+  function _lds(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  const _targetDate=_lds(date);
   S.planned.forEach(p=>{
     if(p.done) return;
     if(shownActIds.has(p.actId)) return; // already shown via weekPlan
-    const pDate=p.addedAt==='2099-01-01T00:00:00.000Z'?null:new Date(p.addedAt);
-    if(!pDate) return; // no-date items don't show in calendar
-    if(pDate.toDateString()!==dateStr) return;
+    if(p.addedAt==='2099-01-01T00:00:00.000Z') return; // no-date items don't show in calendar
+    const pDate=new Date(p.addedAt);
+    if(_lds(pDate)!==_targetDate) return;
     // Get startH from saved offset in prefs
     const offKey='po_'+dateStr;
     const savedOffset=S.prefs&&S.prefs[offKey]&&S.prefs[offKey][p.id];
