@@ -1909,8 +1909,15 @@ function confirmAddPlanned(){
   // Save as default for next time
   if(ideal>0){act.defaultIdealH=h;act.defaultIdealM=m;}
 
-  // Check for active (not done) entry today
-  const existing=S.planned.find(p=>p.actId===pendingActId&&!p.done&&new Date(p.addedAt).toDateString()===today);
+  // Check for active (not done) entry — only block if same date AND not auto
+  const selectedDate=apNoDateChecked?'2099-01-01':
+    (document.getElementById('apDate')?.value||new Date().toISOString().slice(0,10));
+  const existing=S.planned.find(p=>{
+    if(p.actId!==pendingActId||p.done) return false;
+    if(p.addedAt==='2099-01-01T00:00:00.000Z') return selectedDate==='2099-01-01';
+    const planDate=new Date(p.addedAt).toISOString().slice(0,10);
+    return planDate===selectedDate;
+  });
   if(existing){
     if(existing.auto){
       // Upgrade auto-entry to manual
@@ -1919,8 +1926,10 @@ function confirmAddPlanned(){
       delete existing.auto;
       save();closeModal('addPlannedModal');renderAll();return;
     }
-    // Already manually planned today — just close
-    closeModal('addPlannedModal');renderAll();return;
+    // Already manually planned for this date — update it instead of blocking
+    existing.idealSecs=ideal||existing.idealSecs;
+    if(noteVal) existing.note=noteVal;
+    save();closeModal('addPlannedModal');renderAll();return;
   }
 
   // No active entry — create a new one (even if there's a done entry today)
@@ -4380,6 +4389,47 @@ var _wplanShowWeekend=localStorage.getItem('wplan_show_weekend')!=='0'; // defau
 function setWplanWeekStart(v){_wplanWeekStart=v;localStorage.setItem('wplan_week_start',v);renderWeekPlan();}
 function toggleWplanWeekend(){_wplanShowWeekend=!_wplanShowWeekend;localStorage.setItem('wplan_show_weekend',_wplanShowWeekend?'1':'0');renderWeekPlan();}
 
+// ── Unified calendar items for a date: weekPlan + S.planned ──
+function getCalendarItemsForDate(date){
+  const dateKey=date.toISOString().slice(0,10);
+  const dateStr=date.toDateString();
+  const result=[];
+  const shownActIds=new Set();
+
+  // 1. weekPlan entries (solid border)
+  const wplanItems=S.weekPlan&&S.weekPlan[dateKey]||[];
+  wplanItems.forEach((item,idx)=>{
+    if(S.deletedWplan&&S.deletedWplan.includes(dateKey+'_'+item.actId)) return;
+    result.push({item,idx,source:'wplan'});
+    shownActIds.add(item.actId);
+  });
+
+  // 2. S.planned items for this date (dashed border)
+  S.planned.forEach(p=>{
+    if(p.done) return;
+    if(shownActIds.has(p.actId)) return; // already shown via weekPlan
+    const pDate=p.addedAt==='2099-01-01T00:00:00.000Z'?null:new Date(p.addedAt);
+    if(!pDate) return; // no-date items don't show in calendar
+    if(pDate.toDateString()!==dateStr) return;
+    // Get startH from saved offset in prefs
+    const offKey='po_'+dateStr;
+    const savedOffset=S.prefs&&S.prefs[offKey]&&S.prefs[offKey][p.id];
+    const startH=savedOffset?Math.floor(savedOffset.abs/60):
+      (p._wplanStartH!==undefined?p._wplanStartH:undefined);
+    const startM=savedOffset?(savedOffset.abs%60):
+      (p._wplanStartM||0);
+    result.push({
+      item:{actId:p.actId,startH,startM,idealSecs:p.idealSecs,subtasks:p.subtasks},
+      idx:-1,source:'planned',pid:p.id
+    });
+    shownActIds.add(p.actId);
+  });
+
+  // Sort by startH
+  result.sort((a,b)=>(a.item.startH??99)-(b.item.startH??99));
+  return result;
+}
+
 function renderWeekPlan(){
   const el=document.getElementById('diaWeekPlanContent');
   if(!el)return;
@@ -4476,32 +4526,17 @@ function renderWeekPlanWeek(el, refDate){
       </div>
       <div class="wplan-items" id="wpi_${day}">`;
 
-    // Show items for this specific date: weekPlan + S.planned
+    // Unified: weekPlan + S.planned for this date
     const dateKey=dayDate.toISOString().slice(0,10);
-    const dayItems=S.weekPlan[dateKey]||[];
-    // Also include S.planned items for this date
-    const plannedItems=S.planned.filter(p=>
-      new Date(p.addedAt).toDateString()===dayDate.toDateString()&&!p.done
-    );
-    // Build combined list, deduplicate by actId
-    const shownActIds=new Set();
-    const allItems=[];
-    dayItems.forEach((item,idx)=>{allItems.push({item,idx,source:'wplan'});shownActIds.add(item.actId);});
-    plannedItems.forEach(p=>{
-      if(!shownActIds.has(p.actId)){
-        allItems.push({item:{actId:p.actId,startH:p._wplanStartH,startM:p._wplanStartM||0,idealSecs:p.idealSecs},idx:-1,source:'planned',pid:p.id});
-        shownActIds.add(p.actId);
-      }
-    });
-    allItems.sort((a,b)=>(a.item.startH||0)-(b.item.startH||0));
+    const allItems=getCalendarItemsForDate(dayDate);
 
-    allItems.forEach(({item,idx,source,pid})=>{
+    allItems.forEach(({item,idx,source})=>{
       const act=S.activities.find(a=>a.id===item.actId);
       if(!act)return;
       const color=actColor(act.id);
       const timeStr=item.startH!==undefined
         ?`${String(item.startH).padStart(2,'0')}:${String(item.startM||0).padStart(2,'0')}`:'';
-      const subsStr=(item.subtasks||[]).slice(0,2).map(s=>s.text).join(', ');
+      const subsStr=(item.subtasks||[]).slice(0,2).map(s=>typeof s==='string'?s:s.text).join(', ');
       const clickFn=source==='wplan'
         ?`openWplanEdit('${dateKey}',${idx})`
         :`openAddPlanned('${item.actId}')`;
@@ -4568,15 +4603,7 @@ function renderWeekPlanMonth(el, refDate){
         const isPast=dayDate<new Date(now.getFullYear(),now.getMonth(),now.getDate());
         const dayNum=dayDate.getDate();
         const mDateKey=dayDate.toISOString().slice(0,10);
-        const mItems=S.weekPlan[mDateKey]||[];
-        const mPlanned=S.planned.filter(p=>
-          new Date(p.addedAt).toDateString()===dayDate.toDateString()&&!p.done
-        );
-        const mShown=new Set();
-        const mAll=[];
-        mItems.forEach((item,idx)=>{mAll.push({item,idx,source:'wplan'});mShown.add(item.actId);});
-        mPlanned.forEach(p=>{if(!mShown.has(p.actId)){mAll.push({item:{actId:p.actId,startH:p._wplanStartH,idealSecs:p.idealSecs},idx:-1,source:'planned'});mShown.add(p.actId);}});
-        mAll.sort((a,b)=>(a.item.startH||0)-(b.item.startH||0));
+        const mAll=getCalendarItemsForDate(dayDate);
 
         html+=`<div class="wplan-col ${isPast?'wplan-past':''}">
           <div class="wplan-day-hdr ${isToday?'today':''}" style="opacity:${isOtherMonth?0.3:1};">
