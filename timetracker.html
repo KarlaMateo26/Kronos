@@ -6231,6 +6231,522 @@ pullFromCloud().finally(()=>{
     if(ctx&&!ctx.paused&&!timers[k])startTick(k);
   });
 });
+
+// ── FIX #1: helper para fecha local (NO UTC). Lo usan varios fixes.
+function localDateKey(d){
+  d=d||new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+// ── FIX #4: migrar lapStartTime en sesiones running de versiones anteriores
+Object.keys(S.running||{}).forEach(function(k){
+  var ctx=S.running[k];
+  if(ctx && !ctx.lapStartTime && ctx.startTime) ctx.lapStartTime=ctx.startTime;
+});
+
+// ── FIX #5: closeModal limpia todas las variables _pending* y _edit*
+closeModal = function(id){
+  document.getElementById(id).classList.remove('show');
+  activeDetailId=null; pendingActId=null;
+  if(id==='pendingSubModal') _pendingDonePid=null;
+  if(id==='sessNameModal'||id==='lapNameModal') pendingSessKey=null;
+  if(id==='editSubModal'){ _editSubPid=null; _editSubSid=null; }
+  if(id==='wplanModal'||id==='wplanPickerModal'){ _wplanEditActId=null; _wplanEditDay=null; }
+  if(id==='iplanEditModal'){ _iplanEditPid=null; _iplanEditDateStr=null; _iplanEditType=null; }
+};
+
+// ── FIX #1: applyWeekPlanToday usa zona local
+applyWeekPlanToday = function(){
+  if(!S.weekPlan) return;
+  const todayStr=new Date().toDateString();
+  const todayKey=localDateKey();
+  const dayItems=S.weekPlan[todayKey]||[];
+  dayItems.forEach(function(item){
+    const act=S.activities.find(a=>a.id===item.actId); if(!act) return;
+    const already=S.planned.find(p=>p.actId===item.actId && new Date(p.addedAt).toDateString()===todayStr);
+    if(already) return;
+    const newPlan={
+      id:genId(), actId:act.id, actName:act.name, actEmoji:act.emoji,
+      idealSecs:item.idealSecs||0, note:'',
+      subtasks:(item.subtasks||[]).map(s=>({id:genId(),text:s.text,done:false})),
+      done:false, addedAt:new Date().toISOString(), fromWeekPlan:true
+    };
+    S.planned.push(newPlan);
+    if(item.startH!==undefined){
+      const offKey='po_'+todayStr;
+      if(!S.prefs) S.prefs={};
+      if(!S.prefs[offKey]) S.prefs[offKey]={};
+      S.prefs[offKey][newPlan.id]={abs:item.startH*60+(item.startM||0)};
+    }
+  });
+};
+
+// ── FIX #1: getCalendarItemsForDate usa zona local
+getCalendarItemsForDate = function(date){
+  const dateKey=localDateKey(date);
+  const dateStr=date.toDateString();
+  const result=[];
+  const shownActIds=new Set();
+  const wplanItems=S.weekPlan&&S.weekPlan[dateKey]||[];
+  wplanItems.forEach(function(item,idx){
+    if(S.deletedWplan&&S.deletedWplan.includes(dateKey+'_'+item.actId)) return;
+    result.push({item:item, idx:idx, source:'wplan'});
+    shownActIds.add(item.actId);
+  });
+  const _targetDate=localDateKey(date);
+  S.planned.forEach(function(p){
+    if(p.done) return;
+    if(shownActIds.has(p.actId)) return;
+    if(p.addedAt==='2099-01-01T00:00:00.000Z') return;
+    const pDate=new Date(p.addedAt);
+    if(localDateKey(pDate)!==_targetDate) return;
+    const offKey='po_'+dateStr;
+    const savedOffset=S.prefs&&S.prefs[offKey]&&S.prefs[offKey][p.id];
+    const startH=savedOffset?Math.floor(savedOffset.abs/60):(p._wplanStartH!==undefined?p._wplanStartH:undefined);
+    const startM=savedOffset?(savedOffset.abs%60):(p._wplanStartM||0);
+    result.push({
+      item:{actId:p.actId, startH:startH, startM:startM, idealSecs:p.idealSecs, subtasks:p.subtasks},
+      idx:-1, source:'planned', pid:p.id
+    });
+    shownActIds.add(p.actId);
+  });
+  result.sort((a,b)=>(a.item.startH??99)-(b.item.startH??99));
+  return result;
+};
+
+// ── FIX #1+#2+#3: confirmAddPlanned completo
+confirmAddPlanned = function(){
+  const act=S.activities.find(a=>a.id===pendingActId); if(!act) return;
+  const h=parseInt(document.getElementById('apHours').value)||0;
+  const m=parseInt(document.getElementById('apMins').value)||0;
+  const ideal=(h*3600+m*60)||0;
+  const noteVal=document.getElementById('apNote').value.trim();
+  if(ideal>0){ act.defaultIdealH=h; act.defaultIdealM=m; }
+
+  // FIX #2: leer apNoDateChecked al inicio (antes se usaba antes de declararse)
+  const apNoDateChecked=document.getElementById('apNoDate')?.checked;
+  const selectedDate=apNoDateChecked?'2099-01-01':(document.getElementById('apDate')?.value||localDateKey());
+
+  // FIX #1: comparar fechas en zona local
+  const existing=S.planned.find(p=>{
+    if(p.actId!==pendingActId||p.done) return false;
+    if(p.addedAt==='2099-01-01T00:00:00.000Z') return selectedDate==='2099-01-01';
+    return localDateKey(new Date(p.addedAt))===selectedDate;
+  });
+  if(existing){
+    if(existing.auto){
+      existing.idealSecs=ideal; existing.note=noteVal; delete existing.auto;
+      save(); closeModal('addPlannedModal'); renderAll(); return;
+    }
+    existing.idealSecs=ideal||existing.idealSecs;
+    if(noteVal) existing.note=noteVal;
+    save(); closeModal('addPlannedModal'); renderAll(); return;
+  }
+
+  // FIX #3: si ya hay entrada en weekPlan para este día+actId, actualízala en vez de duplicar
+  if(!apNoDateChecked && S.weekPlan && S.weekPlan[selectedDate]){
+    const wpEntry=S.weekPlan[selectedDate].find(x=>x.actId===pendingActId);
+    if(wpEntry){
+      if(ideal>0) wpEntry.idealSecs=ideal;
+      const apStartHVal0=document.getElementById('apStartH')?.value;
+      if(apStartHVal0!==''&&apStartHVal0!==undefined){
+        wpEntry.startH=parseInt(apStartHVal0);
+        wpEntry.startM=parseInt(document.getElementById('apStartM')?.value)||0;
+      }
+      // Si la fecha es hoy, materializa en S.planned para verlo en el tracker
+      if(selectedDate===localDateKey()){
+        const newPlan={
+          id:genId(), actId:act.id, actName:act.name, actEmoji:act.emoji,
+          idealSecs:wpEntry.idealSecs||ideal, note:noteVal,
+          subtasks:(wpEntry.subtasks||[]).map(s=>({id:genId(),text:s.text,done:false})),
+          done:false, addedAt:new Date().toISOString(),
+          divisionId:act.divisionId||'d_otros', fromWeekPlan:true
+        };
+        S.planned.push(newPlan);
+        if(wpEntry.startH!==undefined){
+          const offKey='po_'+new Date().toDateString();
+          if(!S.prefs) S.prefs={};
+          if(!S.prefs[offKey]) S.prefs[offKey]={};
+          S.prefs[offKey][newPlan.id]={abs:wpEntry.startH*60+(wpEntry.startM||0)};
+        }
+      }
+      save(); closeModal('addPlannedModal'); renderAll(); return;
+    }
+  }
+
+  const subsList=document.getElementById('apSubsList');
+  const storedItems=subsList&&subsList.dataset.items?JSON.parse(subsList.dataset.items):[];
+  const checkedBoxes=subsList?[...subsList.querySelectorAll('.ap-sub-cb')]:[];
+  const allSubs=storedItems
+    .filter((_,i)=>checkedBoxes[i]&&checkedBoxes[i].checked)
+    .map(item=>({id:genId(),text:item.text,done:false}));
+  const apStartHVal=document.getElementById('apStartH')?.value;
+  const apStartMVal=document.getElementById('apStartM')?.value||'0';
+  const hasStartTime=apStartHVal!==''&&apStartHVal!==undefined&&apStartHVal!==null;
+  const apDateVal=document.getElementById('apDate')?.value;
+  let planAddedAt;
+  if(apNoDateChecked){ planAddedAt='2099-01-01T00:00:00.000Z'; }
+  else if(apDateVal){
+    const [py,pm,pd]=apDateVal.split('-').map(Number);
+    planAddedAt=new Date(py,pm-1,pd,12,0,0).toISOString();
+  } else { planAddedAt=new Date().toISOString(); }
+  const newPlan={
+    id:genId(), actId:act.id, actName:act.name, actEmoji:act.emoji,
+    idealSecs:ideal, note:noteVal, subtasks:allSubs,
+    done:false, addedAt:planAddedAt,
+    divisionId:act.divisionId||'d_otros'
+  };
+  S.planned.push(newPlan);
+  if(hasStartTime){
+    const sh=parseInt(apStartHVal);
+    const sm=parseInt(apStartMVal)||0;
+    const offKey='po_'+new Date().toDateString();
+    if(!S.prefs) S.prefs={};
+    if(!S.prefs[offKey]) S.prefs[offKey]={};
+    S.prefs[offKey][newPlan.id]={abs:sh*60+sm};
+    act.defaultStartH=sh; act.defaultStartM=sm;
+  }
+  act.pendingSubtasks=[];
+  save(); closeModal('addPlannedModal'); renderAll();
+};
+
+// ── FIX #13a: confirmWplanEdit añade recurId a cada réplica
+confirmWplanEdit = function(){
+  if(!S.weekPlan[_wplanEditDay]){ S.weekPlan[_wplanEditDay]=[]; }
+  let item=S.weekPlan[_wplanEditDay][_wplanEditActId];
+  if(!item) return;
+  const sh=document.getElementById('wplanStartH').value;
+  item.startH=sh!==''?parseInt(sh):undefined;
+  item.startM=parseInt(document.getElementById('wplanStartM').value)||0;
+  const ih=parseInt(document.getElementById('wplanIdealH').value)||0;
+  const im=parseInt(document.getElementById('wplanIdealM').value)||0;
+  item.idealSecs=(ih*3600+im*60)||0;
+
+  const repeat=document.getElementById('wplanRepeat')?.value||'';
+  if(document.getElementById('wplanRepeat')) document.getElementById('wplanRepeat').value='';
+  if(document.getElementById('wplanUntilRow')) document.getElementById('wplanUntilRow').style.display='none';
+
+  if(repeat){
+    const baseDate=new Date(_wplanEditDay+'T12:00:00');
+    const untilVal=document.getElementById('wplanUntil')?.value;
+    const untilDate=untilVal?new Date(untilVal+'T23:59:59'):new Date(baseDate.getTime()+8*7*86400000);
+    if(!item.recurId) item.recurId='r_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
+    item.recurType=repeat;
+    item.recurUntil=untilVal||null;
+    const recurId=item.recurId;
+    const dates=[];
+    let cur=new Date(baseDate);
+    cur.setDate(cur.getDate()+1);
+    while(cur<=untilDate){
+      const dow=cur.getDay();
+      if(repeat==='weekly'){
+        if(dow===baseDate.getDay()) dates.push(localDateKey(cur));
+        cur.setDate(cur.getDate()+1);
+      } else if(repeat==='weekdays'){
+        if(dow>=1 && dow<=5) dates.push(localDateKey(cur));
+        cur.setDate(cur.getDate()+1);
+      } else if(repeat==='daily'){
+        dates.push(localDateKey(cur));
+        cur.setDate(cur.getDate()+1);
+      }
+    }
+    dates.forEach(function(dateKey){
+      if(!S.weekPlan[dateKey]) S.weekPlan[dateKey]=[];
+      if(!S.weekPlan[dateKey].find(x=>x.actId===item.actId && x.recurId===recurId)){
+        S.weekPlan[dateKey].push({
+          actId:item.actId, startH:item.startH, startM:item.startM,
+          idealSecs:item.idealSecs, subtasks:[...(item.subtasks||[])],
+          recurId:recurId
+        });
+      }
+    });
+  }
+  save(); closeModal('wplanModal'); renderWeekPlan();
+};
+
+// ── FIX #13b: removeWplanGroupByDow con confirm + nueva removeWplanByRecurId
+removeWplanGroupByDow = function(dow, actId){
+  if(!confirm('Esto eliminará TODAS las entradas de esta actividad en este día de la semana (incluyendo entradas manuales no recurrentes).\n\n¿Continuar?')) return;
+  if(!S.deletedWplan) S.deletedWplan=[];
+  Object.keys(S.weekPlan).forEach(function(dateKey){
+    const dt=new Date(dateKey+'T12:00:00');
+    if(dt.getDay()!==dow) return;
+    S.weekPlan[dateKey]=S.weekPlan[dateKey].filter(x=>x.actId!==actId);
+    if(!S.weekPlan[dateKey].length) delete S.weekPlan[dateKey];
+    S.deletedWplan.push(dateKey+'_'+actId);
+  });
+  if(S.deletedWplan.length>500) S.deletedWplan=S.deletedWplan.slice(-300);
+  save(); forcePush(); renderWeekPlan();
+};
+
+// Nueva: borra SOLO las entradas con este recurId. Preserva manuales del mismo día.
+window.removeWplanByRecurId = function(recurId){
+  if(!recurId) return;
+  if(!S.deletedWplan) S.deletedWplan=[];
+  Object.keys(S.weekPlan).forEach(function(dateKey){
+    const items=S.weekPlan[dateKey]||[];
+    items.forEach(function(item){
+      if(item.recurId===recurId) S.deletedWplan.push(dateKey+'_'+item.actId+'_'+recurId);
+    });
+    S.weekPlan[dateKey]=items.filter(x=>x.recurId!==recurId);
+    if(!S.weekPlan[dateKey].length) delete S.weekPlan[dateKey];
+  });
+  if(S.deletedWplan.length>500) S.deletedWplan=S.deletedWplan.slice(-300);
+  save(); forcePush(); renderWeekPlan();
+};
+
+// ── FIX #11: _doSaveLap preserva estado pausado
+_doSaveLap = function(rKey, lapName, overrideSubId){
+  const ctx=S.running[rKey]; if(!ctx) return;
+  const liveEnd=new Date().toISOString();
+  const liveSecs=ctx.paused?0:elapsed(ctx.startTime);
+  const totalLapSecs=(ctx.lapTotal||0)+liveSecs;
+  const wasPaused=ctx.paused; // FIX #11: recordar para preservar
+  if(totalLapSecs<2){
+    ctx.startTime=new Date().toISOString();
+    ctx.lapTotal=0; ctx.subTotals={}; ctx.subSwitches=[];
+    ctx.lapCount=(ctx.lapCount||0)+1; ctx.paused=false; ctx.pausedAt=null;
+    save(); startTick(rKey); renderAll(); return;
+  }
+  if(!ctx.subTotals) ctx.subTotals={};
+  const key=ctx.subtaskId||'__none__';
+  ctx.subTotals[key]=(ctx.subTotals[key]||0)+liveSecs;
+  const buckets=Object.entries(ctx.subTotals).filter(([,v])=>v>1);
+  if(buckets.length===0){
+    _commitLap(ctx, ctx.lapStartTime||ctx.startTime, liveEnd, totalLapSecs, lapName);
+  } else {
+    buckets.forEach(([stKey,dur])=>{
+      const stId=stKey==='__none__'?null:stKey;
+      const origSub=ctx.subtaskId;
+      ctx.subtaskId=stId;
+      _commitLap(ctx, ctx.lapStartTime||ctx.startTime, liveEnd, dur, lapName);
+      ctx.subtaskId=origSub;
+    });
+  }
+  const _newLapTime=new Date().toISOString();
+  ctx.startTime=_newLapTime;
+  ctx.lapStartTime=_newLapTime;
+  ctx.lapTotal=0; ctx.subTotals={}; ctx.subSwitches=[];
+  ctx.breakTotal=0; ctx.breaks=[]; ctx.breakStart=null;
+  ctx.lapCount=(ctx.lapCount||0)+1;
+  // FIX #11: preservar estado pausado
+  ctx.paused=wasPaused;
+  ctx.pausedAt=wasPaused?_newLapTime:null;
+  save();
+  if(!wasPaused) startTick(rKey);
+  else stopTick(rKey);
+  renderAll();
+};
+
+// ── FIX #18: togglePlannedDone limpia flag unplanned
+togglePlannedDone = function(pid){
+  const p=S.planned.find(x=>x.id===pid); if(!p) return;
+  if(p.done){ p.done=false; save(); renderAll(); return; }
+  const pending=p.subtasks.filter(st=>!st.done);
+  if(pending.length===0){
+    // FIX #18
+    p.subtasks.forEach(st=>{ if(st.unplanned) delete st.unplanned; });
+    p.done=true; save(); renderAll(); return;
+  }
+  _pendingDonePid=pid;
+  const list=document.getElementById('pendingSubList');
+  list.innerHTML=pending.map(st=>'<div class="subtask-item"><input type="checkbox" class="pst-cb" id="pst_'+st.id+'" checked style="width:14px;height:14px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;"><label for="pst_'+st.id+'" class="subtask-name" style="cursor:pointer;">'+esc(st.text)+'</label></div>').join('');
+  openModal('pendingSubModal');
+};
+
+// ── FIX #18: confirmPendingDone limpia flag unplanned
+confirmPendingDone = function(saveForNext){
+  const p=S.planned.find(x=>x.id===_pendingDonePid); if(!p) return;
+  if(saveForNext){
+    document.querySelectorAll('.pst-cb').forEach(cb=>{
+      const sid=cb.id.replace('pst_','');
+      const st=p.subtasks.find(s=>s.id===sid);
+      if(st && !cb.checked) st.keepNext=true;
+    });
+    const toCarry=p.subtasks.filter(st=>!st.done);
+    const act=S.activities.find(a=>a.id===p.actId);
+    if(act){
+      if(!act.pendingSubtasks) act.pendingSubtasks=[];
+      toCarry.forEach(st=>{
+        if(!act.pendingSubtasks.find(ps=>ps.id===st.id))
+          act.pendingSubtasks.push({id:st.id, text:st.text});
+      });
+    }
+  }
+  // FIX #18: limpiar flag unplanned
+  p.subtasks.forEach(st=>{ if(st.unplanned) delete st.unplanned; });
+  p.done=true;
+  save(); closeModal('pendingSubModal'); renderAll();
+};
+
+// ── FIX #22: saveDetailNote valida descanso ≤ duración
+saveDetailNote = function(){
+  const s=S.sessions.find(x=>x.id===activeDetailId); if(!s) return;
+  s.note=document.getElementById('dtNote').value.trim();
+  let newDur=s.duration;
+  const durRow=document.getElementById('dtDurRow');
+  if(durRow){
+    const h=parseInt(document.getElementById('dtDurH').value)||0;
+    const m=parseInt(document.getElementById('dtDurM').value)||0;
+    newDur=h*3600+m*60;
+  }
+  let newBreak=s.breakTotal||0;
+  let newBreaks=null;
+  const bsVal=document.getElementById('dtBreakStart')?.value;
+  const beVal=document.getElementById('dtBreakEnd')?.value;
+  if(bsVal && beVal){
+    const sessionDate=new Date(s.startTime).toDateString();
+    const bsDate=new Date(sessionDate+' '+bsVal);
+    let beDate=new Date(sessionDate+' '+beVal);
+    if(beDate<bsDate) beDate.setDate(beDate.getDate()+1);
+    newBreak=Math.max(0, Math.floor((beDate-bsDate)/1000));
+    newBreaks=[{start:bsDate.toISOString(), end:beDate.toISOString(), dur:newBreak}];
+  } else {
+    const bh=parseInt(document.getElementById('dtBreakH')?.value)||0;
+    const bm=parseInt(document.getElementById('dtBreakM')?.value)||0;
+    const computed=bh*3600+bm*60;
+    if(computed!==newBreak){
+      newBreak=computed;
+      if(newBreak===0) newBreaks=[];
+    }
+  }
+  // FIX #22: validar coherencia
+  const effectiveDur=newDur>0?newDur:s.duration;
+  if(newBreak>effectiveDur){
+    const ok=confirm('⚠️ El descanso ('+fmtS(newBreak)+') es MAYOR que la duración ('+fmtS(effectiveDur)+').\n\nEsto suele ser un error.\n\nOK = aplicar de todos modos\nCancelar = recortar el descanso a la duración');
+    if(!ok){
+      newBreak=effectiveDur;
+      if(newBreaks && newBreaks.length){
+        newBreaks[0].dur=newBreak;
+        const bs=new Date(newBreaks[0].start).getTime();
+        newBreaks[0].end=new Date(bs+newBreak*1000).toISOString();
+      }
+    }
+  }
+  if(newDur>0 && newDur!==s.duration){
+    const diff=newDur-s.duration;
+    s.duration=newDur;
+    s.endTime=new Date(new Date(s.startTime).getTime()+newDur*1000).toISOString();
+    const act=S.activities.find(a=>a.id===s.actId);
+    if(act) act.weekTotal=Math.max(0, (act.weekTotal||0)+diff);
+  }
+  s.breakTotal=newBreak;
+  if(newBreaks!==null) s.breaks=newBreaks;
+  save(); renderHistory(); renderWeekGrid(); closeModal('detailModal');
+};
+
+// ── FIX #13c: openAddPlanned agrupa recurrencias por recurId (preciso) y dow (legacy)
+openAddPlanned = function(actId){
+  const act=S.activities.find(a=>a.id===actId); if(!act) return;
+  pendingActId=actId;
+  document.getElementById('apTitle').textContent=act.emoji+' '+act.name;
+  const defH=act.defaultIdealH!==undefined?act.defaultIdealH:0;
+  const defM=act.defaultIdealM!==undefined?act.defaultIdealM:0;
+  document.getElementById('apHours').value=defH||'';
+  document.getElementById('apMins').value=defM||'';
+  const apDateEl=document.getElementById('apDate');
+  if(apDateEl) apDateEl.value=localDateKey(); // FIX #1
+  const apNoDate=document.getElementById('apNoDate');
+  if(apNoDate) apNoDate.checked=false;
+  const apDateWrap=document.getElementById('apDateWrap');
+  if(apDateWrap) apDateWrap.style.display='block';
+  document.getElementById('apNote').value='';
+  const defStart=act.defaultStartH!==undefined?act.defaultStartH:null;
+  const apSH=document.getElementById('apStartH');
+  const apSM=document.getElementById('apStartM');
+  if(apSH) apSH.value=defStart!==null?String(defStart):'';
+  if(apSM) apSM.value=act.defaultStartM!==undefined?String(act.defaultStartM):'0';
+  const pending=act.pendingSubtasks||[];
+  const defaults=act.defaultSubtasks||[];
+  const subsSection=document.getElementById('apSubsSection');
+  const subsList=document.getElementById('apSubsList');
+  const allItems=[
+    ...pending.map(p=>({text:p.text, checked:true, type:'pending'})),
+    ...defaults.filter(d=>!pending.some(p=>p.text.toLowerCase()===d.toLowerCase()))
+      .map(d=>({text:d, checked:true, type:'default'}))
+  ];
+  if(allItems.length && subsList && subsSection){
+    subsSection.style.display='';
+    subsList.innerHTML=allItems.map((item,i)=>'<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--s0);border-radius:7px;cursor:pointer;"><input type="checkbox" class="ap-sub-cb" data-idx="'+i+'" '+(item.checked?'checked':'')+' style="width:14px;height:14px;accent-color:var(--accent);flex-shrink:0;"><span style="font-size:12px;flex:1;">'+esc(item.text)+'</span>'+(item.type==='pending'?'<span style="font-size:8px;color:var(--amber);font-family:var(--mono);">↩</span>':'<span style="font-size:8px;color:var(--text3);font-family:var(--mono);">★</span>')+'</label>').join('');
+    subsList.dataset.items=JSON.stringify(allItems);
+  } else if(subsSection){ subsSection.style.display='none'; }
+
+  const activePlansEl=document.getElementById('apActivePlans');
+  const activePlansList=document.getElementById('apActivePlansList');
+  const activePlans=S.planned.filter(p=>p.actId===actId && !p.done);
+  const recurrenceEntries=[];
+  if(S.weekPlan){
+    Object.entries(S.weekPlan).forEach(([dateKey,items])=>{
+      items.forEach((item,idx)=>{
+        if(item.actId===actId) recurrenceEntries.push({dateKey, idx, item});
+      });
+    });
+  }
+  recurrenceEntries.sort((a,b)=>a.dateKey.localeCompare(b.dateKey));
+
+  if(activePlansEl && activePlansList){
+    let html='';
+    activePlans.forEach(p=>{
+      const d=new Date(p.addedAt);
+      const lbl=d.toLocaleDateString('es-MX', {weekday:'short',day:'numeric',month:'short'});
+      html+='<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border2);"><span style="font-size:11px;font-family:var(--mono);color:var(--teal);flex:1;">📅 '+lbl+'</span><button onclick="removePlanned(\''+p.id+'\');openAddPlanned(\''+actId+'\');" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:0 4px;">✕</button></div>';
+    });
+    // FIX #13c
+    if(recurrenceEntries.length){
+      const dayNames=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+      const byRecur={};
+      const noRecurEntries=[];
+      recurrenceEntries.forEach(e=>{
+        if(e.item.recurId){
+          if(!byRecur[e.item.recurId]){
+            byRecur[e.item.recurId]={recurId:e.item.recurId, recurType:e.item.recurType||'weekly', count:0, first:e.dateKey, last:e.dateKey, startH:e.item.startH, startM:e.item.startM, dows:new Set()};
+          }
+          const g=byRecur[e.item.recurId];
+          g.count++;
+          g.dows.add(new Date(e.dateKey+'T12:00:00').getDay());
+          if(e.dateKey>g.last) g.last=e.dateKey;
+          if(e.dateKey<g.first) g.first=e.dateKey;
+        } else {
+          noRecurEntries.push(e);
+        }
+      });
+      const byDow={};
+      noRecurEntries.forEach(({dateKey, idx, item})=>{
+        const dow=new Date(dateKey+'T12:00:00').getDay();
+        if(!byDow[dow]) byDow[dow]={dow, count:0, first:dateKey, last:dateKey, startH:item.startH, startM:item.startM};
+        byDow[dow].count++;
+        if(dateKey>byDow[dow].last) byDow[dow].last=dateKey;
+      });
+      const totalGroups=Object.keys(byRecur).length+Object.keys(byDow).length;
+      if(totalGroups){
+        html+='<div style="font-size:9px;color:var(--text3);letter-spacing:1px;font-family:var(--mono);margin-top:8px;margin-bottom:4px;">RECURRENCIAS EN CALENDARIO</div>';
+        Object.values(byRecur).forEach(g=>{
+          const timeStr=g.startH!==undefined?' · '+String(g.startH).padStart(2,'0')+':'+String(g.startM||0).padStart(2,'0'):'';
+          const lastDt=new Date(g.last+'T12:00:00');
+          const lastLbl=lastDt.getDate()+'/'+(lastDt.getMonth()+1);
+          const dowsArr=[...g.dows].sort();
+          const dowsLbl=dowsArr.length===5 && dowsArr.join(',')==='1,2,3,4,5'?'L–V':
+            dowsArr.length===1?'cada '+dayNames[dowsArr[0]]:
+            dowsArr.length===7?'todos los días':dowsArr.map(d=>dayNames[d]).join('/');
+          html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border2);"><span style="font-size:11px;color:var(--accent);flex:1;">↻ '+dowsLbl+timeStr+' · '+g.count+'x hasta '+lastLbl+'</span><button onclick="removeWplanByRecurId(\''+g.recurId+'\');openAddPlanned(\''+actId+'\');" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:0 4px;" title="Eliminar solo esta serie">✕</button></div>';
+        });
+        Object.values(byDow).forEach(g=>{
+          const timeStr=g.startH!==undefined?' · '+String(g.startH).padStart(2,'0')+':'+String(g.startM||0).padStart(2,'0'):'';
+          const lastDt=new Date(g.last+'T12:00:00');
+          const lastLbl=lastDt.getDate()+'/'+(lastDt.getMonth()+1);
+          html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border2);"><span style="font-size:11px;color:var(--text2);flex:1;" title="Entradas sin grupo de recurrencia">📌 '+dayNames[g.dow]+timeStr+' · '+g.count+'x hasta '+lastLbl+'</span><button onclick="removeWplanGroupByDow('+g.dow+',\''+actId+'\');openAddPlanned(\''+actId+'\');" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:0 4px;" title="Eliminar todas las entradas de este día (incluyendo manuales)">✕</button></div>';
+        });
+      }
+    }
+    if(html){ activePlansList.innerHTML=html; activePlansEl.style.display=''; }
+    else activePlansEl.style.display='none';
+  }
+  openModal('addPlannedModal');
+};
+
+// Re-renderiza con las funciones nuevas y persiste la migración de lapStartTime
+try{ save(); renderAll(); }catch(e){ console.warn('post-patch render:', e); }
+console.log('✓ Kronos patch v1 aplicado — 11 fixes activos');
 </script>
 </body>
 </html>
