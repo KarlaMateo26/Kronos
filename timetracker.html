@@ -472,6 +472,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .iplan-now-dot{position:absolute;left:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--red);}
 .iplan-start-input{position:absolute;background:var(--s0);border:1px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:10px;color:var(--text);padding:2px 4px;z-index:5;cursor:pointer;}
 .iplan-empty{text-align:center;padding:40px 16px;color:var(--text3);font-family:var(--mono);font-size:11px;}
+
+/* ── ACTIVE TOGGLE ── */
+.act-status-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block;margin-right:4px;}
+.act-status-dot.on{background:var(--green);}
+.act-status-dot.off{background:var(--text3);}
+.act-row.act-inactive{opacity:.45;}
 </style>
 </head>
 <body>
@@ -525,7 +531,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   <div class="week-grid" id="weekGrid"></div>
 
   <!-- ACTIVITIES -->
-  <div class="sec-lbl">actividades</div>
+  <div class="sec-lbl">actividades
+    <span>
+      <select id="actFilterSel" onchange="renderActList()"
+        style="background:var(--s1);border:1px solid var(--border);border-radius:7px;color:var(--text3);font-family:var(--mono);font-size:9px;padding:3px 8px;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;">
+        <option value="active">● activos</option>
+        <option value="all">○ todos</option>
+      </select>
+    </span>
+  </div>
   <div class="act-list" id="actList"></div>
 </div>
 
@@ -917,6 +931,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
       </select>
       <button onclick="document.getElementById('actDefStartH').value=''" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;padding:4px;">✕</button>
     </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--s0);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:12px;">
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--text);">Estado</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px;">Solo las activas aparecen en el tracker</div>
+      </div>
+      <button id="actActiveToggle" onclick="toggleActActiveEdit()"
+        style="border:none;border-radius:20px;padding:6px 16px;font-family:var(--sans);font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;">
+        Activo
+      </button>
+    </div>
     <button class="mbtn" onclick="confirmAddAct()">Guardar</button>
     <button class="mcancel" onclick="closeModal('addActModal')">Cancelar</button>
   </div>
@@ -1153,6 +1177,7 @@ let timers={}; // rKey -> intervalId
 let selEmoji=EMOJIS[0];
 const ACT_PALETTE=['#6c63ff','#ff5fa0','#2dd4c0','#f59e0b','#1db954','#ff4f6a','#a78bfa','#fb923c','#38bdf8','#e879f9','#84cc16','#f43f5e','#06b6d4','#f97316','#8b5cf6','#10b981'];
 let selColor=ACT_PALETTE[0];
+let _actActiveEdit=true; // state of the active toggle while modal is open
 let pendingActId=null;   // for add-planned modal
 let pendingSessKey=null; // for session name modal
 let activeDetailId=null;
@@ -1207,7 +1232,7 @@ function _buildCompressedState(){
   // Keep only what's needed — strip redundant/computed fields
   var lean={
     activities:(S.activities||[]).map(function(a){
-      var r={id:a.id,name:a.name,emoji:a.emoji,color:a.color,divisionId:a.divisionId};
+      var r={id:a.id,name:a.name,emoji:a.emoji,color:a.color,divisionId:a.divisionId,active:a.active!==false};
       if(a.defaultSubtasks&&a.defaultSubtasks.length) r.defaultSubtasks=a.defaultSubtasks;
       if(a.defaultStartH!==undefined) r.defaultStartH=a.defaultStartH;
       if(a.defaultStartM!==undefined) r.defaultStartM=a.defaultStartM;
@@ -1759,6 +1784,14 @@ function migrateDivisionIds(){
         changed=true;
       }
     }
+  });
+  if(changed) save();
+}
+
+function migrateActiveField(){
+  let changed=false;
+  S.activities.forEach(a=>{
+    if(a.active===undefined){a.active=true;changed=true;}
   });
   if(changed) save();
 }
@@ -3492,18 +3525,28 @@ function renderActList(){
   actListEl.style.display='block';
   actListEl.style.padding='0';
 
+  const filterSel=document.getElementById('actFilterSel');
+  const showOnlyActive=!filterSel||filterSel.value==='active';
+
+  // Determine which activities to show per division
+  const visibleActs=showOnlyActive
+    ? S.activities.filter(a=>a.active!==false)
+    : S.activities;
+
   // Same board-wrap as planned
   let html=`<div class="board-wrap" id="actBoardWrap">`;
 
   divs.forEach(div=>{
-    const divActs=S.activities.filter(a=>(a.divisionId||'d_otros')===div.id);
+    const divActs=visibleActs.filter(a=>(a.divisionId||'d_otros')===div.id);
+    const divAllActs=S.activities.filter(a=>(a.divisionId||'d_otros')===div.id);
+    const hiddenCount=divAllActs.length-divActs.length;
     html+=`<div class="board-col" draggable="true"
       ondragstart="divDragStart(event,'${div.id}')"
       ondragover="divDragOver(event,'${div.id}')"
       ondrop="divDrop(event,'${div.id}')">
       <div class="board-hdr">
         <span class="board-hdr-name" ondblclick="editActDivision('${div.id}')">${esc(div.name)}</span>
-        ${divActs.length?`<span class="board-hdr-count">(${divActs.length})</span>`:''}
+        ${divActs.length?`<span class="board-hdr-count">(${divActs.length}${hiddenCount?`+${hiddenCount}`:``})</span>`:''}
         <button onclick="addActDivision()" style="background:none;border:none;color:var(--border2);cursor:pointer;font-size:14px;padding:0 2px;margin-left:auto;line-height:1;" title="Nueva división">+</button>
       </div>
       <div class="board-items" id="abi_${div.id}"
@@ -3518,15 +3561,16 @@ function renderActList(){
   actListEl.innerHTML=html;
 
   // Insert act cards into columns (like planned board)
-  S.activities.forEach(a=>{
+  visibleActs.forEach(a=>{
     const added=todayActiveIds.includes(a.id);
+    const isActive=a.active!==false;
     const divId=a.divisionId||'d_otros';
     const col=document.getElementById('abi_'+divId)||document.getElementById('abi_d_otros');
     if(!col)return;
     const empty=col.querySelector('.board-empty');
     if(empty)empty.remove();
     const wrapper=document.createElement('div');
-    wrapper.innerHTML=`<div class="act-row" id="ar_${a.id}"
+    wrapper.innerHTML=`<div class="act-row${isActive?'':' act-inactive'}" id="ar_${a.id}"
       draggable="true"
       ondragstart="actDragStart(event,'${a.id}')"
       ondragover="actDragOver(event,'${a.id}')"
@@ -3541,13 +3585,11 @@ function renderActList(){
       <div class="act-info">
         <div class="act-name">${esc(a.name)}</div>
         <div class="act-wk">Semana: ${fmtS(a.weekTotal||0)}</div>
-
       </div>
       <div class="act-btns">
         <button class="act-today-btn ${added?'added':''}" onclick="openAddPlanned('${a.id}')">
           ${(()=>{
             const activePlans=S.planned.filter(p=>p.actId===a.id&&!p.done);
-            // Check weekPlan recurrence
             const hasRecurrence=S.weekPlan&&Object.values(S.weekPlan).some(items=>items.some(x=>x.actId===a.id));
             if(activePlans.length) return '✓ Planeado';
             if(hasRecurrence) return '↻ Recurrente';
@@ -3884,7 +3926,28 @@ function openAddAct(editActId){
   const dsm=document.getElementById('actDefStartM');
   if(dsh) dsh.value=act&&act.defaultStartH!==undefined?String(act.defaultStartH):'';
   if(dsm) dsm.value=act&&act.defaultStartM!==undefined?String(act.defaultStartM):'0';
+  // Active toggle
+  _actActiveEdit=act?act.active!==false:true;
+  _refreshActiveToggleBtn();
   openModal('addActModal');
+}
+function _refreshActiveToggleBtn(){
+  const btn=document.getElementById('actActiveToggle');
+  if(!btn)return;
+  if(_actActiveEdit){
+    btn.textContent='● Activo';
+    btn.style.background='var(--green)';
+    btn.style.color='#fff';
+  } else {
+    btn.textContent='○ Inactivo';
+    btn.style.background='var(--s2)';
+    btn.style.color='var(--text3)';
+    btn.style.border='1px solid var(--border)';
+  }
+}
+function toggleActActiveEdit(){
+  _actActiveEdit=!_actActiveEdit;
+  _refreshActiveToggleBtn();
 }
 function selEp(e){selEmoji=e;document.querySelectorAll('.ep').forEach(el=>el.classList.toggle('sel',el.textContent===e));}
 function selCol(col){selColor=col;document.querySelectorAll('.cp').forEach(el=>el.classList.toggle('sel',el.style.background===col||el.style.backgroundColor===col));}
@@ -3949,12 +4012,13 @@ function confirmAddAct(){
       act.name=n;act.emoji=selEmoji;act.color=selColor;
       act.defaultSubtasks=[..._editingDefaultSubs];
       act.divisionId=actDivId;
+      act.active=_actActiveEdit;
       if(hasDefStart){act.defaultStartH=parseInt(dshVal);act.defaultStartM=parseInt(dsmVal)||0;}
       else{delete act.defaultStartH;delete act.defaultStartM;}
     }
   } else {
     const newAct={id:'act_'+Date.now(),name:n,emoji:selEmoji,color:selColor,weekTotal:0,
-      defaultSubtasks:[..._editingDefaultSubs],divisionId:actDivId};
+      defaultSubtasks:[..._editingDefaultSubs],divisionId:actDivId,active:_actActiveEdit};
     if(hasDefStart){newAct.defaultStartH=parseInt(dshVal);newAct.defaultStartM=parseInt(dsmVal)||0;}
     S.activities.push(newAct);
   }
@@ -6215,6 +6279,7 @@ if(_savedRaw){
 
 // Render immediately from local data
 migrateDivisionIds();
+migrateActiveField();
 pruneOldData();
 try{renderAll();}catch(e){console.warn('Initial render:',e);}
 Object.keys(S.running).forEach(k=>{
@@ -6225,6 +6290,7 @@ Object.keys(S.running).forEach(k=>{
 // Then sync with cloud in background
 pullFromCloud().finally(()=>{
   migrateDivisionIds();
+  migrateActiveField();
   try{smartRenderAfterPull();}catch(e){console.warn('Post-pull render:',e);}
   Object.keys(S.running).forEach(k=>{
     const ctx=S.running[k];
