@@ -478,14 +478,111 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .act-active-quick{background:none;border:none;cursor:pointer;font-size:12px;padding:0 5px;line-height:1;touch-action:manipulation;transition:color .15s;flex-shrink:0;color:var(--green);}
 .act-active-quick.off{color:var(--border2);}
 .act-active-quick:active{transform:scale(.85);}
+
+/* ── DIARIO ── */
+#page-diario.active{display:flex;flex-direction:column;}
+#dmain.active-main{display:flex!important;}
+.dlck-card{background:var(--s1);border:1px solid var(--border);border-radius:22px;padding:28px 22px;display:flex;flex-direction:column;align-items:stretch;gap:14px;width:100%;max-width:340px;}
+.dlck-input{width:100%;padding:11px 14px;background:var(--s2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--sans);font-size:14px;outline:none;text-align:center;letter-spacing:1px;transition:border-color .2s;}
+.dlck-input:focus{border-color:var(--accent);}
+.dlck-btn{width:100%;padding:11px;background:var(--accent);border:none;border-radius:10px;color:#fff;font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s;}
+.dlck-btn:hover{opacity:.88;}
+.dlck-skip{background:none;border:none;color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer;text-decoration:underline;text-align:center;}
+.dsubtab{flex:1;padding:7px 2px;background:var(--s1);border:1px solid var(--border);border-radius:8px;color:var(--text3);font-family:var(--sans);font-size:10px;font-weight:600;cursor:pointer;transition:all .2s;text-align:center;}
+.dsubtab.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.dcol{flex:0 0 82vw;max-width:330px;background:var(--s1);border:1px solid var(--border);border-radius:14px;display:flex;flex-direction:column;overflow:hidden;height:100%;}
+.dcol.dcol-today{border-color:var(--accent);}
+.dcol-hdr{padding:11px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.dcol-tag{font-family:var(--mono);font-size:10px;color:var(--accent);letter-spacing:.8px;font-weight:600;}
+.dcol-date{font-family:var(--sans);font-size:10px;color:var(--text3);}
+.dcol-today .dcol-tag{color:#fff;}
+.dcol-today .dcol-hdr{background:rgba(108,99,255,.1);}
+.dcol-body{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:16px;}
+.dcol-empty{text-align:center;padding:40px 16px;color:var(--text3);font-family:var(--mono);font-size:11px;line-height:1.8;}
+.dq-block{display:flex;flex-direction:column;gap:3px;}
+.dq-num{font-family:var(--mono);font-size:9px;color:var(--accent);letter-spacing:.4px;margin-bottom:1px;}
+.dq-text{font-family:var(--sans);font-size:12px;font-weight:600;color:var(--text);line-height:1.4;}
+.dq-hint{font-family:var(--sans);font-size:10px;color:var(--text3);line-height:1.4;font-style:italic;}
+.dq-answer{font-family:var(--sans);font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-wrap;word-break:break-word;}
+.dq-answer.dq-empty{color:var(--text3);font-style:italic;}
+.dq-textarea{width:100%;background:var(--s2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:var(--sans);font-size:12px;padding:8px 10px;resize:vertical;min-height:64px;outline:none;line-height:1.6;transition:border-color .2s;}
+.dq-textarea:focus{border-color:var(--accent);}
+.dq-erow{display:flex;align-items:flex-start;gap:6px;padding:8px 10px;background:var(--s2);border:1px solid var(--border);border-radius:9px;}
+.dq-erow-num{font-family:var(--mono);font-size:10px;color:var(--text3);min-width:18px;padding-top:5px;}
+.dq-erow-fields{flex:1;display:flex;flex-direction:column;gap:4px;}
+.dq-erow-fields input{width:100%;background:var(--s1);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:var(--sans);font-size:11px;padding:5px 8px;outline:none;transition:border-color .2s;}
+.dq-erow-fields input:focus{border-color:var(--accent);}
+.dq-erow-fields .dq-hint-inp{font-size:10px;color:var(--text3);}
+.dq-erow-actions{display:flex;flex-direction:column;gap:3px;padding-top:2px;}
+.dq-erow-btn{background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;padding:3px 5px;border-radius:5px;line-height:1;transition:all .15s;}
+.dq-erow-btn:hover{background:var(--s3);color:var(--text);}
+.dq-erow-btn.del:hover{color:var(--red);}
+.dq-erow-btn:disabled{opacity:.3;cursor:default;}
 </style>
 </head>
 <body>
 
 <div class="nav">
+  <button class="nav-tab" onclick="showPage('diario')">📔 Diario</button>
   <button class="nav-tab active" onclick="showPage('tracker')">⏱ Tracker</button>
   <button class="nav-tab" onclick="showPage('dia')">📅 Día</button>
   <button class="nav-tab" onclick="showPage('history')">📋 Historial</button>
+</div>
+
+<!-- ═══════════ DIARIO ═══════════ -->
+<div class="page" id="page-diario">
+  <!-- Lock wrap -->
+  <div id="dlock" style="flex:1;display:flex;align-items:center;justify-content:center;padding:24px;">
+    <!-- Lock form (password exists) -->
+    <div id="dlock-form" class="dlck-card" style="display:none">
+      <div style="font-size:44px;text-align:center">📔</div>
+      <div style="font-family:var(--mono);font-size:17px;color:var(--accent);letter-spacing:3px;text-align:center">DIARIO</div>
+      <div style="font-family:var(--sans);font-size:12px;color:var(--text3);text-align:center">Ingresa tu contraseña para acceder</div>
+      <input type="password" id="dlock-pwd" placeholder="Contraseña..."
+        class="dlck-input"
+        onkeydown="if(event.key==='Enter')verifyDiarioPwd()">
+      <div id="dlock-err" style="display:none;font-family:var(--sans);font-size:11px;color:var(--red);text-align:center">Contraseña incorrecta</div>
+      <button onclick="verifyDiarioPwd()" class="dlck-btn">Entrar</button>
+    </div>
+    <!-- Setup form (first time) -->
+    <div id="dsetup-form" class="dlck-card" style="display:none">
+      <div style="font-size:44px;text-align:center">📔</div>
+      <div style="font-family:var(--mono);font-size:17px;color:var(--accent);letter-spacing:3px;text-align:center">DIARIO</div>
+      <div style="font-family:var(--sans);font-size:12px;color:var(--text3);text-align:center;line-height:1.6">Protege tu diario con una contraseña</div>
+      <input type="password" id="dsetup-p1" placeholder="Nueva contraseña..."
+        class="dlck-input"
+        onkeydown="if(event.key==='Enter')document.getElementById('dsetup-p2').focus()">
+      <input type="password" id="dsetup-p2" placeholder="Confirmar contraseña..."
+        class="dlck-input"
+        onkeydown="if(event.key==='Enter')setupDiarioPwd()">
+      <div id="dsetup-err" style="display:none;font-family:var(--sans);font-size:11px;color:var(--red);text-align:center">Las contraseñas no coinciden</div>
+      <button onclick="setupDiarioPwd()" class="dlck-btn">Crear contraseña</button>
+      <button onclick="skipDiarioPwd()" class="dlck-skip">Sin contraseña por ahora</button>
+    </div>
+  </div>
+
+  <!-- Main content (unlocked) -->
+  <div id="dmain" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+    <div class="hdr">
+      <div class="logo">DIARIO</div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <div id="dsave-dot" style="font-size:9px;color:var(--text3);font-family:var(--mono);opacity:0;transition:opacity .4s">● guardado</div>
+        <button onclick="openModal('diarioSettingsOverlay')"
+          style="background:none;border:1px solid var(--border);border-radius:8px;padding:5px 10px;color:var(--text3);font-size:14px;cursor:pointer;line-height:1;font-family:var(--mono);">⚙</button>
+      </div>
+    </div>
+    <!-- Sub-tabs -->
+    <div style="display:flex;gap:3px;padding:10px 16px 0;flex-shrink:0;">
+      <button class="dsubtab active" onclick="switchDiarioView('diario')">📖 Diario</button>
+      <button class="dsubtab" onclick="switchDiarioView('semanal')">📅 Semanal</button>
+      <button class="dsubtab" onclick="switchDiarioView('mensual')">🗓 Mensual</button>
+      <button class="dsubtab" onclick="switchDiarioView('anual')">📆 Anual</button>
+    </div>
+    <!-- View label -->
+    <div id="dview-label" style="padding:8px 16px 0;font-family:var(--sans);font-size:10px;color:var(--text3);"></div>
+    <!-- Columns area -->
+    <div id="dcols" style="display:flex;gap:10px;padding:10px 16px 80px;overflow-x:auto;overflow-y:hidden;flex:1;"></div>
+  </div>
 </div>
 
 <!-- ═══════════ TRACKER ═══════════ -->
@@ -617,6 +714,50 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   </div>
   <div class="sec-lbl">registros</div>
   <div class="hist-list" id="histList"></div>
+</div>
+
+<!-- ── DIARIO SETTINGS MODAL ── -->
+<div class="overlay" id="diarioSettingsOverlay">
+  <div class="modal" style="max-height:88dvh;display:flex;flex-direction:column;padding:0;overflow:hidden;">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <div style="font-size:16px;font-weight:700;color:var(--text);font-family:var(--sans)">⚙ Configurar Diario</div>
+      <button onclick="closeModal('diarioSettingsOverlay')" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;line-height:1;padding:0 4px;">✕</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:18px;">
+      <!-- Questions editor -->
+      <div>
+        <div style="font-family:var(--sans);font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px;">Preguntas del diario</div>
+        <div style="font-family:var(--sans);font-size:11px;color:var(--text3);margin-bottom:10px;">Edita el texto, el subtítulo, reordena o elimina preguntas.</div>
+        <div id="dq-editor-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+        <button onclick="addDiarioQ()"
+          style="margin-top:10px;width:100%;padding:9px;background:var(--accent-dim);border:1px dashed var(--accent);border-radius:9px;color:var(--accent);font-family:var(--sans);font-size:12px;cursor:pointer;font-weight:600;">+ Agregar pregunta</button>
+      </div>
+      <!-- Password -->
+      <div style="border-top:1px solid var(--border);padding-top:16px;">
+        <div style="font-family:var(--sans);font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;">Contraseña</div>
+        <div style="font-family:var(--sans);font-size:11px;color:var(--text3);margin-bottom:10px;">Deja vacío para eliminar la contraseña del diario.</div>
+        <div style="display:flex;gap:8px;">
+          <input type="password" id="dchg-pwd" placeholder="Nueva contraseña..."
+            style="flex:1;padding:9px 12px;background:var(--s2);border:1px solid var(--border);border-radius:9px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none;"
+            onkeydown="if(event.key==='Enter')changeDiarioPwd()">
+          <button onclick="changeDiarioPwd()"
+            style="padding:9px 14px;background:var(--accent);border:none;border-radius:9px;color:#fff;font-family:var(--sans);font-size:12px;cursor:pointer;font-weight:600;white-space:nowrap;">Guardar</button>
+        </div>
+      </div>
+      <!-- Export / Import entries -->
+      <div style="border-top:1px solid var(--border);padding-top:16px;">
+        <div style="font-family:var(--sans);font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;">Datos del diario</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button onclick="exportDiarioData()"
+            style="padding:8px 14px;background:var(--s2);border:1px solid var(--border);border-radius:9px;color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer;">⬇ Exportar JSON</button>
+          <label style="padding:8px 14px;background:var(--s2);border:1px solid var(--border);border-radius:9px;color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer;">
+            ⬆ Importar JSON
+            <input type="file" accept=".json" style="display:none" onchange="importDiarioData(this)">
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ── IMPORT MODAL ── -->
@@ -1342,7 +1483,8 @@ function _pushToCloud(){
   _lastPushHash=pushHash;
 
   var lean=_buildCompressedState();
-  var payload=JSON.stringify({state:lean});
+  var rawJson=JSON.stringify({state:lean});
+var payload=rawJson.replace(/[\uD800-\uDFFF]/g,'');
   _updateSyncDot(null);
 
   fetch(API_URL,{
@@ -7016,6 +7158,299 @@ openAddPlanned = function(actId){
 // Re-renderiza con las funciones nuevas y persiste la migración de lapStartTime
 try{ save(); renderAll(); }catch(e){ console.warn('post-patch render:', e); }
 console.log('✓ Kronos patch v1 aplicado — 11 fixes activos');
+</script>
+
+<!-- ═══════════════════════════════════════════════════════
+     MÓDULO DIARIO
+     ═══════════════════════════════════════════════════════ -->
+<script>
+(function(){
+'use strict';
+
+const DSK = 'kronos_diario_v1';
+let _dUnlocked = false;
+let _dView = 'diario';
+let _dSaveTimer = null;
+
+const DEFAULT_QUESTIONS = [
+  { id:'dq1',  text:'Hoy me siento...', hint:'energía, ánimo, emociones predominantes' },
+  { id:'dq2',  text:'La emoción que más predominó hoy fue...', hint:'alegría, ansiedad, calma, frustración, ilusión, etc.' },
+  { id:'dq3',  text:'Actualmente me preocupa...', hint:'lo que ocupa espacio en tu mente' },
+  { id:'dq4',  text:'Algo que siento que me está frenando es...', hint:'si aplica' },
+  { id:'dq5',  text:'Hoy me emociona / me ilusiona...', hint:'algo que esperas, deseas o te motiva' },
+  { id:'dq6',  text:'Hoy avancé / aporté...', hint:'pequeños o grandes avances' },
+  { id:'dq7',  text:'Hoy aprendí...', hint:'conocimiento, experiencia o descubrimiento' },
+  { id:'dq8',  text:'Me gustaría entender / aprender...', hint:'algo que aún no sabes' },
+  { id:'dq9',  text:'Hoy agradezco...', hint:'personas, experiencias, oportunidades, cosas simples' },
+  { id:'dq10', text:'Logré lo que quería hacer hoy...', hint:'Sí ¿Cómo lo logré? / No ¿Qué me lo impidió?' },
+  { id:'dq11', text:'Si pudiera cambiar algo de hoy...', hint:'reflexión sin juzgarte' },
+  { id:'dq12', text:'Algo importante que quiero recordar de hoy...', hint:'una idea, frase, sensación, decisión o momento' },
+  { id:'dq13', text:'Hoy hice algo que antes me parecía complicado...', hint:'' },
+  { id:'dq14', text:'Deseo para mi yo del futuro...', hint:'algo que te gustaría que ocurriera o recordar' },
+  { id:'dq15', text:'Mis 3 prioridades para mañana...', hint:'1.   2.   3.' },
+];
+
+function dLoad() {
+  try {
+    const raw = localStorage.getItem(DSK);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (!d.questions) d.questions = DEFAULT_QUESTIONS.map(q=>({...q}));
+      if (!d.entries)   d.entries   = {};
+      if (d.password === undefined) d.password = null;
+      return d;
+    }
+  } catch(e) {}
+  return { password: null, questions: DEFAULT_QUESTIONS.map(q=>({...q})), entries: {} };
+}
+function dSave(d) { localStorage.setItem(DSK, JSON.stringify(d)); }
+
+function todayStr() {
+  const n = new Date();
+  return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');
+}
+function dateStr(d) {
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function subtractDays(days) { const d=new Date(); d.setDate(d.getDate()-days); return dateStr(d); }
+function subtractMonths(m)  { const d=new Date(); d.setMonth(d.getMonth()-m);  return dateStr(d); }
+function subtractYears(y)   { const d=new Date(); d.setFullYear(d.getFullYear()-y); return dateStr(d); }
+function fmtDateLong(s) {
+  const d = new Date(s+'T12:00:00');
+  return d.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+}
+function fmtDateShort(s) {
+  if (!s) return '—';
+  const d = new Date(s+'T12:00:00');
+  return d.toLocaleDateString('es-ES',{day:'numeric',month:'short',year:'numeric'});
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderDiarioPage() {
+  const d = dLoad();
+  const lockWrap = document.getElementById('dlock');
+  const main     = document.getElementById('dmain');
+  if (_dUnlocked) {
+    lockWrap.style.display = 'none';
+    main.style.display     = 'flex';
+    renderDiarioView(_dView);
+    return;
+  }
+  main.style.display     = 'none';
+  lockWrap.style.display = 'flex';
+  const lockForm  = document.getElementById('dlock-form');
+  const setupForm = document.getElementById('dsetup-form');
+  if (d.password === null) {
+    lockForm.style.display  = 'none';
+    setupForm.style.display = 'flex';
+  } else if (d.password === '') {
+    _dUnlocked = true; renderDiarioPage();
+  } else {
+    lockForm.style.display  = 'flex';
+    setupForm.style.display = 'none';
+    setTimeout(()=>{ const el=document.getElementById('dlock-pwd'); if(el) el.focus(); }, 150);
+  }
+}
+window.verifyDiarioPwd = function() {
+  const d=dLoad(), inp=document.getElementById('dlock-pwd'), err=document.getElementById('dlock-err');
+  if (inp.value === d.password) { err.style.display='none'; inp.value=''; _dUnlocked=true; renderDiarioPage(); }
+  else { err.style.display='block'; inp.value=''; inp.focus(); }
+};
+window.setupDiarioPwd = function() {
+  const p1=document.getElementById('dsetup-p1').value, p2=document.getElementById('dsetup-p2').value;
+  const err=document.getElementById('dsetup-err');
+  if (p1!==p2) { err.style.display='block'; return; }
+  err.style.display='none';
+  const d=dLoad(); d.password=p1; dSave(d); _dUnlocked=true; renderDiarioPage();
+};
+window.skipDiarioPwd = function() {
+  const d=dLoad(); d.password=''; dSave(d); _dUnlocked=true; renderDiarioPage();
+};
+window.changeDiarioPwd = function() {
+  const newPwd=document.getElementById('dchg-pwd').value;
+  const d=dLoad(); d.password=newPwd; dSave(d);
+  document.getElementById('dchg-pwd').value='';
+  alert(newPwd ? '✓ Contraseña actualizada.' : '✓ Contraseña eliminada.');
+};
+
+window.switchDiarioView = function(view) {
+  _dView = view;
+  document.querySelectorAll('.dsubtab').forEach((t,i) => {
+    t.classList.toggle('active', ['diario','semanal','mensual','anual'][i] === view);
+  });
+  renderDiarioView(view);
+};
+
+function getPastDates(view) {
+  if (view === 'diario') {
+    const d=dLoad(), today=todayStr();
+    const past = Object.keys(d.entries)
+      .filter(k => k < today && Object.keys(d.entries[k]).some(qk => d.entries[k][qk] && d.entries[k][qk].trim()))
+      .sort().reverse().slice(0,2).reverse();
+    while (past.length < 2) past.unshift(null);
+    return past;
+  }
+  return {
+    semanal: [subtractDays(14), subtractDays(7)],
+    mensual: [subtractMonths(2), subtractMonths(1)],
+    anual:   [subtractYears(2),  subtractYears(1)],
+  }[view] || [null, null];
+}
+
+function getViewLabel(view) {
+  return { diario:'Los últimos 2 días escritos + hoy', semanal:'El mismo día hace 2 y 1 semana', mensual:'El mismo día hace 2 y 1 mes', anual:'El mismo día hace 2 y 1 año' }[view] || '';
+}
+function getPastLabel(view, idx) {
+  return ({ diario:['Antes de ayer','Ayer'], semanal:['Hace 2 semanas','Hace 1 semana'], mensual:['Hace 2 meses','Hace 1 mes'], anual:['Hace 2 años','Hace 1 año'] }[view]||['',''])[idx];
+}
+
+function renderDiarioView(view) {
+  const container = document.getElementById('dcols');
+  const lbl       = document.getElementById('dview-label');
+  if (!container) return;
+  if (lbl) lbl.textContent = getViewLabel(view);
+  const today=todayStr(), pastDates=getPastDates(view), d=dLoad(), todayEntry=d.entries[today]||{};
+  let html = '';
+  pastDates.forEach((ds, i) => {
+    const entry=ds?(d.entries[ds]||{}):{};
+    const hasData=ds&&Object.keys(entry).some(k=>entry[k]&&entry[k].trim());
+    html += `<div class="dcol">
+      <div class="dcol-hdr">
+        <span class="dcol-tag">${esc(getPastLabel(view,i))}</span>
+        <span class="dcol-date">${ds?fmtDateShort(ds):'—'}</span>
+      </div>
+      <div class="dcol-body">`;
+    if (!ds) {
+      html += `<div class="dcol-empty">Sin entrada<br>registrada</div>`;
+    } else if (!hasData) {
+      html += `<div class="dcol-empty">Sin entrada<br>para este día<br><span style="font-size:9px;margin-top:4px;display:inline-block">${fmtDateLong(ds)}</span></div>`;
+    } else {
+      d.questions.forEach((q,qi) => {
+        const ans=entry[q.id];
+        html += `<div class="dq-block"><div class="dq-num">${qi+1}</div><div class="dq-text">${esc(q.text)}</div>
+          <div class="dq-answer${ans&&ans.trim()?'':' dq-empty'}">${ans&&ans.trim()?esc(ans):'—'}</div></div>`;
+      });
+    }
+    html += `</div></div>`;
+  });
+  html += `<div class="dcol dcol-today">
+    <div class="dcol-hdr">
+      <span class="dcol-tag" style="color:var(--accent)">HOY</span>
+      <span class="dcol-date">${fmtDateShort(today)}</span>
+    </div>
+    <div class="dcol-body">`;
+  d.questions.forEach((q,qi) => {
+    const ans=todayEntry[q.id]||'';
+    html += `<div class="dq-block">
+      <div class="dq-num">${qi+1}</div>
+      <div class="dq-text">${esc(q.text)}</div>
+      ${q.hint?`<div class="dq-hint">${esc(q.hint)}</div>`:''}
+      <textarea class="dq-textarea" rows="3" data-date="${today}" data-qid="${q.id}"
+        oninput="debounceSaveDiario(this)" placeholder="Escribe aquí...">${esc(ans)}</textarea>
+    </div>`;
+  });
+  html += `</div></div>`;
+  container.innerHTML = html;
+  setTimeout(() => {
+    const cols=container.querySelectorAll('.dcol');
+    if (cols.length) cols[cols.length-1].scrollIntoView({behavior:'smooth',inline:'end',block:'nearest'});
+  }, 80);
+}
+
+window.debounceSaveDiario = function(el) {
+  if (_dSaveTimer) clearTimeout(_dSaveTimer);
+  _dSaveTimer = setTimeout(() => {
+    const d=dLoad();
+    if (!d.entries[el.dataset.date]) d.entries[el.dataset.date]={};
+    d.entries[el.dataset.date][el.dataset.qid]=el.value;
+    dSave(d);
+    _dSaveTimer=null;
+    const dot=document.getElementById('dsave-dot');
+    if (dot) { dot.style.opacity='1'; setTimeout(()=>dot.style.opacity='0',1800); }
+  }, 700);
+};
+
+window.openDiarioSettings = function() { renderDiarioQList(); openModal('diarioSettingsOverlay'); };
+
+function renderDiarioQList() {
+  const d=dLoad(), el=document.getElementById('dq-editor-list');
+  if (!el) return;
+  el.innerHTML = d.questions.map((q,i) => `
+    <div class="dq-erow">
+      <div class="dq-erow-num">${i+1}</div>
+      <div class="dq-erow-fields">
+        <input value="${esc(q.text)}" placeholder="Pregunta..." onchange="updateDiarioQ('${esc(q.id)}','text',this.value)">
+        <input class="dq-hint-inp" value="${esc(q.hint||'')}" placeholder="Subtítulo (opcional)..." onchange="updateDiarioQ('${esc(q.id)}','hint',this.value)">
+      </div>
+      <div class="dq-erow-actions">
+        <button class="dq-erow-btn" onclick="moveDiarioQ('${esc(q.id)}',-1)" ${i===0?'disabled':''}>▲</button>
+        <button class="dq-erow-btn" onclick="moveDiarioQ('${esc(q.id)}',1)" ${i===d.questions.length-1?'disabled':''}>▼</button>
+        <button class="dq-erow-btn del" onclick="deleteDiarioQ('${esc(q.id)}')">✕</button>
+      </div>
+    </div>`).join('');
+}
+window.updateDiarioQ = function(id,field,value) {
+  const d=dLoad(), q=d.questions.find(q=>q.id===id);
+  if(q){ q[field]=value; dSave(d); if(_dUnlocked) renderDiarioView(_dView); }
+};
+window.moveDiarioQ = function(id,dir) {
+  const d=dLoad(), i=d.questions.findIndex(q=>q.id===id), ni=i+dir;
+  if(ni<0||ni>=d.questions.length) return;
+  [d.questions[i],d.questions[ni]]=[d.questions[ni],d.questions[i]];
+  dSave(d); renderDiarioQList(); if(_dUnlocked) renderDiarioView(_dView);
+};
+window.deleteDiarioQ = function(id) {
+  if(!confirm('¿Eliminar esta pregunta?')) return;
+  const d=dLoad(); d.questions=d.questions.filter(q=>q.id!==id);
+  dSave(d); renderDiarioQList(); if(_dUnlocked) renderDiarioView(_dView);
+};
+window.addDiarioQ = function() {
+  const d=dLoad();
+  d.questions.push({id:'dq'+Date.now(),text:'Nueva pregunta...',hint:''});
+  dSave(d); renderDiarioQList(); if(_dUnlocked) renderDiarioView(_dView);
+  const el=document.getElementById('dq-editor-list');
+  if(el) setTimeout(()=>{ if(el.lastElementChild) el.lastElementChild.scrollIntoView({behavior:'smooth'}); },80);
+};
+window.exportDiarioData = function() {
+  const blob=new Blob([JSON.stringify(dLoad(),null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='diario-kronos-'+todayStr()+'.json'; a.click();
+};
+window.importDiarioData = function(input) {
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try {
+      const imp=JSON.parse(ev.target.result);
+      if(!imp.entries&&!imp.questions){alert('Archivo inválido.');return;}
+      if(!confirm('¿Reemplazar todos los datos del diario con este archivo?')) return;
+      localStorage.setItem(DSK,JSON.stringify(imp)); _dUnlocked=true; renderDiarioPage();
+      alert('✓ Importación exitosa.');
+    } catch { alert('Archivo JSON inválido.'); }
+  };
+  reader.readAsText(file); input.value='';
+};
+
+const _origShowPage = window.showPage;
+window.showPage = function(name) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  const pageEl=document.getElementById('page-'+name);
+  if(pageEl) pageEl.classList.add('active');
+  const tabIdx={diario:0,tracker:1,dia:2,history:3};
+  const tabs=document.querySelectorAll('.nav-tab');
+  if(tabIdx[name]!==undefined&&tabs[tabIdx[name]]) tabs[tabIdx[name]].classList.add('active');
+  const fab=document.getElementById('fab');
+  if(fab) fab.style.display=name==='tracker'?'flex':'none';
+  if(name==='history') renderHistory();
+  if(name==='dia')     renderDia();
+  if(name==='diario')  renderDiarioPage();
+};
+window.renderDiarioPage = renderDiarioPage;
+
+})();
 </script>
 </body>
 </html>
