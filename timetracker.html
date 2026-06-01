@@ -214,7 +214,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 /* ─────────────────────────────────────────
    WEEK GRID
 ───────────────────────────────────────── */
-.week-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:0 16px;}
+.week-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px;padding:0 16px;}
 .wc{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:9px 6px;text-align:center;position:relative;overflow:hidden;cursor:pointer;touch-action:manipulation;}
 .wc.has-t::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--accent);}
 .wc-emoji{font-size:16px;display:block;margin-bottom:2px;}
@@ -474,10 +474,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .iplan-empty{text-align:center;padding:40px 16px;color:var(--text3);font-family:var(--mono);font-size:11px;}
 
 /* ── ACTIVE TOGGLE ── */
-.act-status-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block;margin-right:4px;}
-.act-status-dot.on{background:var(--green);}
-.act-status-dot.off{background:var(--text3);}
 .act-row.act-inactive{opacity:.45;}
+.act-active-quick{background:none;border:none;cursor:pointer;font-size:12px;padding:0 5px;line-height:1;touch-action:manipulation;transition:color .15s;flex-shrink:0;color:var(--green);}
+.act-active-quick.off{color:var(--border2);}
+.act-active-quick:active{transform:scale(.85);}
 </style>
 </head>
 <body>
@@ -527,7 +527,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   <div class="running-list" id="runningList"></div>
 
   <!-- WEEK SUMMARY -->
-  <div class="sec-lbl">resumen semanal</div>
+  <div class="sec-lbl">resumen semanal
+    <span>
+      <button onclick="openSummaryConfig()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0 4px;line-height:1;touch-action:manipulation;" title="Configurar">⚙</button>
+    </span>
+  </div>
   <div class="week-grid" id="weekGrid"></div>
 
   <!-- ACTIVITIES -->
@@ -633,6 +637,17 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
     <div id="importPreview" style="display:none;background:var(--s0);border-radius:10px;padding:12px;margin-bottom:10px;font-size:11px;font-family:var(--mono);color:var(--text2);line-height:1.6;"></div>
     <button class="mbtn" id="importConfirmBtn" style="display:none;" onclick="confirmImport()">Importar registros</button>
     <button class="mcancel" onclick="closeModal('importModal')">Cancelar</button>
+  </div>
+</div>
+
+<!-- ── SUMMARY CONFIG MODAL ── -->
+<div class="overlay" id="summaryConfigModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" style="font-size:15px;">Configurar resumen semanal</div>
+    <p style="font-size:11px;color:var(--text3);text-align:center;margin-bottom:14px;line-height:1.5;">Elige qué divisiones y actividades se muestran en el resumen.</p>
+    <div id="summaryConfigList" style="display:flex;flex-direction:column;gap:6px;max-height:55dvh;overflow-y:auto;"></div>
+    <button class="mbtn" style="margin-top:14px;" onclick="closeModal('summaryConfigModal')">Listo</button>
   </div>
 </div>
 
@@ -1233,6 +1248,7 @@ function _buildCompressedState(){
   var lean={
     activities:(S.activities||[]).map(function(a){
       var r={id:a.id,name:a.name,emoji:a.emoji,color:a.color,divisionId:a.divisionId,active:a.active!==false};
+      if(a.summaryVisible) r.summaryVisible=true;
       if(a.defaultSubtasks&&a.defaultSubtasks.length) r.defaultSubtasks=a.defaultSubtasks;
       if(a.defaultStartH!==undefined) r.defaultStartH=a.defaultStartH;
       if(a.defaultStartM!==undefined) r.defaultStartM=a.defaultStartM;
@@ -3304,15 +3320,119 @@ function actWeekTotal(actId){
   return committed+live;
 }
 
+function divWeekTotal(divId){
+  return S.activities
+    .filter(a=>(a.divisionId||'d_otros')===divId)
+    .reduce((t,a)=>t+actWeekTotal(a.id),0);
+}
+
 function renderWeekGrid(){
-  const withTotals=S.activities.map(a=>({...a,_total:actWeekTotal(a.id)}));
-  const top=[...withTotals].sort((a,b)=>b._total-a._total).slice(0,8);
-  document.getElementById('weekGrid').innerHTML=top.map(a=>`
-    <div class="wc ${a._total>0?'has-t':''}" onclick="startActivity('${a.id}',null,null)">
-      <span class="wc-emoji">${a.emoji}</span>
-      <span class="wc-name">${a.name.slice(0,8)}</span>
-      <span class="wc-time">${fmtS(a._total)}</span>
-    </div>`).join('');
+  const divs=getActDivisions();
+  const items=[];
+
+  // Division items (summaryVisible defaults to true)
+  divs.forEach(div=>{
+    if(div.summaryVisible===false) return;
+    const total=divWeekTotal(div.id);
+    // Pick top emoji from most-used activity in this division
+    const divActs=S.activities.filter(a=>(a.divisionId||'d_otros')===div.id);
+    const topAct=divActs.slice().sort((a,b)=>actWeekTotal(b.id)-actWeekTotal(a.id))[0];
+    items.push({
+      type:'division',id:div.id,
+      emoji:topAct?topAct.emoji:'📁',
+      name:div.name,
+      total,
+      onclick:`openSummaryConfig()`
+    });
+  });
+
+  // Individual activity items (summaryVisible defaults to false — opt-in)
+  S.activities.forEach(a=>{
+    if(!a.summaryVisible) return;
+    items.push({
+      type:'activity',id:a.id,
+      emoji:a.emoji,name:a.name,
+      total:actWeekTotal(a.id),
+      onclick:`startActivity('${a.id}',null,null)`
+    });
+  });
+
+  // Sort by total desc
+  items.sort((a,b)=>b.total-a.total);
+
+  document.getElementById('weekGrid').innerHTML=items.length
+    ? items.map(it=>`
+      <div class="wc ${it.total>0?'has-t':''}" onclick="${it.onclick}">
+        <span class="wc-emoji">${it.emoji}</span>
+        <span class="wc-name">${it.name.slice(0,10)}</span>
+        <span class="wc-time">${fmtS(it.total)}</span>
+      </div>`).join('')
+    : `<div style="grid-column:1/-1;text-align:center;padding:18px;font-family:var(--mono);font-size:10px;color:var(--text3);">Configura el resumen ⚙</div>`;
+}
+
+function openSummaryConfig(){
+  const divs=getActDivisions();
+  const list=document.getElementById('summaryConfigList');
+  let html='';
+  divs.forEach(div=>{
+    const isOn=div.summaryVisible!==false;
+    html+=`<div style="background:var(--s0);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;">
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:700;color:var(--text);">${esc(div.name)}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:1px;">División · ${fmtS(divWeekTotal(div.id))} esta semana</div>
+        </div>
+        <button onclick="toggleDivSummary('${div.id}',this)"
+          style="border:none;border-radius:20px;padding:5px 14px;font-family:var(--sans);font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;
+            background:${isOn?'var(--accent)':'var(--s2)'};color:${isOn?'#fff':'var(--text3)'};
+            border:1px solid ${isOn?'var(--accent)':'var(--border)'};">
+          ${isOn?'✓ Visible':'Oculto'}
+        </button>
+      </div>
+      <div style="border-top:1px solid var(--border);padding:6px 12px 8px;display:flex;flex-direction:column;gap:5px;" id="sdiv_${div.id}">
+        ${S.activities.filter(a=>(a.divisionId||'d_otros')===div.id).map(a=>{
+          const aOn=!!a.summaryVisible;
+          return `<div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:14px;">${a.emoji}</span>
+            <span style="flex:1;font-size:11px;color:var(--text2);">${esc(a.name)}</span>
+            <span style="font-size:9px;font-family:var(--mono);color:var(--text3);">${fmtS(actWeekTotal(a.id))}</span>
+            <button onclick="toggleActSummary('${a.id}',this)"
+              style="border:none;border-radius:14px;padding:3px 10px;font-family:var(--sans);font-size:10px;font-weight:700;cursor:pointer;transition:all .2s;
+                background:${aOn?'var(--teal-dim)':'transparent'};color:${aOn?'var(--teal)':'var(--text3)'};
+                border:1px solid ${aOn?'var(--teal)':'var(--border)'};">
+              ${aOn?'ind.':'—'}
+            </button>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  });
+  list.innerHTML=html;
+  openModal('summaryConfigModal');
+}
+
+function toggleDivSummary(divId,btn){
+  const div=(S.actDivisions||[]).find(d=>d.id===divId);
+  if(!div)return;
+  div.summaryVisible=div.summaryVisible===false;
+  const isOn=div.summaryVisible!==false;
+  btn.textContent=isOn?'✓ Visible':'Oculto';
+  btn.style.background=isOn?'var(--accent)':'var(--s2)';
+  btn.style.color=isOn?'#fff':'var(--text3)';
+  btn.style.borderColor=isOn?'var(--accent)':'var(--border)';
+  save();renderWeekGrid();
+}
+
+function toggleActSummary(actId,btn){
+  const act=S.activities.find(a=>a.id===actId);
+  if(!act)return;
+  act.summaryVisible=!act.summaryVisible;
+  const isOn=!!act.summaryVisible;
+  btn.textContent=isOn?'ind.':'—';
+  btn.style.background=isOn?'var(--teal-dim)':'transparent';
+  btn.style.color=isOn?'var(--teal)':'var(--text3)';
+  btn.style.borderColor=isOn?'var(--teal)':'var(--border)';
+  save();renderWeekGrid();
 }
 
 // ── ACTIVITIES ──
@@ -3338,6 +3458,14 @@ function startLongPress(actId){
 
 function cancelLongPress(){
   clearTimeout(_lpTimer);_lpTimer=null;
+}
+
+function quickToggleActive(actId,e){
+  e.stopPropagation();
+  const act=S.activities.find(a=>a.id===actId);
+  if(!act)return;
+  act.active=!(act.active!==false);
+  save();renderActList();
 }
 
 // Long-press for history groups
@@ -3540,6 +3668,8 @@ function renderActList(){
     const divActs=visibleActs.filter(a=>(a.divisionId||'d_otros')===div.id);
     const divAllActs=S.activities.filter(a=>(a.divisionId||'d_otros')===div.id);
     const hiddenCount=divAllActs.length-divActs.length;
+    // Skip completely empty divisions when filtering to active only
+    if(showOnlyActive&&divActs.length===0) return;
     html+=`<div class="board-col" draggable="true"
       ondragstart="divDragStart(event,'${div.id}')"
       ondragover="divDragOver(event,'${div.id}')"
@@ -3587,6 +3717,7 @@ function renderActList(){
         <div class="act-wk">Semana: ${fmtS(a.weekTotal||0)}</div>
       </div>
       <div class="act-btns">
+        <button class="act-active-quick ${isActive?'':'off'}" onclick="quickToggleActive('${a.id}',event)" title="${isActive?'Desactivar':'Activar'}">${isActive?'●':'○'}</button>
         <button class="act-today-btn ${added?'added':''}" onclick="openAddPlanned('${a.id}')">
           ${(()=>{
             const activePlans=S.planned.filter(p=>p.actId===a.id&&!p.done);
