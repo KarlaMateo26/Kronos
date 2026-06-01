@@ -640,6 +640,20 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   </div>
 </div>
 
+<!-- ── EDIT DIVISION MODAL ── -->
+<div class="overlay" id="editDivModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" style="font-size:15px;">Editar división</div>
+    <div class="field"><label>Nombre</label><input type="text" id="divNameInput" placeholder="Nombre" maxlength="30"></div>
+    <div style="font-size:10px;color:var(--text3);margin:6px 0 8px;text-align:center;letter-spacing:1px;text-transform:uppercase;font-family:var(--mono);">Emoji</div>
+    <div id="divEmojiGrid" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;justify-content:center;max-height:180px;overflow-y:auto;"></div>
+    <button class="mbtn" onclick="confirmEditDiv()">Guardar</button>
+    <button class="det-btn del" id="divDelBtn" style="width:100%;padding:10px;margin-top:6px;" onclick="confirmDelDiv()">Eliminar división</button>
+    <button class="mcancel" onclick="closeModal('editDivModal')">Cancelar</button>
+  </div>
+</div>
+
 <!-- ── SUMMARY CONFIG MODAL ── -->
 <div class="overlay" id="summaryConfigModal">
   <div class="modal">
@@ -1134,6 +1148,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 const SK='kronos_v4';
 const API_URL='https://script.google.com/macros/s/AKfycbx1k0fGxPruFhqu77ZR7HnamkBqVmISWdJ9_oMbhcWu106BNFfBLB9pu3nh33H8-uJW/exec';
 const EMOJIS=['🎹','💼','🏋️','😴','🧘','📚','🎮','🍳','🚶','🎨','📝','💻','🧹','🛁','🎵','🌱','🤝','🎯','🧠','🛒','☕','🎧','🖥️','📱','✈️','🎤'];
+const DIV_EMOJIS=[
+  '🎹','💼','🏋️','😴','🧘','📚','🎮','🍳','🚶','🎨','📝','💻','🧹','🛁','🎵','🌱','🤝','🎯','🧠','🛒','☕','🎧','🖥️','📱','✈️','🎤',
+  '🫀','💆‍♀️','💅','🧶','🪾','☄️','🤸','🧘‍♀️','🏆','🩰','🎬','🎼','⏳','🛠️','💡','🕯️','⚙️','🔮','🚿','🧼','🩻','🛍️','🎀','📃','🧑‍🧑‍🧒‍🧒','🕙','🏳️','🏁','🍴',
+  '📁','🗂️','⭐','🔵','🟣','🟢','🟡','🔴','🟠','⚡','🌀','🔷','🔶','📌','🏷️'
+];
 const DEFAULT_ACTS=[
   {id:'sleep',name:'Dormir',emoji:'😴'},
   {id:'piano',name:'Piano',emoji:'🎹'},
@@ -3339,7 +3358,7 @@ function renderWeekGrid(){
     const topAct=divActs.slice().sort((a,b)=>actWeekTotal(b.id)-actWeekTotal(a.id))[0];
     items.push({
       type:'division',id:div.id,
-      emoji:topAct?topAct.emoji:'📁',
+      emoji:div.emoji||(topAct?topAct.emoji:'📁'),
       name:div.name,
       total,
       onclick:`openSummaryConfig()`
@@ -3376,8 +3395,10 @@ function openSummaryConfig(){
   let html='';
   divs.forEach(div=>{
     const isOn=div.summaryVisible!==false;
+    const divEmoji=div.emoji||'📁';
     html+=`<div style="background:var(--s0);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
       <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;">
+        <span onclick="editActDivision('${div.id}')" title="Cambiar emoji/nombre" style="font-size:22px;cursor:pointer;flex-shrink:0;" title="Editar">${divEmoji}</span>
         <div style="flex:1;">
           <div style="font-size:13px;font-weight:700;color:var(--text);">${esc(div.name)}</div>
           <div style="font-size:10px;color:var(--text3);margin-top:1px;">División · ${fmtS(divWeekTotal(div.id))} esta semana</div>
@@ -3675,6 +3696,7 @@ function renderActList(){
       ondragover="divDragOver(event,'${div.id}')"
       ondrop="divDrop(event,'${div.id}')">
       <div class="board-hdr">
+        ${div.emoji?`<span style="font-size:14px;flex-shrink:0;" ondblclick="editActDivision('${div.id}')">${div.emoji}</span>`:''}
         <span class="board-hdr-name" ondblclick="editActDivision('${div.id}')">${esc(div.name)}</span>
         ${divActs.length?`<span class="board-hdr-count">(${divActs.length}${hiddenCount?`+${hiddenCount}`:``})</span>`:''}
         <button onclick="addActDivision()" style="background:none;border:none;color:var(--border2);cursor:pointer;font-size:14px;padding:0 2px;margin-left:auto;line-height:1;" title="Nueva división">+</button>
@@ -3738,26 +3760,52 @@ function renderActList(){
   });
 }
 
+var _editDivId=null;
+var _editDivEmoji=null;
+
 function editActDivision(divId){
   const div=(S.actDivisions||[]).find(d=>d.id===divId);if(!div)return;
-  const newName=prompt('Renombrar división (deja vacío para eliminar):',div.name);
-  if(newName===null)return; // cancelled
-  if(!newName.trim()){
-    if(!confirm('¿Eliminar división "'+div.name+'"? Las actividades irán a Otros.'))return;
-    S.actDivisions=S.actDivisions.filter(d=>d.id!==divId);
-    S.activities.forEach(a=>{if(a.divisionId===divId)a.divisionId='d_otros';});
-    S.planned.forEach(p=>{if(p.divisionId===divId)p.divisionId='d_otros';});
-  } else {
-    div.name=newName.trim();
-  }
-  save();renderActList();renderPlanned();
+  _editDivId=divId;
+  _editDivEmoji=div.emoji||DIV_EMOJIS[0];
+  document.getElementById('divNameInput').value=div.name;
+  const grid=document.getElementById('divEmojiGrid');
+  grid.innerHTML=DIV_EMOJIS.map(e=>`
+    <div class="ep ${e===_editDivEmoji?'sel':''}" onclick="selDivEp('${e}')" style="font-size:22px;width:44px;height:44px;">${e}</div>`).join('');
+  const canDelete=divId!=='d_otros';
+  document.getElementById('divDelBtn').style.display=canDelete?'block':'none';
+  openModal('editDivModal');
+}
+
+function selDivEp(e){
+  _editDivEmoji=e;
+  document.querySelectorAll('#divEmojiGrid .ep').forEach(el=>el.classList.toggle('sel',el.textContent===e));
+}
+
+function confirmEditDiv(){
+  const name=document.getElementById('divNameInput').value.trim();
+  if(!name)return;
+  const div=(S.actDivisions||[]).find(d=>d.id===_editDivId);
+  if(!div)return;
+  div.name=name;
+  div.emoji=_editDivEmoji;
+  save();closeModal('editDivModal');renderActList();renderPlanned();renderWeekGrid();
+}
+
+function confirmDelDiv(){
+  const div=(S.actDivisions||[]).find(d=>d.id===_editDivId);
+  if(!div)return;
+  if(!confirm('¿Eliminar división "'+div.name+'"? Las actividades irán a Otros.'))return;
+  S.actDivisions=S.actDivisions.filter(d=>d.id!==_editDivId);
+  S.activities.forEach(a=>{if(a.divisionId===_editDivId)a.divisionId='d_otros';});
+  S.planned.forEach(p=>{if(p.divisionId===_editDivId)p.divisionId='d_otros';});
+  save();closeModal('editDivModal');renderActList();renderPlanned();renderWeekGrid();
 }
 
 function addActDivision(){
   const name=prompt('Nombre de la nueva división:');
   if(!name||!name.trim())return;
   if(!S.actDivisions) S.actDivisions=[{id:'d_deberes',name:'Deberes'},{id:'d_daily',name:'Daily Advance'},{id:'d_otros',name:'Otros'}];
-  S.actDivisions.push({id:'d_'+Date.now(),name:name.trim()});
+  S.actDivisions.push({id:'d_'+Date.now(),name:name.trim(),emoji:'📁'});
   save();renderActList();
 }
 
