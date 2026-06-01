@@ -1153,6 +1153,30 @@ const DIV_EMOJIS=[
   '🫀','💆‍♀️','💅','🧶','🪾','☄️','🤸','🧘‍♀️','🏆','🩰','🎬','🎼','⏳','🛠️','💡','🕯️','⚙️','🔮','🚿','🧼','🩻','🛍️','🎀','📃','🧑‍🧑‍🧒‍🧒','🕙','🏳️','🏁','🍴',
   '📁','🗂️','⭐','🔵','🟣','🟢','🟡','🔴','🟠','⚡','🌀','🔷','🔶','📌','🏷️'
 ];
+
+// Brand emoji map: key → base64 SVG data URI
+const BRAND_EMOJI_MAP={};
+(function(){
+  function b(svg){return 'data:image/svg+xml;base64,'+btoa(svg);}
+  BRAND_EMOJI_MAP['brand_bbva']=b('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="8" fill="#004481"/><text x="20" y="27" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="Arial,sans-serif">BBVA</text></svg>');
+  BRAND_EMOJI_MAP['brand_mcd']=b('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="8" fill="#DA291C"/><text x="20" y="30" text-anchor="middle" fill="#FFC72C" font-size="26" font-weight="900" font-family="Arial,sans-serif">M</text></svg>');
+  BRAND_EMOJI_MAP['brand_scj']=b('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="8" fill="#003087"/><text x="20" y="21" text-anchor="middle" fill="white" font-size="10" font-weight="bold" font-family="Arial,sans-serif">SC</text><text x="20" y="33" text-anchor="middle" fill="#00A651" font-size="8.5" font-weight="bold" font-family="Arial,sans-serif">JOHNSON</text></svg>');
+  BRAND_EMOJI_MAP['brand_omg']=b('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="8" fill="#0055A5"/><text x="20" y="22" text-anchor="middle" fill="white" font-size="9" font-weight="bold" font-family="Arial,sans-serif">OMNI</text><text x="20" y="33" text-anchor="middle" fill="#E8E8E8" font-size="8" font-family="Arial,sans-serif">MEDIA</text></svg>');
+})();
+const BRAND_EMOJI_KEYS=Object.keys(BRAND_EMOJI_MAP);
+const ALL_EMOJIS=[...BRAND_EMOJI_KEYS,...DIV_EMOJIS];
+
+function emojiHtml(e){
+  if(!e) return '?';
+  const src=BRAND_EMOJI_MAP[e];
+  if(!src) return e;
+  return `<img src="${src}" style="width:1.15em;height:1.15em;vertical-align:-0.18em;border-radius:3px;object-fit:contain;display:inline-block;">`;
+}
+function emojiHtmlPicker(e){
+  const src=BRAND_EMOJI_MAP[e];
+  if(!src) return e;
+  return `<img src="${src}" style="width:22px;height:22px;border-radius:4px;object-fit:contain;vertical-align:middle;">`;
+}
 const DEFAULT_ACTS=[
   {id:'sleep',name:'Dormir',emoji:'😴'},
   {id:'piano',name:'Piano',emoji:'🎹'},
@@ -2759,7 +2783,7 @@ function renderPlanned(){
       onpointerleave="cancelPcLongPress()"
       onpointercancel="cancelPcLongPress()">
       <div class="pc-header">
-        <div class="pc-emoji">${p.actEmoji}</div>
+        <div class="pc-emoji">${emojiHtml(p.actEmoji)}</div>
         <div class="pc-info">
           <div class="pc-name">${esc(p.actName)}${p.auto?` <span style="font-size:9px;color:var(--text3);font-family:var(--mono);font-style:italic;">new</span>`:''}
             ${p.addedAt==='2099-01-01T00:00:00.000Z'?
@@ -2947,7 +2971,7 @@ function renderPlanned(){
       card.id='upc_'+ctx.rKey;
       card.innerHTML=`
         <div class="pc-header">
-          <div class="pc-emoji">${ctx.actEmoji}</div>
+          <div class="pc-emoji">${emojiHtml(ctx.actEmoji)}</div>
           <div class="pc-info">
             <div class="pc-name">${esc(ctx.actName)}</div>
             ${spent>0?`<div class="pc-meta"><span class="pc-spent">${fmtS(spent)}</span></div>`:''}
@@ -3161,7 +3185,7 @@ function buildRunCard(rKey,isTop){
   return`<div class="run-card ${isBreaking?'break-mode':''}${isTop&&!isBreaking?' top-card':''}" id="rc_${rKey}">
     <!-- TOP ROW: emoji + name | subtask + real -->
     <div class="rc-top">
-      <div class="rc-emoji">${ctx.actEmoji}</div>
+      <div class="rc-emoji">${emojiHtml(ctx.actEmoji)}</div>
       <div class="rc-left">
         <div class="rc-name-row">
           <span class="rc-name">${esc(ctx.actName)}</span>
@@ -3382,7 +3406,7 @@ function renderWeekGrid(){
   document.getElementById('weekGrid').innerHTML=items.length
     ? items.map(it=>`
       <div class="wc ${it.total>0?'has-t':''}" onclick="${it.onclick}">
-        <span class="wc-emoji">${it.emoji}</span>
+        <span class="wc-emoji">${emojiHtml(it.emoji)}</span>
         <span class="wc-name">${it.name.slice(0,10)}</span>
         <span class="wc-time">${fmtS(it.total)}</span>
       </div>`).join('')
@@ -3398,7 +3422,7 @@ function openSummaryConfig(){
     const divEmoji=div.emoji||'📁';
     html+=`<div style="background:var(--s0);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
       <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;">
-        <span onclick="editActDivision('${div.id}')" title="Cambiar emoji/nombre" style="font-size:22px;cursor:pointer;flex-shrink:0;" title="Editar">${divEmoji}</span>
+        <span onclick="editActDivision('${div.id}')" title="Cambiar emoji/nombre" style="font-size:22px;cursor:pointer;flex-shrink:0;">${emojiHtml(divEmoji)}</span>
         <div style="flex:1;">
           <div style="font-size:13px;font-weight:700;color:var(--text);">${esc(div.name)}</div>
           <div style="font-size:10px;color:var(--text3);margin-top:1px;">División · ${fmtS(divWeekTotal(div.id))} esta semana</div>
@@ -3414,7 +3438,7 @@ function openSummaryConfig(){
         ${S.activities.filter(a=>(a.divisionId||'d_otros')===div.id).map(a=>{
           const aOn=!!a.summaryVisible;
           return `<div style="display:flex;align-items:center;gap:8px;">
-            <span style="font-size:14px;">${a.emoji}</span>
+            <span style="font-size:14px;">${emojiHtml(a.emoji)}</span>
             <span style="flex:1;font-size:11px;color:var(--text2);">${esc(a.name)}</span>
             <span style="font-size:9px;font-family:var(--mono);color:var(--text3);">${fmtS(actWeekTotal(a.id))}</span>
             <button onclick="toggleActSummary('${a.id}',this)"
@@ -3696,7 +3720,7 @@ function renderActList(){
       ondragover="divDragOver(event,'${div.id}')"
       ondrop="divDrop(event,'${div.id}')">
       <div class="board-hdr">
-        ${div.emoji?`<span style="font-size:14px;flex-shrink:0;" ondblclick="editActDivision('${div.id}')">${div.emoji}</span>`:''}
+        ${div.emoji?`<span style="font-size:14px;flex-shrink:0;" ondblclick="editActDivision('${div.id}')">${emojiHtml(div.emoji)}</span>`:''}
         <span class="board-hdr-name" ondblclick="editActDivision('${div.id}')">${esc(div.name)}</span>
         ${divActs.length?`<span class="board-hdr-count">(${divActs.length}${hiddenCount?`+${hiddenCount}`:``})</span>`:''}
         <button onclick="addActDivision()" style="background:none;border:none;color:var(--border2);cursor:pointer;font-size:14px;padding:0 2px;margin-left:auto;line-height:1;" title="Nueva división">+</button>
@@ -3733,7 +3757,7 @@ function renderActList(){
       onpointerleave="cancelLongPress()"
       onpointercancel="cancelLongPress()">
       <div class="drag-handle"><span></span><span></span><span></span></div>
-      <div class="act-emoji">${a.emoji}</div>
+      <div class="act-emoji">${emojiHtml(a.emoji)}</div>
       <div class="act-info">
         <div class="act-name">${esc(a.name)}</div>
         <div class="act-wk">Semana: ${fmtS(a.weekTotal||0)}</div>
@@ -3766,11 +3790,11 @@ var _editDivEmoji=null;
 function editActDivision(divId){
   const div=(S.actDivisions||[]).find(d=>d.id===divId);if(!div)return;
   _editDivId=divId;
-  _editDivEmoji=div.emoji||DIV_EMOJIS[0];
+  _editDivEmoji=div.emoji||ALL_EMOJIS[0];
   document.getElementById('divNameInput').value=div.name;
   const grid=document.getElementById('divEmojiGrid');
-  grid.innerHTML=DIV_EMOJIS.map(e=>`
-    <div class="ep ${e===_editDivEmoji?'sel':''}" onclick="selDivEp('${e}')" style="font-size:22px;width:44px;height:44px;">${e}</div>`).join('');
+  grid.innerHTML=ALL_EMOJIS.map(e=>`
+    <div class="ep ${e===_editDivEmoji?'sel':''}" onclick="selDivEp('${e}')" data-emoji="${e}" style="font-size:22px;width:44px;height:44px;">${emojiHtmlPicker(e)}</div>`).join('');
   const canDelete=divId!=='d_otros';
   document.getElementById('divDelBtn').style.display=canDelete?'block':'none';
   openModal('editDivModal');
@@ -3778,7 +3802,7 @@ function editActDivision(divId){
 
 function selDivEp(e){
   _editDivEmoji=e;
-  document.querySelectorAll('#divEmojiGrid .ep').forEach(el=>el.classList.toggle('sel',el.textContent===e));
+  document.querySelectorAll('#divEmojiGrid .ep').forEach(el=>el.classList.toggle('sel',(el.dataset.emoji||el.textContent)===e));
 }
 
 function confirmEditDiv(){
@@ -3864,7 +3888,7 @@ function renderHistory(){
         oncontextmenu="return false;">
         <button class="lap-grp-del" onclick="event.stopPropagation();deleteSessionGroup('${gid}')">🗑 Eliminar</button>
         <div class="lap-grp-hdr" onclick="if(!document.getElementById('lg_${gid}').classList.contains('lg-editing'))toggleLapGrp('${gid}')">
-          <div class="lg-emoji">${first.actEmoji}</div>
+          <div class="lg-emoji">${emojiHtml(first.actEmoji)}</div>
           <div class="lg-info">
             <div class="lg-name">${first.actName}${sessName?` · <em style="color:var(--accent);font-style:normal;">${esc(sessName)}</em>`:''}</div>
             <div class="lg-meta">${fmtTime(first.startTime)} → ${fmtTime(last.endTime)}${laps.length>1?` · ${laps.length} laps`:''}${hasNote?' · 📝':''}${hasDev?' · ⚠️':''}</div>
@@ -4085,8 +4109,8 @@ function openAddAct(editActId){
   const act=editActId?S.activities.find(a=>a.id===editActId):null;
   selEmoji=act?act.emoji:EMOJIS[0];
   selColor=act?act.color||ACT_PALETTE[0]:ACT_PALETTE[0];
-  document.getElementById('emojiGrid').innerHTML=EMOJIS.map(e=>`
-    <div class="ep ${e===selEmoji?'sel':''}" onclick="selEp('${e}')">${e}</div>`).join('');
+  document.getElementById('emojiGrid').innerHTML=ALL_EMOJIS.map(e=>`
+    <div class="ep ${e===selEmoji?'sel':''}" onclick="selEp('${e}')" data-emoji="${e}">${emojiHtmlPicker(e)}</div>`).join('');
   document.getElementById('colorGrid').innerHTML=ACT_PALETTE.map(col=>`
     <div class="cp ${col===selColor?'sel':''}" style="background:${col};" onclick="selCol('${col}')"></div>`).join('');
   document.getElementById('aName').value=act?act.name:'';
@@ -4128,7 +4152,7 @@ function toggleActActiveEdit(){
   _actActiveEdit=!_actActiveEdit;
   _refreshActiveToggleBtn();
 }
-function selEp(e){selEmoji=e;document.querySelectorAll('.ep').forEach(el=>el.classList.toggle('sel',el.textContent===e));}
+function selEp(e){selEmoji=e;document.querySelectorAll('#emojiGrid .ep').forEach(el=>el.classList.toggle('sel',(el.dataset.emoji||el.textContent)===e));}
 function selCol(col){selColor=col;document.querySelectorAll('.cp').forEach(el=>el.classList.toggle('sel',el.style.background===col||el.style.backgroundColor===col));}
 var _editingDefaultSubs=[]; // temp list while modal is open
 
@@ -4800,7 +4824,7 @@ function renderWeekPlanWeek(el, refDate){
         :`openAddPlanned('${item.actId}')`;
       html+=`<div class="wplan-block" style="background:${color}22;border-color:${color};${source==='planned'?'border-style:dashed;':''}"
         onclick="${clickFn}">
-        <div class="wplan-block-name" style="color:${color};">${act.emoji} ${esc(act.name)}</div>
+        <div class="wplan-block-name" style="color:${color};">${emojiHtml(act.emoji)} ${esc(act.name)}</div>
         ${timeStr?`<div class="wplan-block-time" style="color:${color};">${timeStr}${item.idealSecs?' · '+fmtM(item.idealSecs):''}</div>`:''}
         ${subsStr?`<div class="wplan-block-subs" style="color:${color};">${esc(subsStr)}</div>`:''}
       </div>`;
@@ -4905,7 +4929,7 @@ function openWplanAdd(dateKey){
   const opts=S.activities.map(a=>`
     <div onclick="openWplanEditByDate('${a.id}','${dateKey}')"
       style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);">
-      <span style="font-size:16px;">${a.emoji}</span>
+      <span style="font-size:16px;">${emojiHtml(a.emoji)}</span>
       <span style="font-size:13px;">${esc(a.name)}</span>
     </div>`).join('');
   document.getElementById('wplanPickerTitle').textContent=`${label} — elegir actividad`;
@@ -5324,7 +5348,7 @@ function _renderDayCol(blocks, viewStart, viewEnd, PX, isToday, dateKey, showAdd
       onclick="openIplanBlockEdit('${p.id}','${p._virtual?'wpl':'plan'}',${startMin},${dur})"
       style="top:${top}px;height:${height}px;background:${color}25;border:1.5px solid ${color};user-select:none;z-index:2;cursor:pointer;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:2px;">
-        <div class="iplan-block-name" style="color:${color};flex:1;">${p.actEmoji} ${esc(p.actName)}</div>
+        <div class="iplan-block-name" style="color:${color};flex:1;">${emojiHtml(p.actEmoji)} ${esc(p.actName)}</div>
         <button onclick="event.stopPropagation();iplanDeleteBlock('${p.id}','${p._virtual?'wpl':'plan'}','${dateKey}')"
           style="background:none;border:none;color:${color};opacity:.6;cursor:pointer;font-size:10px;padding:0 2px;flex-shrink:0;">✕</button>
       </div>
@@ -5482,7 +5506,7 @@ function iplanTapAdd(event,dateKey,viewStart,PX){
   document.getElementById('wplanPickerList').innerHTML=S.activities.map(a=>`
     <div onclick="iplanTapAddConfirm('${a.id}')"
       style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);">
-      <span style="font-size:16px;">${a.emoji}</span>
+      <span style="font-size:16px;">${emojiHtml(a.emoji)}</span>
       <span style="font-size:13px;">${esc(a.name)}</span>
     </div>`).join('');
   openModal('wplanPickerModal');
@@ -5869,7 +5893,7 @@ function renderHabit(){
     if(!act)return;
     const color=actColor(actId);
     html+=`<div class="habit-row">
-      <div class="habit-emoji">${act.emoji}</div>
+      <div class="habit-emoji">${emojiHtml(act.emoji)}</div>
       <div class="habit-name">${esc(act.name)}</div>
       <div class="habit-dots">`;
     days.forEach(d=>{
@@ -5923,7 +5947,7 @@ function renderHabit(){
       // Card
       html+=`<div class="st-act-card" style="border:1px solid ${color}44;margin:0 16px 10px;">
         <div class="st-act-header" style="border-bottom:1px solid var(--border);">
-          <span style="font-size:16px;">${g.actEmoji}</span>
+          <span style="font-size:16px;">${emojiHtml(g.actEmoji)}</span>
           <span style="font-size:13px;font-weight:700;flex:1;">${esc(g.actName)}</span>
           <span class="st-act-total">${fmtS(totalT)}</span>
         </div>`;
@@ -6127,7 +6151,7 @@ function _buildTlDayCol(pd, viewStart, viewEnd, PX){
     const hS=String(Math.floor(sm/60)%24).padStart(2,'0');
     const mS=String(sm%60).padStart(2,'0');
     blocksHtml+=`<div class="iplan-block" style="top:${top}px;height:${height}px;left:${left}%;width:${laneW}%;background:${color}25;border:1.5px solid ${color};" onclick="openDetail('${s.id}')">
-      <div class="iplan-block-name" style="color:${color};">${s.actEmoji} ${esc(s.actName)}</div>
+      <div class="iplan-block-name" style="color:${color};">${emojiHtml(s.actEmoji)} ${esc(s.actName)}</div>
       ${height>20?`<div class="iplan-block-time" style="color:${color};">${hS}:${mS} · ${fmtM(s.duration)}</div>`:''}
     </div>`;
   });
