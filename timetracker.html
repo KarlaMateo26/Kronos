@@ -1503,7 +1503,8 @@ function _pushToCloud(){
 
   var lean=_buildCompressedState();
   var rawJson=JSON.stringify({state:lean});
-var payload=rawJson.replace(/[\uD800-\uDFFF]/g,'');
+// Only remove lone surrogates (invalid UTF-16) — valid emoji pairs (e.g. 🐢 = D83D DC22) must stay intact
+var payload=rawJson.replace(/([\uD800-\uDBFF][\uDC00-\uDFFF])|[\uD800-\uDFFF]/g,function(m,pair){return pair?pair:'';});
   _updateSyncDot(null);
 
   fetch(API_URL,{
@@ -1579,16 +1580,14 @@ function pullFromCloud(){
             if(cld) mergedRunning[k]=cld;
             // If only local (shouldn't happen in readonly) — drop it
           } else if(loc&&cld){
-            // If this device is ticking this session — keep local, UNLESS the other device
-            // paused/stopped it more recently than our current lap started
+            // Compare last state-change timestamps to decide which device is more current.
+            // startTime is reset on every pause AND resume, so it's the correct "last action" timestamp.
+            // pausedAt equals startTime when paused; for running sessions use startTime directly.
             if(timers[k]||isPrimaryDevice){
-              var ourLapStart=new Date(loc.lapStartTime||loc.startTime).getTime();
-              var cldPausedAt=cld.paused&&cld.pausedAt?new Date(cld.pausedAt).getTime():0;
-              var cldLapStart=!cld.paused&&cld.lapStartTime?new Date(cld.lapStartTime).getTime():0;
-              // Cloud pause/resume happened after our lap started — cloud wins
-              if(cld.paused&&cldPausedAt>ourLapStart){
-                mergedRunning[k]=cld;
-              } else if(!cld.paused&&cldLapStart>ourLapStart){
+              var localLastChange=new Date(loc.startTime).getTime();
+              var cloudLastChange=cld.paused?new Date(cld.pausedAt||cld.startTime).getTime():new Date(cld.startTime).getTime();
+              // Cloud made a more recent change than us → apply it
+              if(cloudLastChange>localLastChange){
                 mergedRunning[k]=cld;
               } else {
                 mergedRunning[k]=loc;
@@ -1727,8 +1726,8 @@ function pullFromCloud(){
                 defaultIdealH:a.defaultIdealH,defaultIdealM:a.defaultIdealM
               });
             } else {
-              // Cloud is newer — apply cloud fields but keep local divisionId if set
-              if(a.divisionId) actMap[a.id].divisionId=a.divisionId;
+              // Cloud is newer — actMap already has cloud's version (correct divisionId, emoji, etc.)
+              // Do NOT override with local fields, which may be stale
             }
           }
         });
