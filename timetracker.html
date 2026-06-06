@@ -596,10 +596,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
         style="background:none;border:1px solid var(--border);border-radius:5px;font-family:var(--mono);font-size:8px;padding:2px 6px;cursor:pointer;outline:none;color:var(--green);">
         ⟳ Auto
       </button>
-      <button id="primaryBtn" onclick="toggleSyncMode()"
-        style="background:none;border:none;font-family:var(--mono);font-size:8px;padding:0 3px;cursor:pointer;outline:none;color:var(--text3);">
-        🔄 Compartido
-      </button>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:1px;">
+        <button id="primaryBtn" onclick="toggleSyncMode()"
+          style="background:none;border:none;font-family:var(--mono);font-size:8px;padding:0 3px;cursor:pointer;outline:none;color:var(--text3);">
+          🔄 Compartido
+        </button>
+        <span id="deviceIdLbl" style="font-family:var(--mono);font-size:7px;color:var(--text3);opacity:.5;line-height:1;pointer-events:none;"></span>
+      </div>
       <div class="wk-badge" id="wkBadge">SEM 00</div>
     </div>
   </div>
@@ -1288,9 +1291,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 // ═══════════════════════════════════════════════════════
 const SK='kronos_v4';
 const API_URL='https://script.google.com/macros/s/AKfycbx1k0fGxPruFhqu77ZR7HnamkBqVmISWdJ9_oMbhcWu106BNFfBLB9pu3nh33H8-uJW/exec';
-const EMOJIS=['🎹','💼','🏋️','😴','🧘','📚','🎮','🍳','🚶','🎨','📝','💻','🧹','🛁','🎵','🌱','🤝','🎯','🧠','🛒','☕','🎧','🖥️','📱','✈️','🎤'];
+const EMOJIS=['🎹','💼','🏋️','😴','🧘','📚','🎮','🍳','🚶','🎨','📝','💻','🧹','🛁','🎵','🌱','🤝','🎯','🧠','🛒','☕','🎧','🖥️','📱','✈️','🎤','🐢','🗃️','🔍','🔄'];
 const DIV_EMOJIS=[
-  '🎹','💼','🏋️','😴','🧘','📚','🎮','🍳','🚶','🎨','📝','💻','🧹','🛁','🎵','🌱','🤝','🎯','🧠','🛒','☕','🎧','🖥️','📱','✈️','🎤',
+  '🎹','💼','🏋️','😴','🧘','📚','🎮','🍳','🚶','🎨','📝','💻','🧹','🛁','🎵','🌱','🤝','🎯','🧠','🛒','☕','🎧','🖥️','📱','✈️','🎤','🐢','🗃️','🔍','🔄',
   '🫀','💆‍♀️','💅','🧶','🪾','☄️','🤸','🧘‍♀️','🏆','🩰','🎬','🎼','⏳','🛠️','💡','🕯️','⚙️','🔮','🚿','🧼','🩻','🛍️','🎀','📃','🧑‍🧑‍🧒‍🧒','🕙','🏳️','🏁','🍴',
   '📁','🗂️','⭐','🔵','🟣','🟢','🟡','🔴','🟠','⚡','🌀','🔷','🔶','📌','🏷️'
 ];
@@ -1384,6 +1387,19 @@ save();
 
 var _inPull=false; // flag: true while merging cloud data
 var _pullInProgress=false; // guard against concurrent pulls
+var _mergeHadLocalData=false; // true when merge finds local items not in cloud → triggers re-push
+
+// Stable per-browser device ID — persists in localStorage so we can track which browser last pushed
+var _deviceId=(function(){
+  var id=localStorage.getItem('kronos_device_id');
+  if(!id){
+    var platform=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||'dev';
+    var short=platform.replace(/\s/g,'').replace(/[^a-zA-Z0-9]/g,'').slice(0,6)||'dev';
+    id=short+'_'+Date.now().toString(36).slice(-4);
+    localStorage.setItem('kronos_device_id',id);
+  }
+  return id;
+})();
 
 function save(){
   // Prune old planOffsets (keep only last 30 days)
@@ -1463,7 +1479,9 @@ function _buildCompressedState(){
     deletedActIds:(S.deletedActIds||[]).slice(-100),
     deletedWplan:(S.deletedWplan||[]).slice(-500),
     currentWeek:S.currentWeek,
-    _lastModified:S._lastModified||Date.now()
+    _lastModified:S._lastModified||Date.now(),
+    _deviceId:_deviceId,
+    _pushedAt:Date.now()
   };
   return lean;
 }
@@ -1624,10 +1642,12 @@ function pullFromCloud(){
         cloudSessions.forEach(function(s){
           if(!deletedSet.has(s.id)) sessMap[s.id]=s;
         });
+        _mergeHadLocalData=false; // reset before each merge
         localSessions.forEach(function(s){
           if(deletedSet.has(s.id)) return; // skip deleted
           if(!sessMap[s.id]){
             sessMap[s.id]=s;
+            _mergeHadLocalData=true; // local has a session cloud doesn't
           } else {
             // prefer whichever has a note, or longer duration, or more recent edit
             var existing=sessMap[s.id];
@@ -1650,6 +1670,7 @@ function pullFromCloud(){
           if(deletedSet.has(p.id)) return; // deleted
           if(!planMap[p.id]){
             planMap[p.id]=p;
+            _mergeHadLocalData=true; // local has a planned item cloud doesn't
           } else {
             var merged=planMap[p.id];
             // merge subtasks: union by id
@@ -1691,6 +1712,7 @@ function pullFromCloud(){
           if(deletedActSet.has(a.id)) return;
           if(!actMap[a.id]){
             actMap[a.id]=a; // local-only activity
+            _mergeHadLocalData=true; // local has an activity cloud doesn't
           } else {
             // Local wins if locally modified more recently
             if(localNewer||timers[Object.keys(S.running||{})[0]]){
@@ -1789,7 +1811,16 @@ function pullFromCloud(){
         if(!S.activities)S.activities=[];
         recalcWeekTotals(); // recalc since cloud state has lean activities without weekTotal
         _inPull=false; // merge complete
-        saveLocal(); // persist merged state locally only — don't push back to cloud
+        saveLocal(); // persist merged state locally
+        // If local had data the cloud didn't, push the merged result so cloud gets both devices' contributions
+        // This prevents the "phone overwrites laptop's new divisions" problem
+        if(_mergeHadLocalData&&canWrite()){
+          _mergeHadLocalData=false;
+          console.log('[KRONOS] Local had new data → pushing merged state to cloud');
+          syncToCloud();
+        } else {
+          _mergeHadLocalData=false;
+        }
         console.log('[KRONOS] Merge complete. Final acts:',
           S.activities.length,'planned:',S.planned.length,
           'sessions:',S.sessions.length,'running:',Object.keys(S.running).length
@@ -1818,7 +1849,7 @@ function pullFromCloud(){
           renderWeekGrid();
           renderDayMeta();
         }
-        _updateSyncDot(true);
+        _updateSyncDot(true,cloud._deviceId);
         updateDeviceUI();
       } else {
         _updateSyncDot(false);
@@ -2007,7 +2038,7 @@ function migrateActiveField(){
   if(changed) save();
 }
 
-function _updateSyncDot(ok){
+function _updateSyncDot(ok,cloudDeviceId){
   const dot=document.getElementById('syncDot');
   if(!dot)return;
   if(ok===null){
@@ -2015,7 +2046,11 @@ function _updateSyncDot(ok){
     dot.title='Sincronizando...';
   } else if(ok){
     dot.textContent='●';dot.style.color='var(--green)';
-    dot.title='Sync OK · '+new Date().toLocaleTimeString();
+    var fromLabel=cloudDeviceId&&cloudDeviceId!==_deviceId?'cloud: '+cloudDeviceId:'este: '+_deviceId;
+    dot.title='Sync OK · '+new Date().toLocaleTimeString()+' · '+fromLabel;
+    // Update device label in primaryBtn subtitle if exists
+    var devLbl=document.getElementById('deviceIdLbl');
+    if(devLbl) devLbl.textContent=_deviceId;
   } else {
     dot.textContent='●';dot.style.color='var(--red)';
     dot.title='Sin conexión — toca para reintentar';
@@ -2751,6 +2786,8 @@ function renderAll(){
   renderWeekBadge();renderPlanned();renderRunning();renderWeekGrid();renderActList();renderDayMeta();
   updateDeviceUI();
   updateSyncAutoBtn();
+  var devLbl=document.getElementById('deviceIdLbl');
+  if(devLbl) devLbl.textContent=_deviceId;
   if(document.getElementById('page-history').classList.contains('active'))renderHistory();
 }
 
