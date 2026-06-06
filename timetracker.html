@@ -122,17 +122,55 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .pc-flow-sel{background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text3);font-family:var(--mono);font-size:10px;width:26px;height:26px;text-align:center;text-align-last:center;appearance:none;-webkit-appearance:none;outline:none;cursor:pointer;flex-shrink:0;padding:0;}
 .pc-flow-sel.has-order{color:var(--accent);border-color:var(--accent);font-weight:700;}
 
-/* ── FLOW STRIP ── */
-.flow-strip{display:flex;align-items:center;gap:0;padding:4px 16px 10px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
-.flow-strip::-webkit-scrollbar{display:none;}
-.flow-card{flex:0 0 auto;background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:7px 10px;display:flex;align-items:center;gap:6px;cursor:pointer;touch-action:manipulation;transition:border-color .15s,background .15s;max-width:150px;min-width:0;}
-.flow-card:active{transform:scale(.95);}
-.flow-card.fc-running{border-color:var(--accent);background:linear-gradient(135deg,var(--s2),var(--s1));}
-.flow-num{font-family:var(--mono);font-size:9px;color:var(--text3);background:var(--s2);border-radius:50%;width:17px;height:17px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;line-height:1;}
-.flow-num.fn-running{background:var(--accent);color:#fff;}
-.flow-emoji{font-size:14px;flex-shrink:0;line-height:1;}
-.flow-name{font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);min-width:0;}
-.flow-arrow{flex:0 0 auto;color:var(--border2);font-size:13px;padding:0 5px;font-family:var(--mono);user-select:none;}
+/* ── PLANNED card with flow order: orange/salmon tint ── */
+.planned-card.has-flow{border-color:rgba(240,110,60,.45);background:linear-gradient(135deg,var(--s1),rgba(240,110,60,.07));}
+
+/* ── FLOW FULL CARDS ── */
+.fcard-list{padding:0 16px;display:flex;flex-direction:column;gap:0;}
+.fcard-focus-lbl{padding:6px 16px 3px;font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);}
+.fcard-completed{margin:6px 16px 6px;background:var(--green-dim);border:1px solid var(--green);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:8px;color:var(--green);font-family:var(--mono);font-size:11px;}
+.fcard-arrow-row{display:flex;justify-content:center;padding:4px 0;color:var(--border2);font-size:15px;user-select:none;}
+.fcard{background:var(--s1);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color .2s;}
+.fcard.fc-running{border-color:var(--accent);}
+.fcard-hdr{display:flex;align-items:center;padding:9px 12px;gap:7px;}
+.fcard-num{width:20px;height:20px;border-radius:50%;background:var(--s2);color:var(--text3);font-family:var(--mono);font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.fcard-num.fn-active{background:var(--accent);color:#fff;}
+.fcard-emoji{font-size:16px;flex-shrink:0;}
+.fcard-name{flex:1;font-size:13px;font-weight:700;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fcard-reorder{display:flex;gap:2px;flex-shrink:0;}
+.fcard-reorder button{background:var(--s2);border:none;border-radius:4px;color:var(--text3);font-size:10px;width:20px;height:20px;cursor:pointer;touch-action:manipulation;display:flex;align-items:center;justify-content:center;line-height:1;}
+.fcard-reorder button:active{transform:scale(.88);}
+.fcard-play{width:28px;height:28px;background:#1db954;border:none;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;touch-action:manipulation;flex-shrink:0;font-size:12px;color:#fff;transition:all .15s;}
+.fcard-play.fc-playing{background:var(--amber);color:#000;}
+.fcard-play:active{transform:scale(.88);}
+.fcard-timers{display:flex;align-items:center;gap:10px;padding:0 12px 5px;flex-wrap:wrap;}
+.fcard-focus-t{font-family:var(--mono);font-size:14px;color:var(--accent);font-weight:500;letter-spacing:.5px;}
+.fcard-break-t{font-family:var(--mono);font-size:10px;color:var(--teal);}
+.fcard-ideal{padding:0 12px 5px;font-size:9px;color:var(--amber);font-family:var(--mono);}
+.fcard-subs{border-top:1px solid var(--border2);padding:3px 0;}
+.fcard-sub-item{display:flex;align-items:center;gap:7px;padding:4px 12px;}
+.fcard-sub-check{width:12px;height:12px;border:1.5px solid var(--border2);border-radius:3px;flex-shrink:0;}
+.fcard-sub-check.done{background:var(--green);border-color:var(--green);}
+.fcard-sub-name{font-size:11px;color:var(--text2);}
+.fcard-sub-name.done{text-decoration:line-through;color:var(--text3);}
+/* ── TIMELINE 24H ── */
+.tl24-wrap{padding:4px 0 2px;}
+.tl24-blocks{display:flex;gap:5px;padding:4px 16px 6px;}
+.tl24-block-btn{flex:1;padding:3px 0;background:var(--s1);border:1px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:7px;color:var(--text3);cursor:pointer;text-align:center;touch-action:manipulation;transition:all .15s;line-height:1.4;}
+.tl24-block-btn.tl-active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+.tl24-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;position:relative;}
+.tl24-scroll::-webkit-scrollbar{display:none;}
+.tl24-inner{position:relative;height:54px;}
+.tl24-hour{position:absolute;top:0;bottom:0;border-left:1px solid var(--border);pointer-events:none;}
+.tl24-hour-lbl{font-family:var(--mono);font-size:7px;color:var(--text3);padding-left:2px;padding-top:2px;white-space:nowrap;position:absolute;top:0;}
+.tl24-now{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:10;border-radius:1px;pointer-events:none;}
+.tl24-now-tri{position:absolute;top:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--red);}
+.tl24-item{position:absolute;top:18px;height:24px;border-radius:4px;overflow:hidden;display:flex;align-items:center;padding:0 4px;min-width:4px;box-sizing:border-box;}
+.tl24-item-lbl{font-size:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono);}
+/* left/right ghost fade for timeline */
+.tl24-fade-l,.tl24-fade-r{position:absolute;top:0;bottom:0;width:16px;pointer-events:none;z-index:5;}
+.tl24-fade-l{left:0;background:linear-gradient(to right,var(--bg),transparent);}
+.tl24-fade-r{right:0;background:linear-gradient(to left,var(--bg),transparent);}
 
 /* Board view */
 .board-wrap{display:flex;gap:0;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:8px;}
@@ -638,9 +676,21 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   </div>
   <div class="board-wrap" id="plannedList"></div>
 
+  <!-- TIMELINE 24H -->
+  <div class="tl24-wrap" id="tl24Wrap" style="display:none;">
+    <div class="tl24-blocks" id="tl24Blocks"></div>
+    <div style="position:relative;">
+      <div class="tl24-fade-l"></div>
+      <div class="tl24-scroll" id="tl24Scroll">
+        <div class="tl24-inner" id="tl24Inner"></div>
+      </div>
+      <div class="tl24-fade-r"></div>
+    </div>
+  </div>
+
   <!-- FLOW -->
   <div class="sec-lbl" id="flowLbl" style="display:none;">flujo del día <span id="flowCount"></span></div>
-  <div class="flow-strip" id="flowStrip"></div>
+  <div class="fcard-list" id="flowStrip"></div>
 
   <!-- IN PROGRESS -->
   <div class="sec-lbl" id="runningLbl" style="display:none;">en curso <span id="runningCount"></span></div>
@@ -2350,7 +2400,6 @@ function removePlanned(pid){
 // ── FLOW ORDER ──
 function setFlowOrder(pid,val){
   const order=val===''?null:parseInt(val);
-  // If another visible item already has this number, free it first (swap prevented by disabling, but just in case)
   if(order!=null){
     S.planned.forEach(p=>{if(p.id!==pid&&p.flowOrder===order)p.flowOrder=null;});
   }
@@ -2359,41 +2408,249 @@ function setFlowOrder(pid,val){
   save();
   renderPlanned();
   renderFlow();
+  renderTimeline24();
+}
+
+function moveFlowOrder(pid,dir){
+  // dir: -1 = move earlier, +1 = move later
+  const p=S.planned.find(x=>x.id===pid);
+  if(!p||p.flowOrder==null) return;
+  const newOrder=p.flowOrder+dir;
+  if(newOrder<1||newOrder>20) return;
+  // Swap with whoever has newOrder
+  const other=S.planned.find(x=>x.id!==pid&&x.flowOrder===newOrder);
+  if(other) other.flowOrder=p.flowOrder;
+  p.flowOrder=newOrder;
+  save();
+  renderPlanned();
+  renderFlow();
+  renderTimeline24();
+}
+
+function _flowVisible(){
+  const nowMs=Date.now();
+  const sevenDaysMs=7*24*60*60*1000;
+  return S.planned.filter(p=>{
+    if(p.done||p.flowOrder==null) return false;
+    if(p.addedAt==='2099-01-01T00:00:00.000Z') return true;
+    return new Date(p.addedAt).getTime()<=nowMs+sevenDaysMs;
+  }).sort((a,b)=>(a.flowOrder||99)-(b.flowOrder||99));
 }
 
 function renderFlow(){
   const lbl=document.getElementById('flowLbl');
   const strip=document.getElementById('flowStrip');
   if(!lbl||!strip) return;
-  const nowMs=Date.now();
-  const sevenDaysMs=7*24*60*60*1000;
-  const visible=S.planned.filter(p=>{
-    if(p.done||p.flowOrder==null) return false;
-    if(p.addedAt==='2099-01-01T00:00:00.000Z') return true;
-    return new Date(p.addedAt).getTime()<=nowMs+sevenDaysMs;
-  }).sort((a,b)=>(a.flowOrder||99)-(b.flowOrder||99));
+  const visible=_flowVisible();
   lbl.style.display=visible.length?'flex':'none';
+  const tl24=document.getElementById('tl24Wrap');
+  if(tl24) tl24.style.display=visible.length?'block':'none';
   const cnt=document.getElementById('flowCount');
   if(cnt) cnt.textContent=visible.length?`(${visible.length})`:'';
   if(!visible.length){strip.innerHTML='';return;}
-  let html='';
+
+  let html=`<div class="fcard-focus-lbl">Focusing in:</div>`;
   visible.forEach((p,i)=>{
     const rKey=getRunKey(p.id,p.actId);
     const ctx=S.running[rKey];
-    const isRunning=ctx&&!ctx.paused;
-    html+=`<div class="flow-card ${isRunning?'fc-running':''}" onclick="scrollToPlanned('${p.id}')" title="${esc(p.actName)}">
-      <div class="flow-num ${isRunning?'fn-running':''}">${p.flowOrder}</div>
-      <div class="flow-emoji">${emojiHtml(p.actEmoji)}</div>
-      <div class="flow-name">${esc(p.actName)}</div>
+    const isRunning=!!ctx&&!ctx.paused;
+    const isBreaking=ctx&&!!ctx.breakStart;
+    const liveFocus=ctx&&!ctx.paused?elapsed(ctx.startTime):0;
+    const totalFocus=(ctx?(ctx.lapTotal||0):0)+liveFocus;
+    const liveBreak=isBreaking?elapsed(ctx.breakStart):0;
+    const totalBreak=(ctx?(ctx.breakTotal||0):0)+liveBreak;
+    const pendingSubs=(p.subtasks||[]).filter(st=>!st.done);
+    const doneSubs=(p.subtasks||[]).filter(st=>st.done);
+    const allSubs=[...pendingSubs,...doneSubs];
+    const idealLabel=p.idealSecs?`⏱ ${fmtM(p.idealSecs)} ideal`:'';
+
+    html+=`
+    <div class="fcard ${isRunning?'fc-running':''}" id="fc_${p.id}">
+      <div class="fcard-hdr">
+        <div class="fcard-num ${isRunning?'fn-active':''}">${p.flowOrder}</div>
+        <div class="fcard-emoji">${emojiHtml(p.actEmoji)}</div>
+        <div class="fcard-name">${esc(p.actName)}</div>
+        <div class="fcard-reorder">
+          <button onclick="moveFlowOrder('${p.id}',-1)" title="Subir en el flujo" ${p.flowOrder<=1?'disabled style="opacity:.3"':''}>↑</button>
+          <button onclick="moveFlowOrder('${p.id}',+1)" title="Bajar en el flujo" ${p.flowOrder>=20?'disabled style="opacity:.3"':''}>↓</button>
+        </div>
+        <button class="fcard-play ${isRunning?'fc-playing':''}" onclick="startActivity('${p.actId}','${p.id}',null)" title="${isRunning?'Pausar':'Iniciar'}">
+          ${isRunning?'⏸':'▶'}
+        </button>
+      </div>
+      <div class="fcard-timers">
+        <span class="fcard-focus-t" id="fct_${p.id}">${fmt(totalFocus)}</span>
+        ${totalBreak>0||isBreaking?`<span class="fcard-break-t">☕ <span id="fcb_${p.id}">${fmt(totalBreak)}</span></span>`:`<span class="fcard-break-t" id="fcb_${p.id}" style="display:none;"></span>`}
+      </div>
+      ${idealLabel?`<div class="fcard-ideal">${idealLabel}${p.note?` · 📌 ${esc(p.note)}`:''}${isRunning&&p.idealSecs?(()=>{const pct=Math.round(totalFocus/p.idealSecs*100);return` · ${pct}%`;})():''}${!isRunning&&p.idealSecs&&totalFocus>0?(()=>{const pct=Math.round(totalFocus/p.idealSecs*100);return` · ${pct}%`;})():''}</div>`:p.note?`<div class="fcard-ideal">📌 ${esc(p.note)}</div>`:''}
+      ${allSubs.length?`<div class="fcard-subs">${allSubs.map(st=>`
+        <div class="fcard-sub-item">
+          <div class="fcard-sub-check ${st.done?'done':''}"></div>
+          <span class="fcard-sub-name ${st.done?'done':''}">${esc(st.text)}</span>
+        </div>`).join('')}
+      </div>`:''}
     </div>`;
-    if(i<visible.length-1) html+=`<div class="flow-arrow">→</div>`;
+    if(i<visible.length-1) html+=`<div class="fcard-arrow-row">↓</div>`;
   });
+
+  html+=`<div class="fcard-completed">✓ Completed</div>`;
   strip.innerHTML=html;
+}
+
+function updateFlowCard(rKey){
+  // Update timer displays in the flow card without full re-render
+  const ctx=S.running[rKey];
+  if(!ctx) return;
+  // Find which planned item uses this rKey
+  const p=S.planned.find(x=>getRunKey(x.id,x.actId)===rKey);
+  if(!p||p.flowOrder==null) return;
+  const liveFocus=ctx.paused?0:elapsed(ctx.startTime);
+  const totalFocus=(ctx.lapTotal||0)+liveFocus;
+  const liveBreak=ctx.breakStart?elapsed(ctx.breakStart):0;
+  const totalBreak=(ctx.breakTotal||0)+liveBreak;
+  const tEl=document.getElementById('fct_'+p.id);
+  if(tEl) tEl.textContent=fmt(totalFocus);
+  const bEl=document.getElementById('fcb_'+p.id);
+  if(bEl){
+    if(totalBreak>0||ctx.breakStart){bEl.textContent=fmt(totalBreak);bEl.style.display='';}
+    else bEl.style.display='none';
+  }
 }
 
 function scrollToPlanned(pid){
   const el=document.getElementById('pc_'+pid);
   if(el) el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+// ── TIMELINE 24H ──
+var _tl24Block=null; // current active block index (0-3)
+var _tl24Timer=null;
+var _TL_SCALE=36; // px per hour
+
+// Block definitions: [label, startH_offset_from_midnight, endH_offset_from_midnight]
+// Offsets are from today's midnight. Negative = previous day.
+var _TL24_BLOCKS=[
+  {label:'10pm–7am', startH:-2,  endH:7,  autoFrom:0,    autoTo:7.0167}, // midnight to 7:01am
+  {label:'6am–4pm',  startH:6,   endH:16, autoFrom:7.0167,autoTo:16.0167}, // 7:01am to 4:01pm
+  {label:'3pm–11pm', startH:15,  endH:23, autoFrom:16.0167,autoTo:23.0167}, // 4:01pm to 11:01pm
+  {label:'10pm–7am', startH:22,  endH:31, autoFrom:23.0167,autoTo:31}  // 11:01pm to 7am next day
+];
+// Timeline spans from hour -12 to +36 relative to today's midnight (48h total)
+var _TL_START_H=-12; // hours before midnight today
+var _TL_TOTAL_H=48;
+
+function _tl24HourToX(hFromMidnight){
+  return (hFromMidnight-_TL_START_H)*_TL_SCALE;
+}
+
+function _tl24CurrentBlock(){
+  const now=new Date();
+  const h=now.getHours()+now.getMinutes()/60;
+  for(let i=0;i<_TL24_BLOCKS.length;i++){
+    const b=_TL24_BLOCKS[i];
+    if(h>=b.autoFrom&&h<b.autoTo) return i;
+  }
+  return 3; // late night fallback
+}
+
+function renderTimeline24(){
+  const wrap=document.getElementById('tl24Wrap');
+  if(!wrap||wrap.style.display==='none') return;
+  const scroll=document.getElementById('tl24Scroll');
+  const inner=document.getElementById('tl24Inner');
+  const blocksEl=document.getElementById('tl24Blocks');
+  if(!scroll||!inner||!blocksEl) return;
+
+  const totalW=_TL_TOTAL_H*_TL_SCALE;
+  inner.style.width=totalW+'px';
+
+  const now=new Date();
+  const midnight=new Date(now);midnight.setHours(0,0,0,0);
+  const nowH=(now-midnight)/3600000; // hours since midnight today
+
+  // Draw hour labels + vertical lines
+  let rulerHtml='';
+  for(let h=_TL_START_H;h<=_TL_TOTAL_H+_TL_START_H;h++){
+    const x=_tl24HourToX(h);
+    const absH=((h%24)+24)%24;
+    const lbl=absH===0?'00:00':(absH<10?'0'+absH+':00':absH+':00');
+    const isMidnight=absH===0;
+    rulerHtml+=`<div class="tl24-hour" style="left:${x}px;${isMidnight?'border-color:var(--border2);':''}">
+      <span class="tl24-hour-lbl" style="${isMidnight?'color:var(--text2);font-weight:600;':''}">${h%2===0?lbl:''}</span>
+    </div>`;
+  }
+
+  // Current time indicator
+  const nowX=_tl24HourToX(nowH);
+  rulerHtml+=`<div class="tl24-now" style="left:${nowX}px;"><div class="tl24-now-tri"></div></div>`;
+
+  // Planned items with scheduled times
+  const todayStr=new Date().toDateString();
+  const poKey='po_'+todayStr;
+  const prefs=S.prefs&&S.prefs[poKey]?S.prefs[poKey]:{};
+  const nowMs=Date.now();
+  const sevenDaysMs=7*24*60*60*1000;
+  const colors=['var(--accent)','var(--teal)','var(--pink)','var(--green)','var(--amber)'];
+  let ci=0;
+  S.planned.forEach(p=>{
+    if(p.done) return;
+    if(new Date(p.addedAt).toDateString()!==todayStr&&p.addedAt!=='2099-01-01T00:00:00.000Z') return;
+    const pref=prefs[p.id];
+    if(!pref||pref.abs==null) return;
+    const startH=pref.abs/60;
+    const durH=(p.idealSecs||3600)/3600;
+    const x=_tl24HourToX(startH);
+    const w=Math.max(durH*_TL_SCALE,4);
+    const col=colors[ci%colors.length]; ci++;
+    const inFlow=p.flowOrder!=null;
+    rulerHtml+=`<div class="tl24-item" style="left:${x}px;width:${w}px;background:${col}22;border:1px solid ${col};${inFlow?'border-width:2px;':''}" title="${esc(p.actName)} · ${pref.abs<600?'0'+Math.floor(pref.abs/60)+':'+String(pref.abs%60).padStart(2,'0'):Math.floor(pref.abs/60)+':'+String(pref.abs%60).padStart(2,'0')}">
+      <span class="tl24-item-lbl" style="color:${col};">${inFlow?p.flowOrder+' ':''}${esc(p.actName)}</span>
+    </div>`;
+  });
+
+  inner.innerHTML=rulerHtml;
+
+  // Block buttons
+  if(_tl24Block===null) _tl24Block=_tl24CurrentBlock();
+  blocksEl.innerHTML=_TL24_BLOCKS.map((b,i)=>`
+    <button class="tl24-block-btn ${_tl24Block===i?'tl-active':''}" onclick="_tl24GoBlock(${i})">${b.label}</button>
+  `).join('');
+
+  // Auto-scroll to active block (only on first render or block change)
+  _tl24ScrollToBlock(_tl24Block,false);
+}
+
+function _tl24GoBlock(idx){
+  _tl24Block=idx;
+  // Update button states
+  document.querySelectorAll('.tl24-block-btn').forEach((b,i)=>b.classList.toggle('tl-active',i===idx));
+  _tl24ScrollToBlock(idx,true);
+}
+
+function _tl24ScrollToBlock(idx,animate){
+  const scroll=document.getElementById('tl24Scroll');
+  if(!scroll) return;
+  const b=_TL24_BLOCKS[idx];
+  const x=_tl24HourToX(b.startH);
+  scroll.scrollTo({left:Math.max(0,x),behavior:animate?'smooth':'instant'});
+}
+
+function startTimeline24(){
+  if(_tl24Timer) clearInterval(_tl24Timer);
+  _tl24Timer=setInterval(()=>{
+    // Check if block should auto-switch
+    const cur=_tl24CurrentBlock();
+    if(cur!==_tl24Block){_tl24Block=cur;renderTimeline24();return;}
+    // Just update the now-line position
+    const inner=document.getElementById('tl24Inner');
+    if(!inner) return;
+    const now=new Date();
+    const midnight=new Date(now);midnight.setHours(0,0,0,0);
+    const nowH=(now-midnight)/3600000;
+    const nowX=_tl24HourToX(nowH);
+    const nowLine=inner.querySelector('.tl24-now');
+    if(nowLine) nowLine.style.left=nowX+'px';
+  },30000); // update every 30s
 }
 
 // subtasks
@@ -2560,6 +2817,7 @@ function startTick(rKey){
   timers[rKey]=setInterval(()=>{
     if(document.getElementById('page-tracker').classList.contains('active')){
       updateRunCard(rKey);
+      updateFlowCard(rKey);
       renderWeekGrid(); // keep week summary live
     }
   },1000);
@@ -2853,7 +3111,7 @@ function setDeviation(rKey,realActId){
 //  RENDER
 // ═══════════════════════════════════════════════════════
 function renderAll(){
-  renderWeekBadge();renderPlanned();renderFlow();renderRunning();renderWeekGrid();renderActList();renderDayMeta();
+  renderWeekBadge();renderPlanned();renderFlow();renderTimeline24();renderRunning();renderWeekGrid();renderActList();renderDayMeta();
   updateDeviceUI();
   updateSyncAutoBtn();
   var devLbl=document.getElementById('deviceIdLbl');
@@ -3038,7 +3296,7 @@ function renderPlanned(){
       const taken=usedOrders.has(n);
       flowOpts+=`<option value="${n}" ${p.flowOrder===n?'selected':''} ${taken?'disabled':''} style="color:var(--text);background:var(--bg);">${n}</option>`;
     }
-    const cardHtml=`<div class="planned-card ${p.done?'done-card':''} ${isRunning?'pc-running':''} ${p.auto?'pc-auto':''}" id="pc_${p.id}"
+    const cardHtml=`<div class="planned-card ${p.done?'done-card':''} ${isRunning?'pc-running':''} ${p.auto?'pc-auto':''} ${p.flowOrder?'has-flow':''}" id="pc_${p.id}"
       draggable="true"
       ondragstart="pcDragStart(event,'${p.id}')"
       ondragover="pcDragOver(event,'${p.id}')"
@@ -6698,6 +6956,7 @@ function stopAutoPull(){
   _autoPullInterval=null;
 }
 startAutoPull();
+startTimeline24();
 
 // Pull immediately when tab/app becomes visible again (critical for mobile)
 document.addEventListener('visibilitychange',function(){
