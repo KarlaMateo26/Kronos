@@ -125,33 +125,36 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 /* ── PLANNED card with flow order: orange/salmon tint ── */
 .planned-card.has-flow{border-color:rgba(240,110,60,.45);background:linear-gradient(135deg,var(--s1),rgba(240,110,60,.07));}
 
-/* ── FLOW FULL CARDS ── */
-.fcard-list{padding:0 16px;display:flex;flex-direction:column;gap:0;}
-.fcard-focus-lbl{padding:6px 16px 3px;font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);}
-.fcard-completed{margin:6px 16px 6px;background:var(--green-dim);border:1px solid var(--green);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:8px;color:var(--green);font-family:var(--mono);font-size:11px;}
-.fcard-arrow-row{display:flex;justify-content:center;padding:4px 0;color:var(--border2);font-size:15px;user-select:none;}
-.fcard{background:var(--s1);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color .2s;}
+/* ── FLOW STRIP — horizontal scroll ── */
+.fcard-list{display:flex;flex-direction:row;align-items:flex-start;gap:0;padding:4px 0 10px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.fcard-list::-webkit-scrollbar{display:none;}
+.fcard-list > *:first-child{margin-left:16px;}
+.fcard-list > *:last-child{margin-right:16px;}
+.fcard-focus-lbl{flex:0 0 auto;display:flex;align-items:center;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);padding-right:6px;white-space:nowrap;align-self:center;}
+.fcard-completed{flex:0 0 auto;background:var(--green-dim);border:1px solid var(--green);border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:6px;color:var(--green);font-family:var(--mono);font-size:10px;white-space:nowrap;align-self:center;}
+.fcard-arrow-row{flex:0 0 auto;color:var(--border2);font-size:16px;padding:0 4px;user-select:none;align-self:center;line-height:1;}
+.fcard{flex:0 0 220px;background:var(--s1);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color .2s;display:flex;flex-direction:column;}
 .fcard.fc-running{border-color:var(--accent);}
-.fcard-hdr{display:flex;align-items:center;padding:9px 12px;gap:7px;}
-.fcard-num{width:20px;height:20px;border-radius:50%;background:var(--s2);color:var(--text3);font-family:var(--mono);font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.fcard-hdr{display:flex;align-items:center;padding:8px 10px;gap:6px;}
+.fcard-num{width:18px;height:18px;border-radius:50%;background:var(--s2);color:var(--text3);font-family:var(--mono);font-size:8px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .fcard-num.fn-active{background:var(--accent);color:#fff;}
-.fcard-emoji{font-size:16px;flex-shrink:0;}
-.fcard-name{flex:1;font-size:13px;font-weight:700;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fcard-emoji{font-size:15px;flex-shrink:0;}
+.fcard-name{flex:1;font-size:12px;font-weight:700;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .fcard-reorder{display:flex;gap:2px;flex-shrink:0;}
-.fcard-reorder button{background:var(--s2);border:none;border-radius:4px;color:var(--text3);font-size:10px;width:20px;height:20px;cursor:pointer;touch-action:manipulation;display:flex;align-items:center;justify-content:center;line-height:1;}
+.fcard-reorder button{background:var(--s2);border:none;border-radius:4px;color:var(--text3);font-size:9px;width:18px;height:18px;cursor:pointer;touch-action:manipulation;display:flex;align-items:center;justify-content:center;line-height:1;}
 .fcard-reorder button:active{transform:scale(.88);}
-.fcard-play{width:28px;height:28px;background:#1db954;border:none;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;touch-action:manipulation;flex-shrink:0;font-size:12px;color:#fff;transition:all .15s;}
+.fcard-play{width:26px;height:26px;background:#1db954;border:none;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;touch-action:manipulation;flex-shrink:0;font-size:11px;color:#fff;transition:all .15s;}
 .fcard-play.fc-playing{background:var(--amber);color:#000;}
 .fcard-play:active{transform:scale(.88);}
-.fcard-timers{display:flex;align-items:center;gap:10px;padding:0 12px 5px;flex-wrap:wrap;}
-.fcard-focus-t{font-family:var(--mono);font-size:14px;color:var(--accent);font-weight:500;letter-spacing:.5px;}
-.fcard-break-t{font-family:var(--mono);font-size:10px;color:var(--teal);}
-.fcard-ideal{padding:0 12px 5px;font-size:9px;color:var(--amber);font-family:var(--mono);}
-.fcard-subs{border-top:1px solid var(--border2);padding:3px 0;}
-.fcard-sub-item{display:flex;align-items:center;gap:7px;padding:4px 12px;}
-.fcard-sub-check{width:12px;height:12px;border:1.5px solid var(--border2);border-radius:3px;flex-shrink:0;}
+.fcard-timers{display:flex;align-items:center;gap:8px;padding:0 10px 4px;}
+.fcard-focus-t{font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:500;letter-spacing:.5px;}
+.fcard-break-t{font-family:var(--mono);font-size:9px;color:var(--teal);}
+.fcard-ideal{padding:0 10px 4px;font-size:9px;color:var(--amber);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fcard-subs{border-top:1px solid var(--border2);padding:3px 0;flex:1;}
+.fcard-sub-item{display:flex;align-items:center;gap:6px;padding:3px 10px;}
+.fcard-sub-check{width:11px;height:11px;border:1.5px solid var(--border2);border-radius:3px;flex-shrink:0;}
 .fcard-sub-check.done{background:var(--green);border-color:var(--green);}
-.fcard-sub-name{font-size:11px;color:var(--text2);}
+.fcard-sub-name{font-size:10px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .fcard-sub-name.done{text-decoration:line-through;color:var(--text3);}
 /* ── TIMELINE 24H ── */
 .tl24-wrap{padding:4px 0 2px;}
@@ -678,7 +681,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 
   <!-- TIMELINE 24H -->
   <div class="tl24-wrap" id="tl24Wrap" style="display:none;">
-    <div class="tl24-blocks" id="tl24Blocks"></div>
     <div style="position:relative;">
       <div class="tl24-fade-l"></div>
       <div class="tl24-scroll" id="tl24Scroll">
@@ -2451,6 +2453,7 @@ function renderFlow(){
 
   let html=`<div class="fcard-focus-lbl">Focusing in:</div>`;
   visible.forEach((p,i)=>{
+
     const rKey=getRunKey(p.id,p.actId);
     const ctx=S.running[rKey];
     const isRunning=!!ctx&&!ctx.paused;
@@ -2490,7 +2493,7 @@ function renderFlow(){
         </div>`).join('')}
       </div>`:''}
     </div>`;
-    if(i<visible.length-1) html+=`<div class="fcard-arrow-row">↓</div>`;
+    if(i<visible.length-1) html+=`<div class="fcard-arrow-row">→</div>`;
   });
 
   html+=`<div class="fcard-completed">✓ Completed</div>`;
@@ -2558,8 +2561,7 @@ function renderTimeline24(){
   if(!wrap||wrap.style.display==='none') return;
   const scroll=document.getElementById('tl24Scroll');
   const inner=document.getElementById('tl24Inner');
-  const blocksEl=document.getElementById('tl24Blocks');
-  if(!scroll||!inner||!blocksEl) return;
+  if(!scroll||!inner) return;
 
   const totalW=_TL_TOTAL_H*_TL_SCALE;
   inner.style.width=totalW+'px';
@@ -2610,13 +2612,8 @@ function renderTimeline24(){
 
   inner.innerHTML=rulerHtml;
 
-  // Block buttons
+  // Auto-scroll to active block based on current time
   if(_tl24Block===null) _tl24Block=_tl24CurrentBlock();
-  blocksEl.innerHTML=_TL24_BLOCKS.map((b,i)=>`
-    <button class="tl24-block-btn ${_tl24Block===i?'tl-active':''}" onclick="_tl24GoBlock(${i})">${b.label}</button>
-  `).join('');
-
-  // Auto-scroll to active block (only on first render or block change)
   _tl24ScrollToBlock(_tl24Block,false);
 }
 
