@@ -118,6 +118,22 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 
 .empty-planned{text-align:center;padding:20px;color:var(--text3);font-size:11px;font-family:var(--mono);}
 
+/* ── FLOW ORDER selector on planned card ── */
+.pc-flow-sel{background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text3);font-family:var(--mono);font-size:10px;width:26px;height:26px;text-align:center;text-align-last:center;appearance:none;-webkit-appearance:none;outline:none;cursor:pointer;flex-shrink:0;padding:0;}
+.pc-flow-sel.has-order{color:var(--accent);border-color:var(--accent);font-weight:700;}
+
+/* ── FLOW STRIP ── */
+.flow-strip{display:flex;align-items:center;gap:0;padding:4px 16px 10px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.flow-strip::-webkit-scrollbar{display:none;}
+.flow-card{flex:0 0 auto;background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:7px 10px;display:flex;align-items:center;gap:6px;cursor:pointer;touch-action:manipulation;transition:border-color .15s,background .15s;max-width:150px;min-width:0;}
+.flow-card:active{transform:scale(.95);}
+.flow-card.fc-running{border-color:var(--accent);background:linear-gradient(135deg,var(--s2),var(--s1));}
+.flow-num{font-family:var(--mono);font-size:9px;color:var(--text3);background:var(--s2);border-radius:50%;width:17px;height:17px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;line-height:1;}
+.flow-num.fn-running{background:var(--accent);color:#fff;}
+.flow-emoji{font-size:14px;flex-shrink:0;line-height:1;}
+.flow-name{font-size:10px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);min-width:0;}
+.flow-arrow{flex:0 0 auto;color:var(--border2);font-size:13px;padding:0 5px;font-family:var(--mono);user-select:none;}
+
 /* Board view */
 .board-wrap{display:flex;gap:0;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:8px;}
 .board-wrap::-webkit-scrollbar{height:3px;}
@@ -621,6 +637,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
     </div>
   </div>
   <div class="board-wrap" id="plannedList"></div>
+
+  <!-- FLOW -->
+  <div class="sec-lbl" id="flowLbl" style="display:none;">flujo del día <span id="flowCount"></span></div>
+  <div class="flow-strip" id="flowStrip"></div>
 
   <!-- IN PROGRESS -->
   <div class="sec-lbl" id="runningLbl" style="display:none;">en curso <span id="runningCount"></span></div>
@@ -1469,7 +1489,8 @@ function _buildCompressedState(){
     planned:(S.planned||[]).filter(function(p){return!p.done;}).map(function(p){
       return{id:p.id,actId:p.actId,actName:p.actName,actEmoji:p.actEmoji,
         idealSecs:p.idealSecs,note:p.note,done:p.done,addedAt:p.addedAt,
-        divisionId:p.divisionId,subtasks:p.subtasks};
+        divisionId:p.divisionId,subtasks:p.subtasks,
+        flowOrder:p.flowOrder||null};
     }),
     running:S.running||{},
     prefs:S.prefs||{},
@@ -1491,7 +1512,7 @@ function _pushToCloud(){
   var pushHash=JSON.stringify({
     acts:(S.activities||[]).map(function(a){return a.id+(a.divisionId||'')+(a.name||'')+(a.emoji||'')+(a.color||'')+(a.active?'1':'0');}).join(''),
     planned:(S.planned||[]).filter(function(p){return!p.done;}).map(function(p){
-      return p.id+(p.idealSecs||0)+(p.divisionId||'')+(p.subtasks||[]).map(function(st){return st.id+(st.done?'1':'0');}).join('');
+      return p.id+(p.idealSecs||0)+(p.divisionId||'')+(p.flowOrder||'')+(p.subtasks||[]).map(function(st){return st.id+(st.done?'1':'0');}).join('');
     }).join(''),
     sessions:(S.sessions||[]).length+'|'+(S.sessions||[]).slice(-20).map(function(s){return s.id+(s.note||'')+(s.subtaskName||'');}).join(''),
     running:JSON.stringify(S.running||{}),
@@ -1680,10 +1701,11 @@ function pullFromCloud(){
               else if(st.done) stMap[st.id].done=true; // done wins
             });
             merged.subtasks=Object.values(stMap);
-            // local wins for idealSecs and note if set
+            // local wins for idealSecs, note, and flowOrder if set
             if(p.idealSecs) merged.idealSecs=p.idealSecs;
             if(p.note) merged.note=p.note;
             if(p.done||merged.done) merged.done=true; // done is permanent
+            if(p.flowOrder!=null) merged.flowOrder=p.flowOrder; // local flow order wins
             planMap[p.id]=merged;
           }
         });
@@ -2325,6 +2347,55 @@ function removePlanned(pid){
   save();forcePush();renderAll();
 }
 
+// ── FLOW ORDER ──
+function setFlowOrder(pid,val){
+  const order=val===''?null:parseInt(val);
+  // If another visible item already has this number, free it first (swap prevented by disabling, but just in case)
+  if(order!=null){
+    S.planned.forEach(p=>{if(p.id!==pid&&p.flowOrder===order)p.flowOrder=null;});
+  }
+  const p=S.planned.find(p=>p.id===pid);
+  if(p) p.flowOrder=order;
+  save();
+  renderPlanned();
+  renderFlow();
+}
+
+function renderFlow(){
+  const lbl=document.getElementById('flowLbl');
+  const strip=document.getElementById('flowStrip');
+  if(!lbl||!strip) return;
+  const nowMs=Date.now();
+  const sevenDaysMs=7*24*60*60*1000;
+  const visible=S.planned.filter(p=>{
+    if(p.done||p.flowOrder==null) return false;
+    if(p.addedAt==='2099-01-01T00:00:00.000Z') return true;
+    return new Date(p.addedAt).getTime()<=nowMs+sevenDaysMs;
+  }).sort((a,b)=>(a.flowOrder||99)-(b.flowOrder||99));
+  lbl.style.display=visible.length?'flex':'none';
+  const cnt=document.getElementById('flowCount');
+  if(cnt) cnt.textContent=visible.length?`(${visible.length})`:'';
+  if(!visible.length){strip.innerHTML='';return;}
+  let html='';
+  visible.forEach((p,i)=>{
+    const rKey=getRunKey(p.id,p.actId);
+    const ctx=S.running[rKey];
+    const isRunning=ctx&&!ctx.paused;
+    html+=`<div class="flow-card ${isRunning?'fc-running':''}" onclick="scrollToPlanned('${p.id}')" title="${esc(p.actName)}">
+      <div class="flow-num ${isRunning?'fn-running':''}">${p.flowOrder}</div>
+      <div class="flow-emoji">${emojiHtml(p.actEmoji)}</div>
+      <div class="flow-name">${esc(p.actName)}</div>
+    </div>`;
+    if(i<visible.length-1) html+=`<div class="flow-arrow">→</div>`;
+  });
+  strip.innerHTML=html;
+}
+
+function scrollToPlanned(pid){
+  const el=document.getElementById('pc_'+pid);
+  if(el) el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
 // subtasks
 // Priority icons
 function priorityIcon(p){
@@ -2782,7 +2853,7 @@ function setDeviation(rKey,realActId){
 //  RENDER
 // ═══════════════════════════════════════════════════════
 function renderAll(){
-  renderWeekBadge();renderPlanned();renderRunning();renderWeekGrid();renderActList();renderDayMeta();
+  renderWeekBadge();renderPlanned();renderFlow();renderRunning();renderWeekGrid();renderActList();renderDayMeta();
   updateDeviceUI();
   updateSyncAutoBtn();
   var devLbl=document.getElementById('deviceIdLbl');
@@ -2795,7 +2866,7 @@ var _lastStateHash='';
 function smartRenderAfterPull(){
   const hash=JSON.stringify({
     acts:S.activities.map(a=>a.id+(a.divisionId||'')+(a.weekTotal||0)+(a.color||'')+(a.emoji||'')+(a.active?'1':'0')).join(','),
-    planned:S.planned.map(p=>p.id+(p.done?'1':'0')+(p.divisionId||'')+(p.subtasks||[]).map(st=>st.id+(st.done?'1':'0')).join('')).join(','),
+    planned:S.planned.map(p=>p.id+(p.done?'1':'0')+(p.divisionId||'')+(p.flowOrder||'')+(p.subtasks||[]).map(st=>st.id+(st.done?'1':'0')).join('')).join(','),
     running:Object.keys(S.running).sort().map(k=>{
       const r=S.running[k];return k+(r?r.paused?'p':'r':'');
     }).join(','),
@@ -2960,6 +3031,13 @@ function renderPlanned(){
     // Check for missing default subtasks
     const act4def=S.activities.find(a=>a.id===p.actId);
     const missingDefaults=(act4def&&act4def.defaultSubtasks||[]).filter(dt=>!p.subtasks.some(st=>st.text.toLowerCase()===dt.toLowerCase()));
+    // Flow order selector options (1-20, taken numbers disabled except this item's own)
+    const usedOrders=new Set(todayPlanned.filter(x=>x.id!==p.id&&x.flowOrder!=null).map(x=>x.flowOrder));
+    let flowOpts=`<option value="" style="color:var(--text);background:var(--bg);">·</option>`;
+    for(let n=1;n<=20;n++){
+      const taken=usedOrders.has(n);
+      flowOpts+=`<option value="${n}" ${p.flowOrder===n?'selected':''} ${taken?'disabled':''} style="color:var(--text);background:var(--bg);">${n}</option>`;
+    }
     const cardHtml=`<div class="planned-card ${p.done?'done-card':''} ${isRunning?'pc-running':''} ${p.auto?'pc-auto':''}" id="pc_${p.id}"
       draggable="true"
       ondragstart="pcDragStart(event,'${p.id}')"
@@ -2982,6 +3060,7 @@ function renderPlanned(){
           <div class="pc-meta">${metaBadges}</div>
         </div>
         <div class="pc-icon-btns">
+          <select class="pc-flow-sel ${p.flowOrder?'has-order':''}" title="Posición en el flujo del día" onclick="event.stopPropagation()" onchange="setFlowOrder('${p.id}',this.value)">${flowOpts}</select>
           <button class="pc-icon-btn play ${isRunning?'active-now':''}" onclick="startActivity('${p.actId}','${p.id}',null)" title="${isRunning?'Pausar':'Iniciar'}">
             ${isRunning?'⏸':'▶'}
           </button>
