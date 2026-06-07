@@ -130,7 +130,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .fcard-row{display:flex;flex-direction:row;align-items:center;gap:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:2px 0 4px;}
 .fcard-row::-webkit-scrollbar{display:none;}
 .fcard-focus-lbl{flex:0 0 auto;display:flex;align-items:center;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);padding-right:6px;white-space:nowrap;}
-.fcard-completed{flex:0 0 auto;display:flex;align-items:center;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--green);font-family:var(--mono);padding-left:6px;white-space:nowrap;}
+.fcard-completed{flex:0 0 auto;display:flex;align-items:center;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);padding-left:6px;white-space:nowrap;}
 .fcard-done-chip{flex:0 0 auto;background:var(--s1);border:1px solid rgba(34,211,160,.4);border-radius:8px;padding:5px 9px;display:flex;align-items:center;gap:5px;opacity:.7;}
 .fcard-done-num{width:15px;height:15px;border-radius:50%;background:var(--green);color:#fff;font-family:var(--mono);font-size:7px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .fcard-done-name{font-size:10px;color:var(--text2);white-space:nowrap;max-width:90px;overflow:hidden;text-overflow:ellipsis;}
@@ -2480,8 +2480,8 @@ function renderFlow(){
         <div class="fcard-emoji">${emojiHtml(p.actEmoji)}</div>
         <div class="fcard-name">${esc(p.actName)}</div>
         <div class="fcard-reorder">
-          <button onclick="moveFlowOrder('${p.id}',-1)" title="Subir en el flujo" ${p.flowOrder<=1?'disabled style="opacity:.3"':''}>↑</button>
-          <button onclick="moveFlowOrder('${p.id}',+1)" title="Bajar en el flujo" ${p.flowOrder>=20?'disabled style="opacity:.3"':''}>↓</button>
+          <button onclick="moveFlowOrder('${p.id}',-1)" title="Mover antes" ${p.flowOrder<=1?'disabled style="opacity:.3"':''}>←</button>
+          <button onclick="moveFlowOrder('${p.id}',+1)" title="Mover después" ${p.flowOrder>=20?'disabled style="opacity:.3"':''}>→</button>
         </div>
         <button class="fcard-play ${isRunning?'fc-playing':''}" onclick="startActivity('${p.actId}','${p.id}',null)" title="${isRunning?'Pausar':'Iniciar'}">
           ${isRunning?'⏸':'▶'}
@@ -2541,7 +2541,7 @@ function scrollToPlanned(pid){
 // ── TIMELINE 24H ──
 var _tl24Block=null; // current active block index (0-3)
 var _tl24Timer=null;
-var _TL_SCALE=36; // px per hour
+var _TL_SCALE=144; // px per hour
 
 // Block definitions: [label, startH_offset_from_midnight, endH_offset_from_midnight]
 // Offsets are from today's midnight. Negative = previous day.
