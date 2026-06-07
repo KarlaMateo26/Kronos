@@ -825,7 +825,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
         <button onclick="_syncDbgForcePush()" style="background:var(--accent);color:#fff;border:none;border-radius:9px;padding:10px 14px;font-family:var(--mono);font-size:11px;cursor:pointer;text-align:left;">
           ↑ Forzar subida (este dispositivo → nube)
         </button>
-        <button onclick="_syncDbgForcePull()" style="background:var(--s2);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:10px 14px;font-family:var(--mono);font-size:11px;cursor:pointer;text-align:left;">
+        <button onclick="_syncDbgForcePull()" id="syncDbgPullBtn" style="background:var(--s2);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:10px 14px;font-family:var(--mono);font-size:11px;cursor:pointer;text-align:left;">
           ↓ Forzar bajada (nube → este dispositivo)
         </button>
         <div style="height:1px;background:var(--border);margin:4px 0;"></div>
@@ -1531,8 +1531,9 @@ function save(){
   }
   S._lastModified=Date.now(); // track when state was last changed locally
   localStorage.setItem(SK,JSON.stringify(S));
-  // Push if auto-sync is on, OR if this device is set as the primary writer
-  // (primary always pushes regardless of auto/manual toggle)
+  // Readonly devices NEVER push — layer 1 guard
+  if(_syncMode==='readonly') return;
+  // Push if auto-sync is on, OR if this device is primary
   if(!_inPull && (_syncAuto || _syncMode==='primary')) syncToCloud();
 }
 
@@ -1556,6 +1557,8 @@ function recalcWeekTotals(){
 var _syncTimer=null;
 
 function syncToCloud(){
+  // Readonly devices NEVER push — layer 2 guard
+  if(_syncMode==='readonly') return;
   clearTimeout(_syncTimer);
   _syncTimer=setTimeout(_pushToCloud, 1500);
 }
@@ -2258,17 +2261,21 @@ function _refreshSyncDebug(){
   var el=document.getElementById('syncDbgInfo');
   if(!el)return;
   var ago=function(ts){if(!ts)return'nunca';var s=Math.round((Date.now()-ts)/1000);return s<60?s+'s':Math.round(s/60)+'min';};
+  var modeLabel=(_syncMode==='readonly')?'📖 Solo lectura — solo baja, nunca sube':
+    (_syncMode==='primary')?'★ Principal — solo sube, nunca baja auto':
+    '🔄 Compartido — sube y baja';
   var lines=[
     'Este dispositivo:  <b style="color:var(--accent)">'+_deviceId+'</b>',
-    'Modo:              <b>'+((_syncMode==='readonly')?'📖 Solo lectura':(_syncMode==='primary')?'★ Principal':'🔄 Compartido')+'</b>',
+    'Modo:              <b>'+modeLabel+'</b>',
     'Sync auto:         <b>'+(_syncAuto?'✓ Sí':'✗ No')+'</b>',
     '──────────────────────────────',
     'Última subida:     '+(_lastPushAt?'hace '+ago(_lastPushAt):'–'),
     'Última bajada:     '+(_lastPullAt?'hace '+ago(_lastPullAt)+(_lastPullOk?' ✓':' ✗'):'–'),
     '──────────────────────────────',
-    'Nube subida por:   '+(_cloudDeviceId||'–'),
+    'Nube subida por:   <b'+(_cloudDeviceId===_deviceId?' style="color:var(--green)"':'')+'>'+(_cloudDeviceId||'–')+'</b>',
     'Nube subida hace:  '+(_cloudPushedAt?ago(_cloudPushedAt):'–'),
-    (_cloudDeviceId&&_cloudDeviceId===_deviceId?'⚠ La nube fue subida por ESTE dispositivo':''),
+    (_cloudDeviceId&&_cloudDeviceId===_deviceId?'<b style="color:var(--green)">✓ La nube tiene datos de ESTE dispositivo</b>':
+     _cloudDeviceId?'<b style="color:var(--amber)">⚠ La nube tiene datos de otro dispositivo</b>':''),
   ].filter(Boolean);
   el.innerHTML=lines.join('<br>');
 }
@@ -7283,12 +7290,19 @@ document.addEventListener('focusout',function(e){
   }
 });
 
+function _shouldAutoPull(){
+  // Primary devices ONLY push — they never auto-pull (eliminates race conditions)
+  if(_syncMode==='primary') return false;
+  // Readonly always pulls (it's the only way it gets updates)
+  if(_syncMode==='readonly') return true;
+  // Shared: pull only if auto-sync is on
+  return _syncAuto;
+}
+
 function startAutoPull(){
   if(_autoPullInterval)return;
   _autoPullInterval=setInterval(function(){
-    // Always pull in readonly mode (it's the only way it gets updates).
-    // In writable modes, only pull if auto-sync is on.
-    if(!_syncAuto && _syncMode!=='readonly') return;
+    if(!_shouldAutoPull()) return;
     if(document.hidden)return;
     if(_userTyping)return;
     pullFromCloud();
@@ -7303,19 +7317,11 @@ startTimeline24();
 
 // Pull immediately when tab/app becomes visible again (critical for mobile)
 document.addEventListener('visibilitychange',function(){
-  if(!document.hidden&&(_syncAuto||_syncMode==='readonly')) pullFromCloud();
+  if(!document.hidden&&_shouldAutoPull()) pullFromCloud();
 });
 window.addEventListener('pageshow',function(){
-  if(_syncAuto||_syncMode==='readonly') pullFromCloud();
+  if(_shouldAutoPull()) pullFromCloud();
 });
-
-// In readonly mode: pull every 10s (only in auto mode)
-setInterval(function(){
-  if(!_syncAuto)return;
-  if(_syncMode==='readonly'&&!document.hidden&&!_userTyping){
-    pullFromCloud();
-  }
-},10000);
 
 // Show FAB only when activities section is visible
 (function(){
