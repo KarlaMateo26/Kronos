@@ -182,6 +182,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .tl24-fade-r{right:0;background:linear-gradient(to left,var(--bg),transparent);}
 .tl24-nav-btn{flex:0 0 auto;background:none;border:none;color:var(--text3);font-size:20px;line-height:1;padding:0 6px;cursor:pointer;touch-action:manipulation;height:54px;display:flex;align-items:center;transition:color .15s;}
 .tl24-nav-btn:active{color:var(--text);}
+.tl24-now-btn{flex:0 0 auto;background:none;border:none;color:var(--text3);font-size:7px;letter-spacing:1.5px;text-transform:uppercase;font-family:var(--mono);padding:0 4px 0 2px;cursor:pointer;touch-action:manipulation;white-space:nowrap;transition:color .15s;line-height:1;}
+.tl24-now-btn:active{color:var(--red);}
 .fcard-sub-check{cursor:pointer;}
 
 /* Board view */
@@ -703,6 +705,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
         <div class="tl24-fade-r"></div>
       </div>
       <button class="tl24-nav-btn" onclick="_tl24Nav(+1)" title="Bloque siguiente">›</button>
+      <button class="tl24-now-btn" onclick="_tl24GoNow()" title="Ir a la hora actual">ahora</button>
     </div>
   </div>
 
@@ -2776,6 +2779,21 @@ function _tl24Nav(dir){
   const cur=_tl24Block===null?_tl24CurrentBlock():_tl24Block;
   _tl24Block=(cur+dir+4)%4;
   renderTimeline24();
+}
+
+function _tl24GoNow(){
+  _tl24Block=_tl24CurrentBlock();
+  renderTimeline24();
+  requestAnimationFrame(()=>{
+    const scroll=document.getElementById('tl24Scroll');
+    if(!scroll) return;
+    const b=_TL24_BLOCKS[_tl24Block];
+    const now=new Date();
+    const midnight=new Date(now);midnight.setHours(0,0,0,0);
+    const nowH=(now-midnight)/3600000;
+    const nowX=(nowH-b.startH)*_TL_SCALE;
+    scroll.scrollTo({left:Math.max(0,nowX-scroll.clientWidth/2),behavior:'smooth'});
+  });
 }
 
 function _tl24ScrollToBlock(idx,animate){
