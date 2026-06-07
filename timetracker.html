@@ -2802,7 +2802,7 @@ function startTimeline24(){
     const nowX=(nowH-b.startH)*_TL_SCALE;
     const nowLine=inner.querySelector('.tl24-now');
     if(nowLine) nowLine.style.left=nowX+'px';
-  },30000); // update every 30s
+  },1800000); // update every 30min
 }
 
 // subtasks
