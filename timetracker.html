@@ -2470,7 +2470,7 @@ function renderFlow(){
     const pendingSubs=(p.subtasks||[]).filter(st=>!st.done);
     const doneSubs=(p.subtasks||[]).filter(st=>st.done);
     const allSubs=[...pendingSubs,...doneSubs];
-    const idealLabel=p.idealSecs?`⏱ ${fmtM(p.idealSecs)} ideal`:'';
+    const idealLabel=p.idealSecs?`⏱ ${fmtM(p.idealSecs)}`:'';
 
     if(i>0) html+=`<div class="fcard-arrow-row">→</div>`;
     html+=`
@@ -2500,16 +2500,16 @@ function renderFlow(){
       </div>`:''}
     </div>`;
   });
-  html+=`<div class="fcard-arrow-row">→</div><span class="fcard-completed" style="padding-right:16px;">Completed</span></div>`;
-
+  html+=`<div class="fcard-arrow-row">→</div><span class="fcard-completed">Completed</span>`;
   if(finished.length){
-    html+=`<div class="fcard-row"><span class="fcard-focus-lbl" style="padding-left:16px;">Finished:</span>`;
+    html+=`<span style="flex:0 0 1px;height:28px;background:var(--border2);margin:0 10px;align-self:center;"></span>`;
+    html+=`<span class="fcard-focus-lbl">Finished:</span>`;
     finished.forEach((p,i)=>{
       if(i>0) html+=`<div class="fcard-arrow-row">→</div>`;
       html+=`<div class="fcard-done-chip"><div class="fcard-done-num">${p.flowOrder}</div><span style="font-size:13px;line-height:1;">${emojiHtml(p.actEmoji)}</span><span class="fcard-done-name">${esc(p.actName)}</span><span style="color:var(--green);font-size:10px;line-height:1;">✓</span></div>`;
     });
-    html+=`<span style="flex:0 0 16px;"></span></div>`;
   }
+  html+=`<span style="flex:0 0 16px;"></span></div>`;
   strip.innerHTML=html;
 }
 
@@ -2576,17 +2576,23 @@ function renderTimeline24(){
   const inner=document.getElementById('tl24Inner');
   if(!scroll||!inner) return;
 
-  const totalW=_TL_TOTAL_H*_TL_SCALE;
+  if(_tl24Block===null) _tl24Block=_tl24CurrentBlock();
+  const b=_TL24_BLOCKS[_tl24Block];
+  const bStart=b.startH;
+  const bEnd=b.endH;
+  const bHours=bEnd-bStart;
+  const totalW=bHours*_TL_SCALE;
   inner.style.width=totalW+'px';
 
   const now=new Date();
   const midnight=new Date(now);midnight.setHours(0,0,0,0);
-  const nowH=(now-midnight)/3600000; // hours since midnight today
+  const nowH=(now-midnight)/3600000;
+  const hToX=h=>(h-bStart)*_TL_SCALE;
 
-  // Draw hour labels + vertical lines
+  // Draw hour labels + vertical lines for current block only
   let rulerHtml='';
-  for(let h=_TL_START_H;h<=_TL_TOTAL_H+_TL_START_H;h++){
-    const x=_tl24HourToX(h);
+  for(let h=Math.ceil(bStart);h<=bEnd;h++){
+    const x=hToX(h);
     const absH=((h%24)+24)%24;
     const lbl=absH===0?'00:00':(absH<10?'0'+absH+':00':absH+':00');
     const isMidnight=absH===0;
@@ -2595,16 +2601,16 @@ function renderTimeline24(){
     </div>`;
   }
 
-  // Current time indicator
-  const nowX=_tl24HourToX(nowH);
-  rulerHtml+=`<div class="tl24-now" style="left:${nowX}px;"><div class="tl24-now-tri"></div></div>`;
+  // Current time indicator (only within block range)
+  const nowX=hToX(nowH);
+  if(nowX>=0&&nowX<=totalW){
+    rulerHtml+=`<div class="tl24-now" style="left:${nowX}px;"><div class="tl24-now-tri"></div></div>`;
+  }
 
-  // Planned items with scheduled times
+  // Planned items within current block's hour range
   const todayStr=new Date().toDateString();
   const poKey='po_'+todayStr;
   const prefs=S.prefs&&S.prefs[poKey]?S.prefs[poKey]:{};
-  const nowMs=Date.now();
-  const sevenDaysMs=7*24*60*60*1000;
   const colors=['var(--accent)','var(--teal)','var(--pink)','var(--green)','var(--amber)'];
   let ci=0;
   S.planned.forEach(p=>{
@@ -2613,8 +2619,9 @@ function renderTimeline24(){
     const pref=prefs[p.id];
     if(!pref||pref.abs==null) return;
     const startH=pref.abs/60;
+    if(startH<bStart||startH>bEnd) return;
     const durH=(p.idealSecs||3600)/3600;
-    const x=_tl24HourToX(startH);
+    const x=hToX(startH);
     const w=Math.max(durH*_TL_SCALE,4);
     const col=colors[ci%colors.length]; ci++;
     const inFlow=p.flowOrder!=null;
@@ -2624,10 +2631,7 @@ function renderTimeline24(){
   });
 
   inner.innerHTML=rulerHtml;
-
-  // Auto-scroll to active block based on current time
-  if(_tl24Block===null) _tl24Block=_tl24CurrentBlock();
-  _tl24ScrollToBlock(_tl24Block,false);
+  scroll.scrollTo({left:0,behavior:'instant'});
 }
 
 function _tl24GoBlock(idx){
@@ -2657,7 +2661,8 @@ function startTimeline24(){
     const now=new Date();
     const midnight=new Date(now);midnight.setHours(0,0,0,0);
     const nowH=(now-midnight)/3600000;
-    const nowX=_tl24HourToX(nowH);
+    const b=_TL24_BLOCKS[_tl24Block];
+    const nowX=(nowH-b.startH)*_TL_SCALE;
     const nowLine=inner.querySelector('.tl24-now');
     if(nowLine) nowLine.style.left=nowX+'px';
   },30000); // update every 30s
