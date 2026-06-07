@@ -1631,10 +1631,35 @@ function _pushToCloud(){
 
   var lean=_buildCompressedState();
   var rawJson=JSON.stringify({state:lean});
-// Only remove lone surrogates (invalid UTF-16) — valid emoji pairs (e.g. 🐢 = D83D DC22) must stay intact
-var payload=rawJson.replace(/([\uD800-\uDBFF][\uDC00-\uDFFF])|[\uD800-\uDFFF]/g,function(m,pair){return pair?pair:'';});
+  // Only remove lone surrogates (invalid UTF-16) — valid emoji pairs must stay intact
+  var payload=rawJson.replace(/([\uD800-\uDBFF][\uDC00-\uDFFF])|[\uD800-\uDFFF]/g,function(m,pair){return pair?pair:'';});
   _updateSyncDot(null);
 
+  // Form POST to hidden iframe: bypasses Firefox tracking protection that blocks fetch/XHR.
+  // JSONP (GET) already works via <script> tag for the same reason.
+  // The fallback fetch is kept in case the form method fails (e.g. some CSP environments).
+  var formOk=false;
+  try{
+    var form=document.createElement('form');
+    form.method='POST';form.action=API_URL;
+    form.target='_kronosFrame';form.style.display='none';
+    var inp=document.createElement('input');
+    inp.type='hidden';inp.name='state';inp.value=payload;
+    form.appendChild(inp);
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+    formOk=true;
+    _lastPushAt=Date.now();
+    _updateSyncDot(true);
+    _addSyncLog('↑ Subida OK ('+Math.round(payload.length/1024)+'KB) modo='+_syncMode);
+    console.log('[KRONOS] Pushed via form POST, payload size:',payload.length);
+  }catch(e2){
+    console.warn('[KRONOS] Form POST failed, trying fetch:',e2);
+  }
+
+  // Fallback: fetch (may be blocked by tracking protection in some browsers)
+  if(!formOk){
   fetch(API_URL,{
     method:'POST',
     mode:'no-cors',
@@ -1643,29 +1668,14 @@ var payload=rawJson.replace(/([\uD800-\uDBFF][\uDC00-\uDFFF])|[\uD800-\uDFFF]/g,
   }).then(function(){
     _lastPushAt=Date.now();
     _updateSyncDot(true);
-    _addSyncLog('↑ Subida OK ('+Math.round(payload.length/1024)+'KB) modo='+_syncMode);
-    console.log('[KRONOS] Pushed to cloud, payload size:',payload.length);
+    _addSyncLog('↑ Subida OK (fetch fallback '+Math.round(payload.length/1024)+'KB) modo='+_syncMode);
+    console.log('[KRONOS] Pushed via fetch fallback, payload size:',payload.length);
   }).catch(function(){
-    // Fallback: form POST
-    try{
-      var form=document.createElement('form');
-      form.method='POST';form.action=API_URL;
-      form.target='_kronosFrame';form.style.display='none';
-      var inp=document.createElement('input');
-      inp.type='hidden';inp.name='state';inp.value=payload;
-      form.appendChild(inp);
-      document.body.appendChild(form);
-      form.submit();
-      document.body.removeChild(form);
-      _lastPushAt=Date.now();
-      _updateSyncDot(true);
-      _addSyncLog('↑ Subida OK (form fallback) modo='+_syncMode);
-      console.log('[KRONOS] Pushed via form fallback');
-    }catch(e2){
       _updateSyncDot(false);
-      console.warn('[KRONOS] Push failed:',e2);
-    }
+      _addSyncLog('✗ Push fallback also failed');
+      console.warn('[KRONOS] All push methods failed');
   });
+  } // end if(!formOk)
 }
 
 function pullFromCloud(){
