@@ -658,7 +658,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   <div class="hdr">
     <div class="logo">KRONOS</div>
     <div style="display:flex;align-items:center;gap:8px;">
-      <span id="syncDot" title="Toca para sincronizar ahora" onclick="manualSync()" 
+      <span id="syncDot" title="Toca para ver estado de sync" onclick="openSyncDebug()"
         style="font-size:16px;color:var(--text3);cursor:pointer;font-family:var(--mono);padding:4px 8px;-webkit-tap-highlight-color:transparent;touch-action:manipulation;">●</span>
       <button id="syncAutoBtn" onclick="setSyncAuto(!_syncAuto)"
         style="background:none;border:1px solid var(--border);border-radius:5px;font-family:var(--mono);font-size:8px;padding:2px 6px;cursor:pointer;outline:none;color:var(--green);">
@@ -811,6 +811,32 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 </div>
 
 <!-- ── DIARIO SETTINGS MODAL ── -->
+<!-- ── SYNC DEBUG PANEL ── -->
+<div class="overlay" id="syncDebugOverlay">
+  <div class="modal" style="padding:0;overflow:hidden;max-height:90dvh;display:flex;flex-direction:column;">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text);">⚡ Estado de Sync</div>
+      <button onclick="closeModal('syncDebugOverlay')" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;line-height:1;padding:0 4px;">✕</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:14px;">
+      <div id="syncDbgInfo" style="font-family:var(--mono);font-size:11px;color:var(--text2);display:flex;flex-direction:column;gap:6px;"></div>
+      <div id="syncDbgLog" style="font-family:var(--mono);font-size:10px;color:var(--text3);background:var(--s0);border:1px solid var(--border);border-radius:8px;padding:10px;max-height:160px;overflow-y:auto;white-space:pre-wrap;"></div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button onclick="_syncDbgForcePush()" style="background:var(--accent);color:#fff;border:none;border-radius:9px;padding:10px 14px;font-family:var(--mono);font-size:11px;cursor:pointer;text-align:left;">
+          ↑ Forzar subida (este dispositivo → nube)
+        </button>
+        <button onclick="_syncDbgForcePull()" style="background:var(--s2);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:10px 14px;font-family:var(--mono);font-size:11px;cursor:pointer;text-align:left;">
+          ↓ Forzar bajada (nube → este dispositivo)
+        </button>
+        <div style="height:1px;background:var(--border);margin:4px 0;"></div>
+        <button onclick="_syncDbgNuke()" style="background:none;color:var(--red);border:1px solid var(--red);border-radius:9px;padding:10px 14px;font-family:var(--mono);font-size:11px;cursor:pointer;text-align:left;">
+          ☢ Borrar local y bajar nube completa
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="diarioSettingsOverlay">
   <div class="modal" style="max-height:88dvh;display:flex;flex-direction:column;padding:0;overflow:hidden;">
     <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
@@ -1612,7 +1638,9 @@ var payload=rawJson.replace(/([\uD800-\uDBFF][\uDC00-\uDFFF])|[\uD800-\uDFFF]/g,
     headers:{'Content-Type':'text/plain'},
     body:payload
   }).then(function(){
+    _lastPushAt=Date.now();
     _updateSyncDot(true);
+    _addSyncLog('↑ Subida OK ('+Math.round(payload.length/1024)+'KB) modo='+_syncMode);
     console.log('[KRONOS] Pushed to cloud, payload size:',payload.length);
   }).catch(function(){
     // Fallback: form POST
@@ -1626,7 +1654,9 @@ var payload=rawJson.replace(/([\uD800-\uDBFF][\uDC00-\uDFFF])|[\uD800-\uDFFF]/g,
       document.body.appendChild(form);
       form.submit();
       document.body.removeChild(form);
+      _lastPushAt=Date.now();
       _updateSyncDot(true);
+      _addSyncLog('↑ Subida OK (form fallback) modo='+_syncMode);
       console.log('[KRONOS] Pushed via form fallback');
     }catch(e2){
       _updateSyncDot(false);
@@ -1648,6 +1678,8 @@ function pullFromCloud(){
       if(done)return;done=true;
       delete window[cbName];
       if(script.parentNode)script.parentNode.removeChild(script);
+      _lastPullAt=Date.now();_lastPullOk=false;
+      _addSyncLog('✗ Bajada timeout (sin red o URL incorrecta)');
       _updateSyncDot(false);_finish();
     },12000);
     window[cbName]=function(data){
@@ -1670,6 +1702,10 @@ function pullFromCloud(){
         // Merge running: protect locally ticking sessions from being overwritten
         var isPrimaryDevice=(_syncMode==='primary');
         var isReadonly=(_syncMode==='readonly');
+        _lastPullAt=Date.now();_lastPullOk=true;
+        _cloudDeviceId=cloud._deviceId||'?';
+        _cloudPushedAt=cloud._pushedAt||null;
+        _addSyncLog('↓ Bajada OK modo='+_syncMode+' nube_de='+_cloudDeviceId);
 
         // Readonly: cloud IS the truth — skip all merge, just replace local state directly
         if(isReadonly){
@@ -2204,6 +2240,83 @@ function _updateSyncDot(ok,cloudDeviceId){
     dot.title='Sin conexión — toca para reintentar';
   }
 }
+// ── Sync debug state ──
+var _syncLog=[];
+var _lastPushAt=null,_lastPullAt=null,_lastPullOk=null;
+var _cloudPushedAt=null,_cloudDeviceId=null;
+
+function _addSyncLog(msg){
+  var t=new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  _syncLog.unshift('['+t+'] '+msg);
+  if(_syncLog.length>40)_syncLog.length=40;
+  var el=document.getElementById('syncDbgLog');
+  if(el)el.textContent=_syncLog.join('\n');
+}
+
+function _refreshSyncDebug(){
+  var el=document.getElementById('syncDbgInfo');
+  if(!el)return;
+  var ago=function(ts){if(!ts)return'nunca';var s=Math.round((Date.now()-ts)/1000);return s<60?s+'s':Math.round(s/60)+'min';};
+  var lines=[
+    'Este dispositivo:  <b style="color:var(--accent)">'+_deviceId+'</b>',
+    'Modo:              <b>'+((_syncMode==='readonly')?'📖 Solo lectura':(_syncMode==='primary')?'★ Principal':'🔄 Compartido')+'</b>',
+    'Sync auto:         <b>'+(_syncAuto?'✓ Sí':'✗ No')+'</b>',
+    '──────────────────────────────',
+    'Última subida:     '+(_lastPushAt?'hace '+ago(_lastPushAt):'–'),
+    'Última bajada:     '+(_lastPullAt?'hace '+ago(_lastPullAt)+(_lastPullOk?' ✓':' ✗'):'–'),
+    '──────────────────────────────',
+    'Nube subida por:   '+(_cloudDeviceId||'–'),
+    'Nube subida hace:  '+(_cloudPushedAt?ago(_cloudPushedAt):'–'),
+    (_cloudDeviceId&&_cloudDeviceId===_deviceId?'⚠ La nube fue subida por ESTE dispositivo':''),
+  ].filter(Boolean);
+  el.innerHTML=lines.join('<br>');
+}
+
+function openSyncDebug(){
+  openModal('syncDebugOverlay');
+  _refreshSyncDebug();
+  clearInterval(window._syncDbgRefreshTimer);
+  window._syncDbgRefreshTimer=setInterval(function(){
+    if(document.getElementById('syncDebugOverlay').classList.contains('show'))_refreshSyncDebug();
+    else clearInterval(window._syncDbgRefreshTimer);
+  },2000);
+}
+
+function _syncDbgForcePush(){
+  if(!canWrite()){_addSyncLog('✗ No puedes subir en modo solo lectura');return;}
+  _lastPushHash=''; // force push even if nothing changed
+  _pushToCloud();
+  _addSyncLog('↑ Subida forzada iniciada');
+}
+
+function _syncDbgForcePull(){
+  _addSyncLog('↓ Bajada forzada iniciada');
+  pullFromCloud().then(function(){
+    _addSyncLog('↓ Bajada completada, renderizando...');
+    try{renderAll();}catch(e){_addSyncLog('✗ Error al renderizar: '+e.message);}
+  });
+}
+
+function _syncDbgNuke(){
+  if(!confirm('¿Borrar TODOS los datos locales y reemplazar con la nube?')) return;
+  _addSyncLog('☢ Borrando estado local...');
+  // Clear local state but keep device ID and sync settings
+  var devId=localStorage.getItem('kronos_device_id');
+  var syncMode=localStorage.getItem('kronos_sync_mode');
+  var syncAuto=localStorage.getItem('kronos_sync_auto');
+  localStorage.removeItem(SK);
+  if(devId)localStorage.setItem('kronos_device_id',devId);
+  if(syncMode)localStorage.setItem('kronos_sync_mode',syncMode);
+  if(syncAuto)localStorage.setItem('kronos_sync_auto',syncAuto);
+  // Re-init S to empty
+  S={activities:[],sessions:[],planned:[],running:{},prefs:{},weekPlan:{},actDivisions:[],deletedIds:[],deletedActIds:[],deletedWplan:[]};
+  _addSyncLog('↓ Jalando desde nube...');
+  pullFromCloud().then(function(){
+    _addSyncLog('✓ Nube cargada, renderizando...');
+    try{renderAll();}catch(e){_addSyncLog('✗ Error: '+e.message);}
+  });
+}
+
 function genId(){return'k'+Date.now()+'_'+Math.random().toString(36).slice(2,5);}
 
 // ═══════════════════════════════════════════════════════
