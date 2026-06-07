@@ -1431,7 +1431,7 @@ function isTodayWindow(dateStr){
   const now=new Date();
   const today=now.toDateString();
   if(dateStr===today) return true;
-  if(now.getHours()<4){
+  if(now.getHours()<5){
     const yesterday=new Date(now);yesterday.setDate(yesterday.getDate()-1);
     if(dateStr===yesterday.toDateString()) return true;
   }
@@ -1505,7 +1505,9 @@ function save(){
   }
   S._lastModified=Date.now(); // track when state was last changed locally
   localStorage.setItem(SK,JSON.stringify(S));
-  if(!_inPull&&_syncAuto) syncToCloud(); // only auto-push if auto mode
+  // Push if auto-sync is on, OR if this device is set as the primary writer
+  // (primary always pushes regardless of auto/manual toggle)
+  if(!_inPull && (_syncAuto || _syncMode==='primary')) syncToCloud();
 }
 
 function saveLocal(){
@@ -2479,8 +2481,7 @@ function renderFlow(){
   if(cnt) cnt.textContent=visible.length?`(${visible.length})`:'';
   if(!visible.length){strip.innerHTML='';return;}
 
-  const todayStr=new Date().toDateString();
-  const finished=(S.planned||[]).filter(p=>p.done&&p.flowOrder!=null&&(new Date(p.addedAt).toDateString()===todayStr||p.addedAt==='2099-01-01T00:00:00.000Z')).sort((a,b)=>(a.flowOrder||99)-(b.flowOrder||99));
+  const finished=(S.planned||[]).filter(p=>p.done&&p.flowOrder!=null&&(isTodayWindow(new Date(p.addedAt).toDateString())||p.addedAt==='2099-01-01T00:00:00.000Z')).sort((a,b)=>(a.flowOrder||99)-(b.flowOrder||99));
 
   let html=`<div class="fcard-row"><span class="fcard-focus-lbl" style="padding-left:16px;">Focusing in:</span>`;
   visible.forEach((p,i)=>{
@@ -2683,7 +2684,7 @@ function _tl24ResizeEnd(){
 // ── TIMELINE 24H ──
 var _tl24Block=null; // current active block index (0-3)
 var _tl24Timer=null;
-var _TL_SCALE=144; // px per hour
+var _TL_SCALE=60; // px per hour — recomputed each render to fit the container
 
 // Block definitions: [label, startH_offset_from_midnight, endH_offset_from_midnight]
 // Offsets are from today's midnight. Negative = previous day.
@@ -2723,6 +2724,8 @@ function renderTimeline24(){
   const bStart=b.startH;
   const bEnd=b.endH;
   const bHours=bEnd-bStart;
+  // Fit the block hours into the visible scroll container; clamp between 40 and 100 px/hr
+  _TL_SCALE=Math.max(40,Math.min(100,Math.floor((scroll.clientWidth||300)/bHours)));
   const totalW=bHours*_TL_SCALE;
   inner.style.width=totalW+'px';
 
@@ -7124,7 +7127,9 @@ document.addEventListener('focusout',function(e){
 function startAutoPull(){
   if(_autoPullInterval)return;
   _autoPullInterval=setInterval(function(){
-    if(!_syncAuto)return; // manual mode — don't auto-pull
+    // Always pull in readonly mode (it's the only way it gets updates).
+    // In writable modes, only pull if auto-sync is on.
+    if(!_syncAuto && _syncMode!=='readonly') return;
     if(document.hidden)return;
     if(_userTyping)return;
     pullFromCloud();
@@ -7139,10 +7144,10 @@ startTimeline24();
 
 // Pull immediately when tab/app becomes visible again (critical for mobile)
 document.addEventListener('visibilitychange',function(){
-  if(!document.hidden&&_syncAuto) pullFromCloud();
+  if(!document.hidden&&(_syncAuto||_syncMode==='readonly')) pullFromCloud();
 });
 window.addEventListener('pageshow',function(){
-  if(_syncAuto) pullFromCloud();
+  if(_syncAuto||_syncMode==='readonly') pullFromCloud();
 });
 
 // In readonly mode: pull every 10s (only in auto mode)
