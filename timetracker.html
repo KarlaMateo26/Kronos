@@ -170,18 +170,25 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .tl24-hour-lbl{font-family:var(--mono);font-size:7px;color:var(--text3);padding-left:2px;padding-top:2px;white-space:nowrap;position:absolute;top:0;}
 .tl24-now{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:10;border-radius:1px;pointer-events:none;}
 .tl24-now-tri{position:absolute;top:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--red);}
-.tl24-item{position:absolute;top:18px;height:24px;border-radius:4px;overflow:hidden;display:flex;align-items:center;padding:0 4px;min-width:4px;box-sizing:border-box;}
-.tl24-item-lbl{font-size:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono);}
+.tl24-item{position:absolute;top:18px;height:24px;border-radius:4px;overflow:hidden;display:flex;align-items:center;padding:0 4px;min-width:4px;box-sizing:border-box;cursor:grab;user-select:none;}
+.tl24-item:active{cursor:grabbing;}
+.tl24-item-lbl{font-size:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--mono);flex:1;min-width:0;}
+.tl24-resize{position:absolute;right:0;top:0;bottom:0;width:10px;cursor:col-resize;background:rgba(255,255,255,.08);transition:background .15s;}
+.tl24-resize:hover,.tl24-resize:active{background:rgba(255,255,255,.3);}
+.tl24-inner.tl-drop-hover{outline:2px dashed var(--accent);outline-offset:-2px;border-radius:4px;}
 /* left/right ghost fade for timeline */
 .tl24-fade-l,.tl24-fade-r{position:absolute;top:0;bottom:0;width:16px;pointer-events:none;z-index:5;}
 .tl24-fade-l{left:0;background:linear-gradient(to right,var(--bg),transparent);}
 .tl24-fade-r{right:0;background:linear-gradient(to left,var(--bg),transparent);}
+.tl24-nav-btn{flex:0 0 auto;background:none;border:none;color:var(--text3);font-size:20px;line-height:1;padding:0 6px;cursor:pointer;touch-action:manipulation;height:54px;display:flex;align-items:center;transition:color .15s;}
+.tl24-nav-btn:active{color:var(--text);}
+.fcard-sub-check{cursor:pointer;}
 
 /* Board view */
 .board-wrap{display:flex;gap:0;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:8px;}
 .board-wrap::-webkit-scrollbar{height:3px;}
 .board-wrap::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
-.board-col{flex:0 0 calc(85vw);max-width:340px;min-width:240px;display:flex;flex-direction:column;}
+.board-col{flex:0 0 calc(74vw);max-width:295px;min-width:210px;display:flex;flex-direction:column;}
 .board-col:first-child{padding-left:16px;}
 .board-col:last-child{padding-right:16px;}
 .board-col+.board-col{padding-left:8px;}
@@ -683,12 +690,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 
   <!-- TIMELINE 24H -->
   <div class="tl24-wrap" id="tl24Wrap" style="display:none;">
-    <div style="position:relative;">
-      <div class="tl24-fade-l"></div>
-      <div class="tl24-scroll" id="tl24Scroll">
-        <div class="tl24-inner" id="tl24Inner"></div>
+    <div style="display:flex;align-items:center;">
+      <button class="tl24-nav-btn" onclick="_tl24Nav(-1)" title="Bloque anterior">‹</button>
+      <div style="position:relative;flex:1;min-width:0;">
+        <div class="tl24-fade-l"></div>
+        <div class="tl24-scroll" id="tl24Scroll">
+          <div class="tl24-inner" id="tl24Inner"
+          ondragover="tl24DragOver(event)"
+          ondrop="tl24Drop(event)"
+          ondragleave="tl24DragLeave(event)"></div>
+        </div>
+        <div class="tl24-fade-r"></div>
       </div>
-      <div class="tl24-fade-r"></div>
+      <button class="tl24-nav-btn" onclick="_tl24Nav(+1)" title="Bloque siguiente">›</button>
     </div>
   </div>
 
@@ -2494,7 +2508,7 @@ function renderFlow(){
       ${idealLabel?`<div class="fcard-ideal">${idealLabel}${p.note?` · 📌 ${esc(p.note)}`:''}${isRunning&&p.idealSecs?(()=>{const pct=Math.round(totalFocus/p.idealSecs*100);return` · ${pct}%`;})():''}${!isRunning&&p.idealSecs&&totalFocus>0?(()=>{const pct=Math.round(totalFocus/p.idealSecs*100);return` · ${pct}%`;})():''}</div>`:p.note?`<div class="fcard-ideal">📌 ${esc(p.note)}</div>`:''}
       ${allSubs.length?`<div class="fcard-subs">${allSubs.map(st=>`
         <div class="fcard-sub-item">
-          <div class="fcard-sub-check ${st.done?'done':''}"></div>
+          <div class="fcard-sub-check ${st.done?'done':''}" onclick="toggleSubtask('${p.id}','${st.id}')"></div>
           <span class="fcard-sub-name ${st.done?'done':''}">${esc(st.text)}</span>
         </div>`).join('')}
       </div>`:''}
@@ -2536,6 +2550,122 @@ function updateFlowCard(rKey){
 function scrollToPlanned(pid){
   const el=document.getElementById('pc_'+pid);
   if(el) el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+// ── TIMELINE DRAG & RESIZE ──
+var _tl24DragPid=null;      // ID of timeline item being repositioned
+var _tl24DragOffsetX=0;     // px offset within the item where drag started
+var _tl24ResizePid=null;    // ID of item being resized
+var _tl24ResizeStartX=0;    // pointer X at resize start
+var _tl24ResizeOrigSecs=0;  // original idealSecs at resize start
+
+function tl24ItemDragStart(e,pid){
+  _tl24DragPid=pid;
+  _pcDragId=null; // prevent board drag from interfering
+  e.stopPropagation();
+  e.dataTransfer.effectAllowed='move';
+  const rect=e.currentTarget.getBoundingClientRect();
+  _tl24DragOffsetX=e.clientX-rect.left;
+}
+
+function _tl24ClientToInnerX(clientX){
+  const scroll=document.getElementById('tl24Scroll');
+  if(!scroll) return 0;
+  return (clientX-scroll.getBoundingClientRect().left)+scroll.scrollLeft;
+}
+
+function tl24DragOver(e){
+  if(!_pcDragId&&!_tl24DragPid) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect='move';
+  const inner=document.getElementById('tl24Inner');
+  if(inner) inner.classList.add('tl-drop-hover');
+}
+
+function tl24DragLeave(e){
+  const inner=document.getElementById('tl24Inner');
+  if(inner) inner.classList.remove('tl-drop-hover');
+}
+
+function tl24Drop(e){
+  e.preventDefault();
+  tl24DragLeave();
+  const pid=_tl24DragPid||_pcDragId;
+  if(!pid) return;
+
+  const b=_TL24_BLOCKS[_tl24Block===null?_tl24CurrentBlock():_tl24Block];
+  const rawX=_tl24ClientToInnerX(e.clientX)-(_tl24DragPid?_tl24DragOffsetX:0);
+  const dropH=b.startH+Math.max(0,rawX)/_TL_SCALE;
+  const snapMin=Math.round(dropH*4)/4*60; // snap to 15min
+  const clampedMin=Math.max(0,Math.min(23*60+45,snapMin));
+
+  const todayStr=new Date().toDateString();
+  const poKey='po_'+todayStr;
+  if(!S.prefs)S.prefs={};
+  if(!S.prefs[poKey])S.prefs[poKey]={};
+  S.prefs[poKey][pid]={abs:clampedMin};
+
+  // If dragged from planned board and has no duration, default to 1hr
+  if(_pcDragId&&!_tl24DragPid){
+    const p=S.planned.find(x=>x.id===pid);
+    if(p&&!p.idealSecs) p.idealSecs=3600;
+  }
+
+  _tl24DragPid=null;
+  _pcDragId=null;
+  save();renderAll();
+}
+
+function tl24ResizeStart(e,pid){
+  e.stopPropagation();
+  e.preventDefault();
+  _tl24ResizePid=pid;
+  _tl24ResizeStartX=e.clientX!=null?e.clientX:(e.touches?e.touches[0].clientX:0);
+  const p=S.planned.find(x=>x.id===pid);
+  _tl24ResizeOrigSecs=p?(p.idealSecs||3600):3600;
+  document.addEventListener('mousemove',_tl24ResizeMove);
+  document.addEventListener('mouseup',_tl24ResizeEnd);
+  document.addEventListener('touchmove',_tl24ResizeTouchMove,{passive:false});
+  document.addEventListener('touchend',_tl24ResizeEnd);
+}
+
+function _tl24ResizeMove(e){
+  if(!_tl24ResizePid) return;
+  const x=e.clientX!=null?e.clientX:_tl24ResizeStartX;
+  const dx=x-_tl24ResizeStartX;
+  const snap=900; // 15min in seconds
+  const newSecs=Math.max(snap,Math.round((_tl24ResizeOrigSecs+(dx/_TL_SCALE)*3600)/snap)*snap);
+  const p=S.planned.find(x=>x.id===_tl24ResizePid);
+  if(p){
+    p.idealSecs=newSecs;
+    const item=document.querySelector(`.tl24-item[data-pid="${_tl24ResizePid}"]`);
+    if(item) item.style.width=Math.max((newSecs/3600)*_TL_SCALE,4)+'px';
+  }
+}
+
+function _tl24ResizeTouchMove(e){
+  e.preventDefault();
+  if(!_tl24ResizePid||!e.touches.length) return;
+  const x=e.touches[0].clientX;
+  const dx=x-_tl24ResizeStartX;
+  const snap=900;
+  const newSecs=Math.max(snap,Math.round((_tl24ResizeOrigSecs+(dx/_TL_SCALE)*3600)/snap)*snap);
+  const p=S.planned.find(x=>x.id===_tl24ResizePid);
+  if(p){
+    p.idealSecs=newSecs;
+    const item=document.querySelector(`.tl24-item[data-pid="${_tl24ResizePid}"]`);
+    if(item) item.style.width=Math.max((newSecs/3600)*_TL_SCALE,4)+'px';
+  }
+}
+
+function _tl24ResizeEnd(){
+  if(!_tl24ResizePid) return;
+  document.removeEventListener('mousemove',_tl24ResizeMove);
+  document.removeEventListener('mouseup',_tl24ResizeEnd);
+  document.removeEventListener('touchmove',_tl24ResizeTouchMove);
+  document.removeEventListener('touchend',_tl24ResizeEnd);
+  save();renderAll();
+  _tl24ResizePid=null;
 }
 
 // ── TIMELINE 24H ──
@@ -2625,8 +2755,10 @@ function renderTimeline24(){
     const w=Math.max(durH*_TL_SCALE,4);
     const col=colors[ci%colors.length]; ci++;
     const inFlow=p.flowOrder!=null;
-    rulerHtml+=`<div class="tl24-item" style="left:${x}px;width:${w}px;background:${col}22;border:1px solid ${col};${inFlow?'border-width:2px;':''}" title="${esc(p.actName)} · ${pref.abs<600?'0'+Math.floor(pref.abs/60)+':'+String(pref.abs%60).padStart(2,'0'):Math.floor(pref.abs/60)+':'+String(pref.abs%60).padStart(2,'0')}">
+    const timeLbl=String(Math.floor(pref.abs/60)).padStart(2,'0')+':'+String(pref.abs%60).padStart(2,'0');
+    rulerHtml+=`<div class="tl24-item" data-pid="${p.id}" draggable="true" ondragstart="tl24ItemDragStart(event,'${p.id}')" style="left:${x}px;width:${w}px;background:${col}22;border:1px solid ${col};${inFlow?'border-width:2px;':''}" title="${esc(p.actName)} · ${timeLbl}">
       <span class="tl24-item-lbl" style="color:${col};">${inFlow?p.flowOrder+' ':''}${esc(p.actName)}</span>
+      <div class="tl24-resize" onmousedown="tl24ResizeStart(event,'${p.id}')" ontouchstart="tl24ResizeStart(event,'${p.id}')"></div>
     </div>`;
   });
 
@@ -2636,9 +2768,14 @@ function renderTimeline24(){
 
 function _tl24GoBlock(idx){
   _tl24Block=idx;
-  // Update button states
   document.querySelectorAll('.tl24-block-btn').forEach((b,i)=>b.classList.toggle('tl-active',i===idx));
   _tl24ScrollToBlock(idx,true);
+}
+
+function _tl24Nav(dir){
+  const cur=_tl24Block===null?_tl24CurrentBlock():_tl24Block;
+  _tl24Block=(cur+dir+4)%4;
+  renderTimeline24();
 }
 
 function _tl24ScrollToBlock(idx,animate){
