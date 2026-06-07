@@ -2149,8 +2149,9 @@ function toggleSyncMode(){
   // Cycle: shared → primary → readonly → shared
   if(_syncMode==='shared') setSyncMode('primary');
   else if(_syncMode==='primary'){
-    // Push current state before going silent
-    _pushToCloud();
+    // Go silent — do NOT push before switching to readonly.
+    // If this device had correct data, it already pushed on every save().
+    // Pushing here risks overwriting the other device's newer data.
     setSyncMode('readonly');
   } else {
     // readonly → shared: pull from cloud FIRST so local = cloud before we allow writes.
