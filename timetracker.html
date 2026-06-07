@@ -1559,7 +1559,12 @@ function _buildCompressedState(){
       if(s.breakTotal) r.breakTotal=s.breakTotal;
       return r;
     }),
-    planned:(S.planned||[]).filter(function(p){return!p.done;}).map(function(p){
+    planned:(S.planned||[]).filter(function(p){
+      // Push non-done items + done items from today's window (so Finished section shows on other devices)
+      if(!p.done)return true;
+      var ds=p.addedAt?new Date(p.addedAt).toDateString():'';
+      return isTodayWindow(ds)||p.addedAt==='2099-01-01T00:00:00.000Z';
+    }).map(function(p){
       return{id:p.id,actId:p.actId,actName:p.actName,actEmoji:p.actEmoji,
         idealSecs:p.idealSecs,note:p.note,done:p.done,addedAt:p.addedAt,
         divisionId:p.divisionId,subtasks:p.subtasks,
@@ -1665,6 +1670,39 @@ function pullFromCloud(){
         // Merge running: protect locally ticking sessions from being overwritten
         var isPrimaryDevice=(_syncMode==='primary');
         var isReadonly=(_syncMode==='readonly');
+
+        // Readonly: cloud IS the truth — skip all merge, just replace local state directly
+        if(isReadonly){
+          _inPull=false;
+          S=cloud;
+          if(!S.sessions)S.sessions=[];
+          if(!S.planned)S.planned=[];
+          if(!S.running)S.running={};
+          if(!S.prefs)S.prefs={};
+          if(!S.activities)S.activities=[];
+          if(!S.deletedIds)S.deletedIds=[];
+          if(!S.deletedActIds)S.deletedActIds=[];
+          if(!S.weekPlan)S.weekPlan={};
+          if(!S.deletedWplan)S.deletedWplan=[];
+          if(!S.actDivisions||!S.actDivisions.length)S.actDivisions=[
+            {id:'d_deberes',name:'Deberes'},{id:'d_daily',name:'Daily Advance'},{id:'d_otros',name:'Otros'}
+          ];
+          recalcWeekTotals();
+          saveLocal();
+          Object.keys(S.running).forEach(function(k){
+            var ctx=S.running[k];if(!ctx)return;
+            if(ctx.paused){if(timers[k]){clearInterval(timers[k]);delete timers[k];}}
+            else{if(!timers[k])startTick(k);}
+          });
+          Object.keys(timers).forEach(function(k){if(!S.running[k]){clearInterval(timers[k]);delete timers[k];}});
+          var anyModalOpen=document.querySelector('.overlay.show');
+          if(!anyModalOpen) smartRenderAfterPull();
+          _updateSyncDot(true);
+          console.log('[KRONOS] Readonly: replaced local with cloud state');
+          _finish();
+          return;
+        }
+
         var mergedRunning={};
         var allKeys=new Set(Object.keys(localRunning).concat(Object.keys(cloudRunning)));
         allKeys.forEach(function(k){
@@ -1985,7 +2023,8 @@ function setSyncAuto(val){
     startAutoPull();
     pullFromCloud();
   } else {
-    stopAutoPull();
+    // Don't kill the pull interval if we're readonly — readonly always needs to pull
+    if(_syncMode!=='readonly') stopAutoPull();
   }
 }
 
@@ -2020,6 +2059,12 @@ function setSyncMode(mode){
   localStorage.setItem('kronos_sync_mode',mode);
   _lastPushHash=null; // reset so next push is never skipped by hash comparison
   updateDeviceUI();
+  if(mode==='readonly'){
+    // Ensure pull interval is alive and pull immediately
+    stopAutoPull();
+    startAutoPull();
+    pullFromCloud().then(function(){try{renderAll();}catch(e){}});
+  }
 }
 
 function canWrite(){
