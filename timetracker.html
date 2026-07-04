@@ -122,8 +122,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .pc-flow-sel{background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text3);font-family:var(--mono);font-size:10px;width:26px;height:26px;text-align:center;text-align-last:center;appearance:none;-webkit-appearance:none;outline:none;cursor:pointer;flex-shrink:0;padding:0;}
 .pc-flow-sel.has-order{color:var(--accent);border-color:var(--accent);font-weight:700;}
 
-/* ── PLANNED card with flow order: orange/salmon tint ── */
-.planned-card.has-flow{border-color:rgba(240,110,60,.45);background:linear-gradient(135deg,var(--s1),rgba(240,110,60,.07));}
+/* ── PLANNED card: flat when un-numbered, raised 3D when numbered ── */
+.planned-card{box-shadow:inset 0 3px 6px rgba(0,0,0,.13);opacity:.78;transform:translateY(1px);}
+.planned-card.has-flow{background:var(--s1);border-color:var(--border2);box-shadow:0 5px 14px rgba(0,0,0,.22),0 2px 4px rgba(0,0,0,.12);opacity:1;transform:translateY(-2px);}
 
 /* ── FLOW STRIP — horizontal scroll ── */
 .fcard-list{display:flex;flex-direction:column;gap:4px;padding:0 0 10px;}
@@ -384,6 +385,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .color-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;justify-content:center;}
 .cp{width:32px;height:32px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:all .15s;touch-action:manipulation;flex-shrink:0;}
 .cp.sel{border-color:#fff;transform:scale(1.15);}
+.cp-sm{width:24px;height:24px;border-width:2px;}
+.cp-more-btn{background:none;border:none;color:var(--text3);font-family:var(--mono);font-size:9px;letter-spacing:.5px;cursor:pointer;padding:2px 6px;width:100%;text-align:center;margin-top:2px;}
+.cp-group-lbl{width:100%;text-align:left;font-size:9px;color:var(--text3);font-family:var(--mono);letter-spacing:.8px;text-transform:uppercase;margin:6px 0 3px;}
 .mbtn{width:100%;background:var(--accent);color:#fff;border:none;border-radius:12px;padding:14px;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer;touch-action:manipulation;transition:all .2s;}
 .mbtn:active{opacity:.85;transform:scale(.98);}
 .mcancel{width:100%;background:transparent;color:var(--text3);border:none;padding:11px;font-family:var(--sans);font-size:13px;cursor:pointer;margin-top:5px;touch-action:manipulation;}
@@ -1493,8 +1497,18 @@ function initState(){
 let S=initState();
 let timers={}; // rKey -> intervalId
 let selEmoji=EMOJIS[0];
-const ACT_PALETTE=['#6c63ff','#ff5fa0','#2dd4c0','#f59e0b','#1db954','#ff4f6a','#a78bfa','#fb923c','#38bdf8','#e879f9','#84cc16','#f43f5e','#06b6d4','#f97316','#8b5cf6','#10b981'];
+const ACT_PALETTE_BASE=['#6c63ff','#ff5fa0','#2dd4c0','#f59e0b','#1db954','#ff4f6a','#38bdf8','#a78bfa'];
+const ACT_PALETTE_GROUPS=[
+  {name:'Morados',colors:['#3730a3','#4f46e5','#6c63ff','#7c3aed','#8b5cf6','#a78bfa','#c084fc','#e879f9']},
+  {name:'Rosas / Rojos',colors:['#be185d','#ec4899','#ff5fa0','#f43f5e','#fb7185','#ff4f6a','#dc2626','#ef4444']},
+  {name:'Azules',colors:['#1e40af','#2563eb','#3b82f6','#0284c7','#38bdf8','#06b6d4','#0e7490','#22d3ee']},
+  {name:'Verdes',colors:['#166534','#15803d','#1db954','#16a34a','#22c55e','#4ade80','#84cc16','#10b981']},
+  {name:'Cálidos',colors:['#92400e','#b45309','#d97706','#f59e0b','#fbbf24','#f97316','#fb923c','#fdba74']},
+  {name:'Neutros',colors:['#1e293b','#334155','#475569','#64748b','#6b7280','#4b5563','#374151','#2dd4c0']},
+];
+const ACT_PALETTE=[...new Set([...ACT_PALETTE_BASE,...ACT_PALETTE_GROUPS.flatMap(g=>g.colors)])];
 let selColor=ACT_PALETTE[0];
+let _colorPickerExpanded=false;
 let _actActiveEdit=true; // state of the active toggle while modal is open
 let pendingActId=null;   // for add-planned modal
 let pendingSessKey=null; // for session name modal
@@ -2992,8 +3006,6 @@ function renderTimeline24(){
   }
 
   // ── PLANNED items (multi-day aware, clips to block boundaries) ──
-  const colors=['var(--accent)','var(--teal)','var(--pink)','var(--green)','var(--amber)'];
-  let ci=0;
   S.planned.forEach(p=>{
     if(p.done) return;
     if(p.addedAt==='2099-01-01T00:00:00.000Z') return;
@@ -3015,7 +3027,7 @@ function renderTimeline24(){
     const clippedEnd=Math.min(endH,bEnd);
     const x=hToX(clippedStart);
     const w=Math.max((clippedEnd-clippedStart)*_TL_SCALE,4);
-    const col=colors[ci%colors.length]; ci++;
+    const col=actColor(p.actId);
     const inFlow=p.flowOrder!=null;
     const absM=Math.round(pref.abs);
     const timeLbl=String(Math.floor(absM/60)).padStart(2,'0')+':'+String(absM%60).padStart(2,'0');
@@ -3026,10 +3038,6 @@ function renderTimeline24(){
   });
 
   // ── REAL sessions ──
-  const palette=['var(--accent)','var(--teal)','var(--pink)','var(--green)','var(--amber)'];
-  const actColorMap={};
-  (S.activities||[]).forEach((a,i)=>{actColorMap[a.id]=palette[i%palette.length];});
-
   (S.sessions||[]).filter(s=>s.startTime&&new Date(s.startTime).toDateString()===todayStr).forEach(s=>{
     const sd=new Date(s.startTime);
     const ed=s.endTime?new Date(s.endTime):now;
@@ -3038,7 +3046,7 @@ function renderTimeline24(){
     if(eH<bStart||sH>bEnd) return;
     const x=Math.max(0,hToX(Math.max(sH,bStart)));
     const w=Math.max((Math.min(eH,bEnd)-Math.max(sH,bStart))*_TL_SCALE,4);
-    const col=actColorMap[s.actId]||palette[0];
+    const col=actColor(s.actId);
     const timeLbl=String(sd.getHours()).padStart(2,'0')+':'+String(sd.getMinutes()).padStart(2,'0');
     html+=`<div class="tl24-item" style="left:${x}px;width:${w}px;top:${ST}px;height:${SH}px;background:${col}33;border:1px solid ${col};cursor:default;" title="${esc(s.actName||'')} · ${timeLbl} · ${fmtM(s.duration)}">
       <span class="tl24-item-lbl" style="color:${col};">${s.actEmoji?esc(s.actEmoji)+' ':''}${esc(s.actName||'')}</span>
@@ -3052,7 +3060,7 @@ function renderTimeline24(){
     if(nowH<bStart||sH>bEnd) return;
     const x=Math.max(0,hToX(Math.max(sH,bStart)));
     const w=Math.max((Math.min(nowH,bEnd)-Math.max(sH,bStart))*_TL_SCALE,4);
-    const col=actColorMap[ctx.actId]||palette[0];
+    const col=actColor(ctx.actId);
     html+=`<div class="tl24-item" style="left:${x}px;width:${w}px;top:${ST}px;height:${SH}px;background:${col}18;border:1px dashed ${col};cursor:default;" title="${esc(ctx.actName)} · en curso">
       <span class="tl24-item-lbl" style="color:${col};">▶ ${esc(ctx.actName)}</span>
     </div>`;
@@ -5303,10 +5311,10 @@ function openAddAct(editActId){
   const act=editActId?S.activities.find(a=>a.id===editActId):null;
   selEmoji=act?act.emoji:EMOJIS[0];
   selColor=act?act.color||ACT_PALETTE[0]:ACT_PALETTE[0];
+  _colorPickerExpanded=false;
   document.getElementById('emojiGrid').innerHTML=ALL_EMOJIS.map(e=>`
     <div class="ep ${e===selEmoji?'sel':''}" onclick="selEp('${e}')" data-emoji="${e}">${emojiHtmlPicker(e)}</div>`).join('');
-  document.getElementById('colorGrid').innerHTML=ACT_PALETTE.map(col=>`
-    <div class="cp ${col===selColor?'sel':''}" style="background:${col};" onclick="selCol('${col}')"></div>`).join('');
+  _renderColorGrid();
   document.getElementById('aName').value=act?act.name:'';
   document.getElementById('defaultSubInput').value='';
   document.getElementById('addActModal').dataset.editId=editActId||'';
@@ -5347,7 +5355,21 @@ function toggleActActiveEdit(){
   _refreshActiveToggleBtn();
 }
 function selEp(e){selEmoji=e;document.querySelectorAll('#emojiGrid .ep').forEach(el=>el.classList.toggle('sel',(el.dataset.emoji||el.textContent)===e));}
-function selCol(col){selColor=col;document.querySelectorAll('.cp').forEach(el=>el.classList.toggle('sel',el.style.background===col||el.style.backgroundColor===col));}
+function _renderColorGrid(){
+  const grid=document.getElementById('colorGrid');
+  if(!grid) return;
+  const mkDot=(col,sm)=>`<div class="cp${sm?' cp-sm':''} ${col===selColor?'sel':''}" style="background:${col};" onclick="selCol('${col}')"></div>`;
+  let h=ACT_PALETTE_BASE.map(c=>mkDot(c,false)).join('');
+  h+=`<button class="cp-more-btn" onclick="_colorPickerExpanded=!_colorPickerExpanded;_renderColorGrid();">${_colorPickerExpanded?'ver menos ▲':'ver más colores ▼'}</button>`;
+  if(_colorPickerExpanded){
+    ACT_PALETTE_GROUPS.forEach(g=>{
+      h+=`<div class="cp-group-lbl">${g.name}</div>`;
+      h+=g.colors.map(c=>mkDot(c,true)).join('');
+    });
+  }
+  grid.innerHTML=h;
+}
+function selCol(col){selColor=col;_renderColorGrid();}
 var _editingDefaultSubs=[]; // temp list while modal is open
 
 function renderDefaultSubs(subs){
