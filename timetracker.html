@@ -167,7 +167,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 .tl24-scroll::-webkit-scrollbar{display:none;}
 .tl24-inner{position:relative;height:54px;}
 .tl24-hour{position:absolute;top:0;bottom:0;border-left:1px solid var(--border);pointer-events:none;}
-.tl24-hour-lbl{font-family:var(--mono);font-size:7px;color:var(--text3);padding-left:2px;padding-top:2px;white-space:nowrap;position:absolute;top:0;}
+.tl24-hour-lbl{font-family:var(--mono);font-size:10px;color:var(--text3);white-space:nowrap;position:absolute;top:0;padding:0 2px;}
 .tl24-now{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:10;border-radius:1px;pointer-events:none;}
 .tl24-now-tri{position:absolute;top:0;left:50%;transform:translateX(-50%);width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid var(--red);}
 .tl24-item{position:absolute;top:18px;height:24px;border-radius:4px;overflow:hidden;display:flex;align-items:center;padding:0 4px;min-width:4px;box-sizing:border-box;cursor:grab;user-select:none;}
@@ -282,12 +282,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
 /* ─────────────────────────────────────────
    WEEK GRID
 ───────────────────────────────────────── */
-.week-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px;padding:0 16px;}
-.wc{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:9px 6px;text-align:center;position:relative;overflow:hidden;cursor:pointer;touch-action:manipulation;}
+.week-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;padding:0 16px;}
+.wc{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:8px 10px;position:relative;overflow:hidden;cursor:pointer;touch-action:manipulation;}
 .wc.has-t::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--accent);}
-.wc-emoji{font-size:16px;display:block;margin-bottom:2px;}
-.wc-name{font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;}
-.wc-time{font-family:var(--mono);font-size:9px;color:var(--text);margin-top:2px;display:block;}
 
 /* ─────────────────────────────────────────
    ACTIVITIES LIST
@@ -690,8 +687,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
   </div>
   <div class="board-wrap" id="plannedList"></div>
 
-  <!-- TIMELINE 24H -->
-  <div class="tl24-wrap" id="tl24Wrap" style="display:none;">
+  <!-- TIMELINE 24H + REAL (combined, shared scroll) -->
+  <div class="tl24-wrap" id="tl24Wrap">
     <div style="display:flex;align-items:center;">
       <button class="tl24-nav-btn" onclick="_tl24Nav(-1)" title="Bloque anterior">‹</button>
       <div style="position:relative;flex:1;min-width:0;">
@@ -705,7 +702,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex
         <div class="tl24-fade-r"></div>
       </div>
       <button class="tl24-nav-btn" onclick="_tl24Nav(+1)" title="Bloque siguiente">›</button>
+      <span id="tl24DateLbl" style="font-family:var(--mono);font-size:8px;color:var(--text3);padding:0 4px;white-space:nowrap;"></span>
       <button class="tl24-now-btn" onclick="_tl24GoNow()" title="Ir a la hora actual">ahora</button>
+      <span class="tl24-now-btn" style="cursor:default;pointer-events:none;border-bottom:1px dashed var(--border2);">real</span>
     </div>
   </div>
 
@@ -2368,9 +2367,9 @@ function openAddPlanned(actId){
   const _localDate=`${_ld.getFullYear()}-${String(_ld.getMonth()+1).padStart(2,'0')}-${String(_ld.getDate()).padStart(2,'0')}`;
   if(apDateEl) apDateEl.value=_localDate;
   const apNoDate=document.getElementById('apNoDate');
-  if(apNoDate){apNoDate.checked=false;}
+  if(apNoDate){apNoDate.checked=true;}
   const apDateWrap=document.getElementById('apDateWrap');
-  if(apDateWrap) apDateWrap.style.display='block';
+  if(apDateWrap) apDateWrap.style.display='none';
   document.getElementById('apNote').value='';
   // Pre-fill start time from activity default if set
   const defStart=act.defaultStartH!==undefined?act.defaultStartH:null;
@@ -2405,7 +2404,10 @@ function openAddPlanned(actId){
   // Show existing active plans + recurrence info
   const activePlansEl=document.getElementById('apActivePlans');
   const activePlansList=document.getElementById('apActivePlansList');
-  const activePlans=S.planned.filter(p=>p.actId===actId&&!p.done);
+  const _todayMidnight=new Date();_todayMidnight.setHours(0,0,0,0);
+  const activePlans=S.planned.filter(p=>p.actId===actId&&!p.done&&(
+    p.addedAt==='2099-01-01T00:00:00.000Z'||new Date(p.addedAt).getTime()>=_todayMidnight.getTime()
+  ));
   // Find weekPlan recurrence entries for this activity
   const recurrenceEntries=[];
   if(S.weekPlan){
@@ -2420,9 +2422,10 @@ function openAddPlanned(actId){
   if(activePlansEl&&activePlansList){
     let html='';
     // Active planned items
+    const _ap2=['Do','Lu','Ma','Mi','Ju','Vi','Sá'];
     activePlans.forEach(p=>{
       const d=new Date(p.addedAt);
-      const lbl=d.toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
+      const lbl=p.addedAt==='2099-01-01T00:00:00.000Z'?'Sin fecha':`${_ap2[d.getDay()]} · ${d.toLocaleDateString('es-MX',{day:'numeric',month:'short'})}`;
       html+=`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border2);">
         <span style="font-size:11px;font-family:var(--mono);color:var(--teal);flex:1;">📅 ${lbl}</span>
         <button onclick="removePlanned('${p.id}');openAddPlanned('${actId}');"
@@ -2645,6 +2648,11 @@ function _flowVisible(){
   }).sort((a,b)=>(a.flowOrder||99)-(b.flowOrder||99));
 }
 
+function clearFinishedFlow(){
+  S.planned.forEach(p=>{if(p.done&&p.flowOrder!=null) p.flowOrder=null;});
+  save();renderFlow();
+}
+
 function renderFlow(){
   const lbl=document.getElementById('flowLbl');
   const strip=document.getElementById('flowStrip');
@@ -2652,7 +2660,7 @@ function renderFlow(){
   const visible=_flowVisible();
   lbl.style.display=visible.length?'flex':'none';
   const tl24=document.getElementById('tl24Wrap');
-  if(tl24) tl24.style.display=visible.length?'block':'none';
+  if(tl24) tl24.style.display='block';
   const cnt=document.getElementById('flowCount');
   if(cnt) cnt.textContent=visible.length?`(${visible.length})`:'';
   if(!visible.length){strip.innerHTML='';return;}
@@ -2666,10 +2674,12 @@ function renderFlow(){
     const ctx=S.running[rKey];
     const isRunning=!!ctx&&!ctx.paused;
     const isBreaking=ctx&&!!ctx.breakStart;
+    const sessionsFocus=S.sessions.filter(s=>s.plannedId===p.id).reduce((t,s)=>t+s.duration,0);
+    const sessionsBreak=S.sessions.filter(s=>s.plannedId===p.id).reduce((t,s)=>t+(s.breakTotal||0),0);
     const liveFocus=ctx&&!ctx.paused?elapsed(ctx.startTime):0;
-    const totalFocus=(ctx?(ctx.lapTotal||0):0)+liveFocus;
+    const totalFocus=sessionsFocus+(ctx?(ctx.lapTotal||0):0)+liveFocus;
     const liveBreak=isBreaking?elapsed(ctx.breakStart):0;
-    const totalBreak=(ctx?(ctx.breakTotal||0):0)+liveBreak;
+    const totalBreak=sessionsBreak+(ctx?(ctx.breakTotal||0):0)+liveBreak;
     const pendingSubs=(p.subtasks||[]).filter(st=>!st.done);
     const doneSubs=(p.subtasks||[]).filter(st=>st.done);
     const allSubs=[...pendingSubs,...doneSubs];
@@ -2691,10 +2701,10 @@ function renderFlow(){
         </button>
       </div>
       <div class="fcard-timers">
-        <span class="fcard-focus-t" id="fct_${p.id}">${fmt(totalFocus)}</span>
-        ${totalBreak>0||isBreaking?`<span class="fcard-break-t">☕ <span id="fcb_${p.id}">${fmt(totalBreak)}</span></span>`:`<span class="fcard-break-t" id="fcb_${p.id}" style="display:none;"></span>`}
+        <span class="fcard-focus-t" id="fct_${p.id}">${fmt(totalFocus+totalBreak)}</span>
+        ${totalBreak>0||isBreaking?`<span class="fcard-break-t">🔵<span id="fcn_${p.id}">${fmt(totalFocus)}</span> ☕<span id="fcb_${p.id}">${fmt(totalBreak)}</span></span>`:`<span class="fcard-break-t" style="display:none;"><span id="fcn_${p.id}"></span><span id="fcb_${p.id}"></span></span>`}
       </div>
-      ${idealLabel?`<div class="fcard-ideal">${idealLabel}${p.note?` · 📌 ${esc(p.note)}`:''}${isRunning&&p.idealSecs?(()=>{const pct=Math.round(totalFocus/p.idealSecs*100);return` · ${pct}%`;})():''}${!isRunning&&p.idealSecs&&totalFocus>0?(()=>{const pct=Math.round(totalFocus/p.idealSecs*100);return` · ${pct}%`;})():''}</div>`:p.note?`<div class="fcard-ideal">📌 ${esc(p.note)}</div>`:''}
+      ${idealLabel?`<div class="fcard-ideal">${idealLabel}${p.note?` · 📌 ${esc(p.note)}`:''}${isRunning&&p.idealSecs?(()=>{const pct=Math.round((totalFocus+totalBreak)/p.idealSecs*100);return` · ${pct}%`;})():''}${!isRunning&&p.idealSecs&&(totalFocus+totalBreak)>0?(()=>{const pct=Math.round((totalFocus+totalBreak)/p.idealSecs*100);return` · ${pct}%`;})():''}</div>`:p.note?`<div class="fcard-ideal">📌 ${esc(p.note)}</div>`:''}
       ${allSubs.length?`<div class="fcard-subs">${allSubs.map(st=>`
         <div class="fcard-sub-item">
           <div class="fcard-sub-check ${st.done?'done':''}" onclick="toggleSubtask('${p.id}','${st.id}')"></div>
@@ -2706,7 +2716,7 @@ function renderFlow(){
   html+=`<div class="fcard-arrow-row">→</div><span class="fcard-completed">Completed</span>`;
   if(finished.length){
     html+=`<span style="flex:0 0 1px;height:28px;background:var(--border2);margin:0 10px;align-self:center;"></span>`;
-    html+=`<span class="fcard-focus-lbl">Finished:</span>`;
+    html+=`<span class="fcard-focus-lbl" style="display:flex;align-items:center;gap:5px;">Finished: <button onclick="clearFinishedFlow()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0 2px;line-height:1;touch-action:manipulation;opacity:.7;" title="Eliminar historial de finalizados">×</button></span>`;
     finished.forEach((p,i)=>{
       if(i>0) html+=`<div class="fcard-arrow-row">→</div>`;
       html+=`<div class="fcard-done-chip"><div class="fcard-done-num">${p.flowOrder}</div><span style="font-size:13px;line-height:1;">${emojiHtml(p.actEmoji)}</span><span class="fcard-done-name">${esc(p.actName)}</span><span style="color:var(--green);font-size:10px;line-height:1;">✓</span></div>`;
@@ -2723,16 +2733,26 @@ function updateFlowCard(rKey){
   // Find which planned item uses this rKey
   const p=S.planned.find(x=>getRunKey(x.id,x.actId)===rKey);
   if(!p||p.flowOrder==null) return;
+  const sessionsFocus=S.sessions.filter(s=>s.plannedId===p.id).reduce((t,s)=>t+s.duration,0);
+  const sessionsBreak=S.sessions.filter(s=>s.plannedId===p.id).reduce((t,s)=>t+(s.breakTotal||0),0);
   const liveFocus=ctx.paused?0:elapsed(ctx.startTime);
-  const totalFocus=(ctx.lapTotal||0)+liveFocus;
+  const totalFocus=sessionsFocus+(ctx.lapTotal||0)+liveFocus;
   const liveBreak=ctx.breakStart?elapsed(ctx.breakStart):0;
-  const totalBreak=(ctx.breakTotal||0)+liveBreak;
+  const totalBreak=sessionsBreak+(ctx.breakTotal||0)+liveBreak;
   const tEl=document.getElementById('fct_'+p.id);
-  if(tEl) tEl.textContent=fmt(totalFocus);
+  if(tEl) tEl.textContent=fmt(totalFocus+totalBreak);
+  const nEl=document.getElementById('fcn_'+p.id);
+  if(nEl) nEl.textContent=fmt(totalFocus);
   const bEl=document.getElementById('fcb_'+p.id);
   if(bEl){
-    if(totalBreak>0||ctx.breakStart){bEl.textContent=fmt(totalBreak);bEl.style.display='';}
-    else bEl.style.display='none';
+    if(totalBreak>0||ctx.breakStart){
+      bEl.textContent=fmt(totalBreak);
+      const bRow=bEl.closest('.fcard-break-t');
+      if(bRow) bRow.style.display='';
+    } else {
+      const bRow=bEl.closest('.fcard-break-t');
+      if(bRow) bRow.style.display='none';
+    }
   }
 }
 
@@ -2785,12 +2805,16 @@ function tl24Drop(e){
   const b=_TL24_BLOCKS[_tl24Block===null?_tl24CurrentBlock():_tl24Block];
   const rawX=_tl24ClientToInnerX(e.clientX)-(_tl24DragPid?_tl24DragOffsetX:0);
   const dropH=b.startH+Math.max(0,rawX)/_TL_SCALE;
-  const snapMin=Math.round(dropH*4)/4*60; // snap to 15min
-  const clampedMin=Math.max(0,Math.min(23*60+45,snapMin));
+  // Determine which calendar date the drop position falls on
+  const _dropMidnight=new Date(); _dropMidnight.setHours(0,0,0,0);
+  const _dropMs=_dropMidnight.getTime()+dropH*3600000;
+  const _dropDate=new Date(_dropMs); _dropDate.setHours(0,0,0,0);
+  const dropDateStr=_dropDate.toDateString();
+  const dropAbsMin=(_dropMs-_dropDate.getTime())/60000;
+  const clampedMin=Math.max(0,Math.min(23*60+45,Math.round(dropAbsMin/15)*15));
 
-  const todayStr=new Date().toDateString();
-  const poKey='po_'+todayStr;
   if(!S.prefs)S.prefs={};
+  const poKey='po_'+dropDateStr;
   if(!S.prefs[poKey])S.prefs[poKey]={};
   S.prefs[poKey][pid]={abs:clampedMin};
 
@@ -2862,17 +2886,18 @@ var _tl24Block=null; // current active block index (0-3)
 var _tl24Timer=null;
 var _TL_SCALE=60; // px per hour — recomputed each render to fit the container
 
-// Block definitions: [label, startH_offset_from_midnight, endH_offset_from_midnight]
-// Offsets are from today's midnight. Negative = previous day.
+// 7-day blocks: today + 6 days ahead. Each block = 1 calendar day (24h from midnight).
 var _TL24_BLOCKS=[
-  {label:'10pm–7am', startH:-2,  endH:7,  autoFrom:0,    autoTo:7.0167}, // midnight to 7:01am
-  {label:'6am–4pm',  startH:6,   endH:16, autoFrom:7.0167,autoTo:16.0167}, // 7:01am to 4:01pm
-  {label:'3pm–10pm', startH:15,  endH:22, autoFrom:16.0167,autoTo:22.0167}, // 4:01pm to 10:01pm
-  {label:'10pm–7am', startH:22,  endH:31, autoFrom:22.0167,autoTo:31}  // 10:01pm to 7am next day
+  {label:'hoy',startH:0,  endH:24, autoFrom:0,  autoTo:24},
+  {label:'+1', startH:24, endH:48, autoFrom:24, autoTo:48},
+  {label:'+2', startH:48, endH:72, autoFrom:48, autoTo:72},
+  {label:'+3', startH:72, endH:96, autoFrom:72, autoTo:96},
+  {label:'+4', startH:96, endH:120,autoFrom:96, autoTo:120},
+  {label:'+5', startH:120,endH:144,autoFrom:120,autoTo:144},
+  {label:'+6', startH:144,endH:168,autoFrom:144,autoTo:168},
 ];
-// Timeline spans from hour -12 to +36 relative to today's midnight (48h total)
-var _TL_START_H=-12; // hours before midnight today
-var _TL_TOTAL_H=48;
+var _TL_START_H=0;
+var _TL_TOTAL_H=168;
 
 function _tl24HourToX(hFromMidnight){
   return (hFromMidnight-_TL_START_H)*_TL_SCALE;
@@ -2885,12 +2910,12 @@ function _tl24CurrentBlock(){
     const b=_TL24_BLOCKS[i];
     if(h>=b.autoFrom&&h<b.autoTo) return i;
   }
-  return 3; // late night fallback
+  return 0; // default: today
 }
 
 function renderTimeline24(){
   const wrap=document.getElementById('tl24Wrap');
-  if(!wrap||wrap.style.display==='none') return;
+  if(!wrap) return;
   const scroll=document.getElementById('tl24Scroll');
   const inner=document.getElementById('tl24Inner');
   if(!scroll||!inner) return;
@@ -2900,62 +2925,144 @@ function renderTimeline24(){
   const bStart=b.startH;
   const bEnd=b.endH;
   const bHours=bEnd-bStart;
-  // Fit the block hours into the visible scroll container; clamp between 40 and 100 px/hr
   _TL_SCALE=Math.max(40,Math.min(100,Math.floor((scroll.clientWidth||300)/bHours)));
   const totalW=bHours*_TL_SCALE;
   inner.style.width=totalW+'px';
 
+  // Layout rows (all in one shared scroll container)
+  const PT=2,  PH=20; // Planned  row: top=2,  height=20  → ends at 22
+  const RT=27, RH=10; // Ruler    row: top=27 (labels midpoint)
+  const ST=42, SH=20; // Sessions row: top=42, height=20  → ends at 62
+  inner.style.height='68px';
+
   const now=new Date();
   const midnight=new Date(now);midnight.setHours(0,0,0,0);
+  const todayStr=now.toDateString();
   const nowH=(now-midnight)/3600000;
   const hToX=h=>(h-bStart)*_TL_SCALE;
+  // Update block date label
+  (()=>{
+    const lbl=document.getElementById('tl24DateLbl');
+    if(!lbl) return;
+    const d2=['Do','Lu','Ma','Mi','Ju','Vi','Sá'];
+    const sd=new Date(midnight.getTime()+b.startH*3600000);
+    const ed=new Date(midnight.getTime()+(b.endH-0.01)*3600000);
+    const sLbl=d2[sd.getDay()]+' '+sd.getDate()+' '+sd.toLocaleDateString('es-MX',{month:'short'});
+    lbl.textContent=sd.toDateString()===ed.toDateString()?sLbl:sLbl+'–'+d2[ed.getDay()]+' '+ed.getDate();
+  })();
 
-  // Draw hour labels + vertical lines for current block only
-  let rulerHtml='';
+  let html='';
+
+  // Hour divider lines (full height) + labels centred in the ruler row
+  const _tlDay2=['Do','Lu','Ma','Mi','Ju','Vi','Sá'];
   for(let h=Math.ceil(bStart);h<=bEnd;h++){
     const x=hToX(h);
     const absH=((h%24)+24)%24;
-    const lbl=absH===0?'00:00':(absH<10?'0'+absH+':00':absH+':00');
+    const lbl=absH===0?'0':(absH+':00');
     const isMidnight=absH===0;
-    rulerHtml+=`<div class="tl24-hour" style="left:${x}px;${isMidnight?'border-color:var(--border2);':''}">
-      <span class="tl24-hour-lbl" style="${isMidnight?'color:var(--text2);font-weight:600;':''}">${lbl}</span>
-    </div>`;
+    const isKeyHour=absH===6||absH===16||absH===22;
+    html+=`<div class="tl24-hour" style="left:${x}px;${isMidnight?'border-color:var(--border2);':isKeyHour?'border-color:var(--text3);opacity:.6;':''}"></div>`;
+    html+=`<span class="tl24-hour-lbl" style="left:${x+2}px;top:${RT}px;${isMidnight?'color:var(--text2);font-weight:600;':isKeyHour?'color:var(--text2);font-weight:500;':''}">${lbl}</span>`;
+    if(isMidnight){
+      const dayAtH=new Date(midnight.getTime()+h*3600000);
+      const dayLbl=_tlDay2[dayAtH.getDay()]+' '+dayAtH.getDate();
+      html+=`<span style="position:absolute;left:${x+2}px;top:${PT}px;font-size:6px;font-family:var(--mono);color:var(--text3);pointer-events:none;white-space:nowrap;opacity:.8;">${dayLbl}</span>`;
+    }
   }
 
-  // Current time indicator (only within block range)
+  // Thin separators between planned / ruler / real
+  html+=`<div style="position:absolute;left:0;width:${totalW}px;top:${PT+PH+2}px;height:1px;background:var(--border2);opacity:.35;pointer-events:none;"></div>`;
+  html+=`<div style="position:absolute;left:0;width:${totalW}px;top:${ST-2}px;height:1px;background:var(--border2);opacity:.35;pointer-events:none;"></div>`;
+
+  // Shade the "last hour before block boundary" ranges: 6-7am, 3-4pm, 10-11pm
+  const _shadeRanges=[{f:6,t:7},{f:15,t:16},{f:22,t:23}];
+  const _dayOff=Math.floor(bStart/24);
+  _shadeRanges.forEach(({f,t})=>{
+    const sH=f+_dayOff*24, eH=t+_dayOff*24;
+    if(eH<=bStart||sH>=bEnd) return;
+    const sx=hToX(Math.max(sH,bStart));
+    const sw=(Math.min(eH,bEnd)-Math.max(sH,bStart))*_TL_SCALE;
+    html+=`<div style="position:absolute;left:${sx}px;width:${sw}px;top:0;height:100%;background:repeating-linear-gradient(45deg,var(--text3) 0px,var(--text3) 1px,transparent 1px,transparent 5px);opacity:.25;pointer-events:none;"></div>`;
+  });
+
+  // Now-line (full height)
   const nowX=hToX(nowH);
   if(nowX>=0&&nowX<=totalW){
-    rulerHtml+=`<div class="tl24-now" style="left:${nowX}px;"><div class="tl24-now-tri"></div></div>`;
+    html+=`<div class="tl24-now" style="left:${nowX}px;"><div class="tl24-now-tri"></div></div>`;
   }
 
-  // Planned items within current block's hour range
-  const todayStr=new Date().toDateString();
-  const poKey='po_'+todayStr;
-  const prefs=S.prefs&&S.prefs[poKey]?S.prefs[poKey]:{};
+  // ── PLANNED items (multi-day aware, clips to block boundaries) ──
   const colors=['var(--accent)','var(--teal)','var(--pink)','var(--green)','var(--amber)'];
   let ci=0;
   S.planned.forEach(p=>{
     if(p.done) return;
-    if(new Date(p.addedAt).toDateString()!==todayStr&&p.addedAt!=='2099-01-01T00:00:00.000Z') return;
-    const pref=prefs[p.id];
+    if(p.addedAt==='2099-01-01T00:00:00.000Z') return;
+    // Determine which calendar date this task belongs to and its offset from today's midnight
+    const taskDate=new Date(p.addedAt);
+    const taskMidnight=new Date(taskDate); taskMidnight.setHours(0,0,0,0);
+    const offsetH=(taskMidnight.getTime()-midnight.getTime())/3600000;
+    if(offsetH<-24||offsetH>7*24) return; // ignore distant past/future
+    const poKey='po_'+taskMidnight.toDateString();
+    const pref=S.prefs&&S.prefs[poKey]?S.prefs[poKey][p.id]:null;
     if(!pref||pref.abs==null) return;
-    const startH=pref.abs/60;
-    if(startH<bStart||startH>bEnd) return;
+    const startH=offsetH+pref.abs/60; // hours from today's midnight
     const durH=(p.idealSecs||3600)/3600;
-    const x=hToX(startH);
-    const w=Math.max(durH*_TL_SCALE,4);
+    const endH=startH+durH;
+    // Overlap check (show if task overlaps this block at all)
+    if(endH<=bStart||startH>=bEnd) return;
+    // Clip to block boundaries
+    const clippedStart=Math.max(startH,bStart);
+    const clippedEnd=Math.min(endH,bEnd);
+    const x=hToX(clippedStart);
+    const w=Math.max((clippedEnd-clippedStart)*_TL_SCALE,4);
     const col=colors[ci%colors.length]; ci++;
     const inFlow=p.flowOrder!=null;
-    const timeLbl=String(Math.floor(pref.abs/60)).padStart(2,'0')+':'+String(pref.abs%60).padStart(2,'0');
-    rulerHtml+=`<div class="tl24-item" data-pid="${p.id}" draggable="true" ondragstart="tl24ItemDragStart(event,'${p.id}')" style="left:${x}px;width:${w}px;background:${col}22;border:1px solid ${col};${inFlow?'border-width:2px;':''}" title="${esc(p.actName)} · ${timeLbl}">
+    const absM=Math.round(pref.abs);
+    const timeLbl=String(Math.floor(absM/60)).padStart(2,'0')+':'+String(absM%60).padStart(2,'0');
+    html+=`<div class="tl24-item" data-pid="${p.id}" draggable="true" ondragstart="tl24ItemDragStart(event,'${p.id}')" style="left:${x}px;width:${w}px;top:${PT}px;height:${PH}px;background:${col}22;border:1px solid ${col};${inFlow?'border-width:2px;':''}" title="${esc(p.actName)} · ${timeLbl}">
       <span class="tl24-item-lbl" style="color:${col};">${inFlow?p.flowOrder+' ':''}${esc(p.actName)}</span>
       <div class="tl24-resize" onmousedown="tl24ResizeStart(event,'${p.id}')" ontouchstart="tl24ResizeStart(event,'${p.id}')"></div>
     </div>`;
   });
 
-  inner.innerHTML=rulerHtml;
+  // ── REAL sessions ──
+  const palette=['var(--accent)','var(--teal)','var(--pink)','var(--green)','var(--amber)'];
+  const actColorMap={};
+  (S.activities||[]).forEach((a,i)=>{actColorMap[a.id]=palette[i%palette.length];});
+
+  (S.sessions||[]).filter(s=>s.startTime&&new Date(s.startTime).toDateString()===todayStr).forEach(s=>{
+    const sd=new Date(s.startTime);
+    const ed=s.endTime?new Date(s.endTime):now;
+    const sH=(sd-midnight)/3600000;
+    const eH=(ed-midnight)/3600000;
+    if(eH<bStart||sH>bEnd) return;
+    const x=Math.max(0,hToX(Math.max(sH,bStart)));
+    const w=Math.max((Math.min(eH,bEnd)-Math.max(sH,bStart))*_TL_SCALE,4);
+    const col=actColorMap[s.actId]||palette[0];
+    const timeLbl=String(sd.getHours()).padStart(2,'0')+':'+String(sd.getMinutes()).padStart(2,'0');
+    html+=`<div class="tl24-item" style="left:${x}px;width:${w}px;top:${ST}px;height:${SH}px;background:${col}33;border:1px solid ${col};cursor:default;" title="${esc(s.actName||'')} · ${timeLbl} · ${fmtM(s.duration)}">
+      <span class="tl24-item-lbl" style="color:${col};">${s.actEmoji?esc(s.actEmoji)+' ':''}${esc(s.actName||'')}</span>
+    </div>`;
+  });
+  Object.values(S.running||{}).forEach(ctx=>{
+    if(!ctx.lapStartTime&&!ctx.startTime) return;
+    const sd=new Date(ctx.lapStartTime||ctx.startTime);
+    if(sd.toDateString()!==todayStr) return;
+    const sH=(sd-midnight)/3600000;
+    if(nowH<bStart||sH>bEnd) return;
+    const x=Math.max(0,hToX(Math.max(sH,bStart)));
+    const w=Math.max((Math.min(nowH,bEnd)-Math.max(sH,bStart))*_TL_SCALE,4);
+    const col=actColorMap[ctx.actId]||palette[0];
+    html+=`<div class="tl24-item" style="left:${x}px;width:${w}px;top:${ST}px;height:${SH}px;background:${col}18;border:1px dashed ${col};cursor:default;" title="${esc(ctx.actName)} · en curso">
+      <span class="tl24-item-lbl" style="color:${col};">▶ ${esc(ctx.actName)}</span>
+    </div>`;
+  });
+
+  inner.innerHTML=html;
   scroll.scrollTo({left:0,behavior:'instant'});
 }
+
+function renderTimeline24Real(){ /* merged into renderTimeline24 */ }
 
 function _tl24GoBlock(idx){
   _tl24Block=idx;
@@ -2965,7 +3072,7 @@ function _tl24GoBlock(idx){
 
 function _tl24Nav(dir){
   const cur=_tl24Block===null?_tl24CurrentBlock():_tl24Block;
-  _tl24Block=(cur+dir+4)%4;
+  _tl24Block=(cur+dir+7)%7;
   renderTimeline24();
 }
 
@@ -3068,7 +3175,7 @@ function addSubtask(pid,text){
 function toggleSubtask(pid,sid){
   const p=S.planned.find(x=>x.id===pid);if(!p)return;
   const st=p.subtasks.find(s=>s.id===sid);if(!st)return;
-  st.done=!st.done;save();renderPlanned();renderRunning();
+  st.done=!st.done;save();renderPlanned();renderFlow();renderRunning();
 }
 
 // time spent on activity with NO subtask assigned
@@ -3426,7 +3533,7 @@ function toggleSubtaskByIdFromCard(rKey,subtaskId){
   const plan=S.planned.find(p=>p.subtasks&&p.subtasks.some(s=>s.id===subtaskId));
   if(plan){
     const st=plan.subtasks.find(s=>s.id===subtaskId);
-    if(st){st.done=!st.done;save();renderPlanned();renderRunning();return;}
+    if(st){st.done=!st.done;save();renderPlanned();renderFlow();renderRunning();return;}
   }
 }
 
@@ -3455,7 +3562,7 @@ function toggleSubtaskFromCard(rKey){
   const st=plan.subtasks.find(s=>s.id===ctx.subtaskId);
   if(!st)return;
   st.done=!st.done;
-  save();renderPlanned();renderRunning();
+  save();renderPlanned();renderFlow();renderRunning();
 }
 
 // deviation
@@ -3517,8 +3624,102 @@ function renderWeekBadge(){
 }
 
 // ── PLANNED ──
+function _buildPlannedCard(p,planGroup){
+  const spent=plannedSpent(p.id);
+  const rKey=getRunKey(p.id,p.actId);
+  const ctx=S.running[rKey];
+  const isRunning=!!ctx&&!ctx.paused;
+  const isBreaking=ctx&&ctx.breakStart;
+  let progressHtml='';
+  var metaBadges='';
+  if(p.idealSecs){
+    const pct=Math.min((spent/p.idealSecs)*100,105);
+    const over=spent>p.idealSecs;
+    progressHtml=`<div class="pc-progress"><div class="pc-progress-fill${over?' over':''}" style="width:${Math.min(pct,100)}%"></div></div>`;
+    const breakSecs=(()=>{let t=0;S.sessions.filter(s=>s.plannedId===p.id).forEach(s=>{t+=(s.breakTotal||0);});Object.values(S.running).forEach(c=>{if(c.plannedId===p.id){t+=(c.breakTotal||0);if(c.breakStart)t+=elapsed(c.breakStart);}});return t;})();
+    metaBadges=`<span class="pc-ideal" onclick="openEditIdeal('${p.id}')" title="Editar tiempo ideal" style="cursor:pointer;">⏱ ${fmtM(p.idealSecs)}</span><span class="pc-spent">${fmtM(spent)}</span>${breakSecs>0?`<span class="pc-spent"> | ${fmtM(breakSecs)}</span>`:''}`;
+  }else{
+    const breakSecs2=(()=>{let t=0;S.sessions.filter(s=>s.plannedId===p.id).forEach(s=>{t+=(s.breakTotal||0);});Object.values(S.running).forEach(c=>{if(c.plannedId===p.id){t+=(c.breakTotal||0);if(c.breakStart)t+=elapsed(c.breakStart);}});return t;})();
+    const bb2=breakSecs2>0?` <span class="pc-spent"> | ${fmtM(breakSecs2)}</span>`:'';
+    metaBadges=spent>0?`<span class="pc-spent">${fmtM(spent)}</span>${bb2}<span onclick="openEditIdeal('${p.id}')" style="cursor:pointer;font-size:9px;color:var(--text3);font-family:var(--mono);margin-left:4px;">+ ideal</span>`:`<span onclick="openEditIdeal('${p.id}')" style="cursor:pointer;font-size:9px;color:var(--text3);font-family:var(--mono);">+ tiempo ideal</span>`;
+  }
+  const subCount=p.subtasks.length;
+  const doneCount=p.subtasks.filter(s=>s.done).length;
+  const pendingCount=subCount-doneCount;
+  const subLabel=subCount?(pendingCount>0?`${pendingCount} pendiente${pendingCount>1?'s':''}${doneCount>0?' · '+doneCount+' ✓':''}`:`✓ Todo listo`):'+ subtareas';
+  const act4def=S.activities.find(a=>a.id===p.actId);
+  const missingDefaults=(act4def&&act4def.defaultSubtasks||[]).filter(dt=>!p.subtasks.some(st=>st.text.toLowerCase()===dt.toLowerCase()));
+  const usedOrders=new Set((planGroup||[]).filter(x=>x.id!==p.id&&x.flowOrder!=null).map(x=>x.flowOrder));
+  let flowOpts=`<option value="" style="color:var(--text);background:var(--bg);">·</option>`;
+  for(let n=1;n<=20;n++){const taken=usedOrders.has(n);flowOpts+=`<option value="${n}" ${p.flowOrder===n?'selected':''} ${taken?'disabled':''} style="color:var(--text);background:var(--bg);">${n}</option>`;}
+  return `<div class="planned-card ${p.done?'done-card':''} ${isRunning?'pc-running':''} ${p.auto?'pc-auto':''} ${p.flowOrder?'has-flow':''}" id="pc_${p.id}"
+    draggable="true"
+    ondragstart="pcDragStart(event,'${p.id}')"
+    ondragover="pcDragOver(event,'${p.id}')"
+    ondrop="pcDrop(event,'${p.id}')"
+    ondragend="pcDragEnd()"
+    onpointerdown="startPcLongPress('${p.id}')"
+    onpointerup="cancelPcLongPress()"
+    onpointerleave="cancelPcLongPress()"
+    onpointercancel="cancelPcLongPress()">
+    <div class="pc-header">
+      <div class="pc-emoji">${emojiHtml(p.actEmoji)}</div>
+      <div class="pc-info">
+        <div class="pc-name">${esc(p.actName)}${p.auto?` <span style="font-size:9px;color:var(--text3);font-family:var(--mono);font-style:italic;">new</span>`:''}
+          ${p.addedAt==='2099-01-01T00:00:00.000Z'?`<span style="font-size:8px;font-family:var(--mono);color:var(--text3);margin-left:4px;cursor:pointer;" onclick="editPlannedDate('${p.id}')">no date</span>`:`<span style="font-size:8px;font-family:var(--mono);color:var(--text3);margin-left:4px;cursor:pointer;" onclick="editPlannedDate('${p.id}')" title="Cambiar fecha">${new Date(p.addedAt).toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'numeric'})}</span>`}
+        </div>
+        <div class="pc-meta">${metaBadges}</div>
+      </div>
+      <div class="pc-icon-btns">
+        <select class="pc-flow-sel ${p.flowOrder?'has-order':''}" title="Posición en el flujo del día" onclick="event.stopPropagation()" onchange="setFlowOrder('${p.id}',this.value)">${flowOpts}</select>
+        <button class="pc-icon-btn play ${isRunning?'active-now':''}" onclick="startActivity('${p.actId}','${p.id}',null)" title="${isRunning?'Pausar':'Iniciar'}">${isRunning?'⏸':'▶'}</button>
+        <button class="pc-icon-btn brk ${isBreaking?'breaking':''}" onclick="toggleBreak('${rKey}')" title="${isBreaking?'Fin pausa':'Descanso'}">☕</button>
+        <button class="pc-icon-btn chk ${p.done?'done':''}" onclick="togglePlannedDone('${p.id}')" title="${p.done?'Reabrir':'Listo'}">✓</button>
+        <button class="pc-icon-btn pc-del-btn" onclick="removePlanned('${p.id}')" title="Eliminar tarjeta">✕</button>
+      </div>
+    </div>
+    <div style="padding:0 12px 4px;text-align:right;">
+      <select onchange="setPlannedDivision('${p.id}',this.value)" style="background:transparent;border:none;color:var(--border2);font-family:var(--mono);font-size:9px;padding:0;outline:none;cursor:pointer;color:transparent;width:16px;direction:rtl;">
+        ${(S.divisions||[]).map(d=>`<option value="${d.id}" style="color:var(--text);background:var(--bg);" ${(p.divisionId||'d1')===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}
+      </select>
+    </div>
+    ${progressHtml}
+    ${p.note?`<div class="pc-note-row">📌 ${esc(p.note)}</div>`:''}
+    <div class="pc-expand-row" onclick="togglePcExpand('${p.id}')">
+      <span class="pc-expand-lbl">${subLabel}</span>
+      ${missingDefaults.length?`<button onclick="loadMissingDefaults('${p.id}',event)" style="font-size:9px;background:var(--accent-dim);border:1px solid var(--accent);color:var(--accent);border-radius:5px;padding:1px 5px;cursor:pointer;margin-right:4px;" title="Cargar subtareas default faltantes">+${missingDefaults.length}</button>`:''}
+      <span class="pc-expand-icon">▼</span>
+    </div>
+    <div class="subtasks-wrap" id="sw_${p.id}">
+      ${(()=>{
+        const planned=p.subtasks.filter(st=>!st.unplanned&&!st.done);
+        const added=p.subtasks.filter(st=>st.unplanned&&!st.done);
+        let html='';
+        const noSubT=noSubSpent(p.actId,p.id);
+        if(noSubT>0||true){html+=`<div class="subtask-item" style="opacity:${noSubT>0?1:0.35};"><div class="subtask-check" style="border-style:dashed;cursor:default;"></div><span class="subtask-name" style="color:var(--text3);font-style:italic;">Sin subtarea</span>${noSubT>0?`<span style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-right:4px;" id="nst_${p.id}">${fmtS(noSubT)}</span>`:`<span style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-right:4px;" id="nst_${p.id}">0s</span>`}<button class="subtask-play" onclick="startActivity('${p.actId}','${p.id}',null)" style="opacity:0.5;"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button></div>`;}
+        planned.forEach(st=>{
+          const t=subtaskSpent(st.id);
+          html+=`<div class="subtask-item" id="sti_${st.id}" draggable="true" ondragstart="stDragStart(event,'${p.id}','${st.id}')" ondragover="stDragOver(event,'${st.id}')" ondrop="stDrop(event,'${p.id}','${st.id}')" ondragend="stDragEnd()"><div class="subtask-check ${st.done?'done':''}" onclick="toggleSubtask('${p.id}','${st.id}')"></div><span class="subtask-name ${st.done?'done-text':''}" id="stn_${st.id}">${esc(st.text)}</span><span style="font-size:9px;color:var(--text3);font-family:var(--mono);" id="st_t_${st.id}">${t>0?fmtS(t):'0s'}</span>${st.priority?`<span style="font-size:10px;margin-left:1px;">${priorityIcon(st.priority)}</span>`:''}${st.deadline?`<span style="font-size:8px;color:var(--text3);font-family:var(--mono);margin-left:2px;">${fmtDeadline(st.deadline)}</span>`:''}<button class="subtask-play" onclick="startActivity('${p.actId}','${p.id}','${st.id}')"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button><button class="st-edit-btn" onclick="openEditSubtask('${p.id}','${st.id}')" title="Editar">✎</button><button class="st-del-btn" onclick="deleteSubtask('${p.id}','${st.id}')" title="Eliminar">✕</button></div>`;
+        });
+        if(added.length){
+          html+=`<div style="font-size:8px;color:var(--text3);font-family:var(--mono);padding:4px 10px 2px;letter-spacing:1px;text-transform:uppercase;">Agregadas</div>`;
+          added.forEach(st=>{const t=subtaskSpent(st.id);html+=`<div class="subtask-item"><div class="subtask-check ${st.done?'done':''}" onclick="toggleSubtask('${p.id}','${st.id}')"></div><span class="subtask-name ${st.done?'done-text':''}" style="color:var(--teal);">${esc(st.text)}</span>${t>0?`<span style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-right:4px;">${fmtS(t)}</span>`:''}<button class="subtask-play" onclick="startActivity('${p.actId}','${p.id}','${st.id}')"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button></div>`;});
+        }
+        return html;
+      })()}
+      <div class="add-sub-row">
+        <input class="add-sub-input" placeholder="+ Nueva subtarea..." id="sub_${p.id}"
+          onkeydown="if(event.key==='Enter'){addSubtask('${p.id}',this.value);this.value='';}">
+      </div>
+    </div>
+  </div>`;
+}
+
 // Track which planned cards are expanded — persist across re-renders
 var _expandedPlans=new Set();
+// Track which future-day sections are expanded
+var _futureDayExpanded=new Set();
+function toggleFutureDay(ds){if(_futureDayExpanded.has(ds))_futureDayExpanded.delete(ds);else _futureDayExpanded.add(ds);renderPlanned();}
 
 function renderPlanned(){
   try {
@@ -3528,15 +3729,15 @@ function renderPlanned(){
     const pid=el.id.replace('pc_','');
     _expandedPlans.add(pid);
   });
-  // Show all non-done planned items — they stay until explicitly finished/removed
+  // Show today + past overdue + sin fecha. Future-dated items go in collapsible sections below.
   const nowMs=new Date().getTime();
-  // Show: backlog + past/today undone + next 7 days upcoming
+  const _todayMid=new Date(nowMs);_todayMid.setHours(0,0,0,0);
+  const _tomorrowMs=_todayMid.getTime()+86400000;
   const todayPlanned=S.planned.filter(p=>{
     if(p.done) return false;
-    if(p.addedAt==='2099-01-01T00:00:00.000Z') return true; // no date
+    if(p.addedAt==='2099-01-01T00:00:00.000Z') return true; // sin fecha
     const planMs=new Date(p.addedAt).getTime();
-    const sevenDaysMs=7*24*60*60*1000;
-    return planMs<=nowMs+sevenDaysMs; // show up to 7 days ahead
+    return planMs<_tomorrowMs; // today + past overdue only
   });
   document.getElementById('plannedCount').textContent=todayPlanned.length?`(${todayPlanned.length})`:'';
 
@@ -3550,21 +3751,21 @@ function renderPlanned(){
   }
   S.divisions=S.actDivisions;
 
-  // Build board columns
+  // Build board columns — only show divisions that have cards
   let boardHtml='';
   S.divisions.forEach(div=>{
-    const divCards=todayPlanned.filter(p=>(p.divisionId||'d1')===div.id);
+    const divCards=todayPlanned.filter(p=>(p.divisionId||'d_otros')===div.id);
+    if(!divCards.length) return;
     boardHtml+=`<div class="board-col" id="bcol_${div.id}">
       <div class="board-hdr">
         <span class="board-hdr-name" id="bhn_${div.id}"
           ondblclick="editDivisionName('${div.id}')">${esc(div.name)}</span>
-        ${divCards.length?`<span class="board-hdr-count">(${divCards.length})</span>`:''}
+        <span class="board-hdr-count">(${divCards.length})</span>
       </div>
       <div class="board-items" id="bi_${div.id}"
         ondragover="biDragOver(event,'${div.id}')"
         ondrop="biDrop(event,'${div.id}')"
         ondragleave="biDragLeave(event,'${div.id}')">
-        ${divCards.length?'':'<div class="board-empty">vacío</div>'}
       </div>
     </div>`;
   });
@@ -3759,8 +3960,8 @@ function renderPlanned(){
     </div>`;
 
     // Insert card into the right board column
-    const divId=p.divisionId||'d1';
-    const col=document.getElementById('bi_'+divId)||document.getElementById('bi_d1');
+    const divId=p.divisionId||'d_otros';
+    const col=document.getElementById('bi_'+divId)||document.getElementById('bi_d_otros');
     if(col){
       const empty=col.querySelector('.board-empty');
       if(empty) empty.remove();
@@ -3891,6 +4092,76 @@ function renderPlanned(){
     const wrap=document.getElementById('sw_'+pid);
     if(card&&wrap){card.classList.add('pc-expanded');wrap.classList.add('open');}
   });
+
+  // ── Future days (up to 6, collapsible, full card format) ──
+  const _fdMidnight=new Date();_fdMidnight.setHours(0,0,0,0);
+  const _fdTomorrowMs=_fdMidnight.getTime()+86400000;
+  const _fdMaxMs=_fdMidnight.getTime()+7*86400000;
+  const _fdItems=S.planned.filter(p=>{
+    if(p.done||p.addedAt==='2099-01-01T00:00:00.000Z') return false;
+    const ms=new Date(p.addedAt).getTime();
+    return ms>=_fdTomorrowMs&&ms<_fdMaxMs;
+  });
+  const _fdByDate={};
+  _fdItems.forEach(p=>{
+    const ds=new Date(p.addedAt).toDateString();
+    if(!_fdByDate[ds])_fdByDate[ds]=[];
+    _fdByDate[ds].push(p);
+  });
+  const _fdSorted=Object.entries(_fdByDate)
+    .sort((a,b)=>new Date(a[0]).getTime()-new Date(b[0]).getTime())
+    .slice(0,6);
+  const _fd2=['Do','Lu','Ma','Mi','Ju','Vi','Sá'];
+  const _fdOld=document.getElementById('futureDaysWrap');
+  if(_fdOld) _fdOld.remove();
+  if(_fdSorted.length){
+    const _fdWrap=document.createElement('div');
+    _fdWrap.id='futureDaysWrap';
+    _fdSorted.forEach(([ds,plans])=>{
+      const _fdd=new Date(ds);
+      const _fde=_futureDayExpanded.has(ds);
+      const _fdHdr=`${_fd2[_fdd.getDay()]} · ${_fdd.toLocaleDateString('es-MX',{day:'numeric',month:'short'})}`;
+      const sec=document.createElement('div');
+      sec.style.cssText='margin-bottom:2px;';
+      const hdrEl=document.createElement('div');
+      hdrEl.style.cssText='display:flex;align-items:center;padding:4px 16px;cursor:pointer;user-select:none;';
+      hdrEl.setAttribute('onclick',`toggleFutureDay(${JSON.stringify(ds)})`);
+      hdrEl.innerHTML=`<span style="font-family:var(--mono);font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;">${esc(_fdHdr)} ${_fde?'▲':'▼'}</span>`;
+      sec.appendChild(hdrEl);
+      if(_fde){
+        // Build board columns like today's board
+        const boardEl=document.createElement('div');
+        boardEl.className='board-wrap';
+        boardEl.style.cssText='padding:0 8px 6px;';
+        let boardHtml='';
+        const divs2=S.divisions||[];
+        divs2.forEach(div=>{
+          const dc=plans.filter(p=>(p.divisionId||'d_otros')===div.id);
+          if(!dc.length) return;
+          boardHtml+=`<div class="board-col" id="bcol_fd_${ds.replace(/\s/g,'_')}_${div.id}">
+            <div class="board-hdr"><span class="board-hdr-name">${esc(div.name)}</span><span class="board-hdr-count">(${dc.length})</span></div>
+            <div class="board-items" id="bi_fd_${ds.replace(/\s/g,'_')}_${div.id}"></div>
+          </div>`;
+        });
+        boardEl.innerHTML=boardHtml;
+        sec.appendChild(boardEl);
+        // Insert full cards into columns
+        plans.forEach(p=>{
+          const cardHtml=_buildPlannedCard(p,plans);
+          const divId=p.divisionId||'d_otros';
+          const safeDs=ds.replace(/\s/g,'_');
+          const colEl=boardEl.querySelector(`#bi_fd_${safeDs}_${divId}`)||boardEl.querySelector(`#bi_fd_${safeDs}_d_otros`);
+          if(colEl){
+            const w=document.createElement('div');
+            w.innerHTML=cardHtml;
+            colEl.appendChild(w.firstElementChild);
+          }
+        });
+      }
+      _fdWrap.appendChild(sec);
+    });
+    list.parentNode.insertBefore(_fdWrap,list.nextSibling);
+  }
   } catch(e){ console.error('renderPlanned error:',e); }
 }
 
@@ -4077,11 +4348,9 @@ function buildRunCard(rKey,isTop){
       <div class="rc-right">
         ${(()=>{
           const today=new Date().toDateString();
-          const relPlanned=S.planned.filter(p=>
-            p.actId===ctx.actId &&
-            new Date(p.addedAt).toDateString()===today &&
-            !p.done
-          );
+          const relPlanned=planned
+            ?[planned]
+            :S.planned.filter(p=>p.actId===ctx.actId&&isTodayWindow(new Date(p.addedAt).toDateString())&&!p.done);
           const allSubs=[];
           relPlanned.forEach(p=>p.subtasks.forEach(st=>{
             allSubs.push({id:st.id,text:st.text,done:st.done});
@@ -4252,48 +4521,90 @@ function divWeekTotal(divId){
     .reduce((t,a)=>t+actWeekTotal(a.id),0);
 }
 
+// Returns Mon–Sun Date objects for the current week
+function _weekDays(){
+  const n=new Date(),d=n.getDay();
+  const mon=new Date(n);
+  mon.setHours(0,0,0,0);
+  mon.setDate(n.getDate()-(d===0?6:d-1));
+  return Array.from({length:7},(_,i)=>{const x=new Date(mon);x.setDate(mon.getDate()+i);return x;});
+}
+
+function _dayTotal(actId,dayStr){
+  const fromSess=S.sessions
+    .filter(s=>s.actId===actId&&new Date(s.startTime).toDateString()===dayStr)
+    .reduce((t,s)=>t+(s.duration||0),0);
+  let live=0;
+  if(dayStr===new Date().toDateString()){
+    for(const ctx of Object.values(S.running)){
+      if(ctx.actId!==actId) continue;
+      live+=(ctx.lapTotal||0);
+      if(!ctx.paused) live+=elapsed(ctx.startTime);
+    }
+  }
+  return fromSess+live;
+}
+
+function fmtDay(s){
+  if(!s||s<60)return'–';
+  if(s<3600)return`${Math.floor(s/60)}m`;
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);
+  return m?`${h}h${m}m`:`${h}h`;
+}
+
 function renderWeekGrid(){
   const divs=getActDivisions();
   const items=[];
+  const days=_weekDays();
+  const DAY_LABELS=['Lu','Ma','Mi','Ju','Vi','Sá','Do'];
+  const todayStr=new Date().toDateString();
+  const todayIdx=days.findIndex(d=>d.toDateString()===todayStr);
 
-  // Division items (summaryVisible defaults to true)
+  function dayRowHtml(actIds){
+    return DAY_LABELS.map((lbl,i)=>{
+      const dayStr=days[i].toDateString();
+      const t=actIds.reduce((s,id)=>s+_dayTotal(id,dayStr),0);
+      const isToday=i===todayIdx;
+      return`<div style="display:flex;justify-content:space-between;align-items:center;padding:1px 0;"><span style="font-size:7px;font-family:var(--mono);color:${isToday?'var(--accent)':'var(--text3)'};font-weight:${isToday?'700':'400'};">${lbl}</span><span style="font-size:8px;font-family:var(--mono);color:${t>0?'var(--text)':'var(--text3)'};">${fmtDay(t)}</span></div>`;
+    }).join('');
+  }
+
   divs.forEach(div=>{
     if(div.summaryVisible===false) return;
-    const total=divWeekTotal(div.id);
-    // Pick top emoji from most-used activity in this division
     const divActs=S.activities.filter(a=>(a.divisionId||'d_otros')===div.id);
     const topAct=divActs.slice().sort((a,b)=>actWeekTotal(b.id)-actWeekTotal(a.id))[0];
     items.push({
-      type:'division',id:div.id,
       emoji:div.emoji||(topAct?topAct.emoji:'📁'),
       name:div.name,
-      total,
+      total:divWeekTotal(div.id),
+      actIds:divActs.map(a=>a.id),
       onclick:`openSummaryConfig()`
     });
   });
 
-  // Individual activity items (summaryVisible defaults to false — opt-in)
   S.activities.forEach(a=>{
     if(!a.summaryVisible) return;
     items.push({
-      type:'activity',id:a.id,
       emoji:a.emoji,name:a.name,
       total:actWeekTotal(a.id),
+      actIds:[a.id],
       onclick:`startActivity('${a.id}',null,null)`
     });
   });
 
-  // Sort by total desc
   items.sort((a,b)=>b.total-a.total);
 
   document.getElementById('weekGrid').innerHTML=items.length
     ? items.map(it=>`
       <div class="wc ${it.total>0?'has-t':''}" onclick="${it.onclick}">
-        <span class="wc-emoji">${emojiHtml(it.emoji)}</span>
-        <span class="wc-name">${it.name.slice(0,10)}</span>
-        <span class="wc-time">${fmtS(it.total)}</span>
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:5px;">
+          <span style="font-size:12px;line-height:1;">${emojiHtml(it.emoji)}</span>
+          <span style="flex:1;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${it.name}</span>
+          <span style="font-family:var(--mono);font-size:9px;color:var(--text);font-weight:600;">${fmtDay(it.total)}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:0;">${dayRowHtml(it.actIds)}</div>
       </div>`).join('')
-    : `<div style="grid-column:1/-1;text-align:center;padding:18px;font-family:var(--mono);font-size:10px;color:var(--text3);">Configura el resumen ⚙</div>`;
+    : `<div style="text-align:center;padding:18px;font-family:var(--mono);font-size:10px;color:var(--text3);">Configura el resumen ⚙</div>`;
 }
 
 function openSummaryConfig(){
@@ -7848,9 +8159,10 @@ openAddPlanned = function(actId){
 
   if(activePlansEl && activePlansList){
     let html='';
+    const _ap2b=['Do','Lu','Ma','Mi','Ju','Vi','Sá'];
     activePlans.forEach(p=>{
       const d=new Date(p.addedAt);
-      const lbl=d.toLocaleDateString('es-MX', {weekday:'short',day:'numeric',month:'short'});
+      const lbl=p.addedAt==='2099-01-01T00:00:00.000Z'?'Sin fecha':(_ap2b[d.getDay()]+' · '+d.toLocaleDateString('es-MX',{day:'numeric',month:'short'}));
       html+='<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border2);"><span style="font-size:11px;font-family:var(--mono);color:var(--teal);flex:1;">📅 '+lbl+'</span><button onclick="removePlanned(\''+p.id+'\');openAddPlanned(\''+actId+'\');" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:0 4px;">✕</button></div>';
     });
     // FIX #13c
