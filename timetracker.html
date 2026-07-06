@@ -3038,7 +3038,12 @@ function renderTimeline24(){
   });
 
   // ── REAL sessions ──
-  (S.sessions||[]).filter(s=>s.startTime&&new Date(s.startTime).toDateString()===todayStr).forEach(s=>{
+  const _tlWinStart=midnight.getTime()-8*24*3600000; // show sessions that ended within last 8 days
+  (S.sessions||[]).filter(s=>{
+    if(!s.startTime) return false;
+    const end=s.endTime?new Date(s.endTime):now;
+    return end.getTime()>=_tlWinStart&&new Date(s.startTime).getTime()<midnight.getTime()+8*24*3600000;
+  }).forEach(s=>{
     const sd=new Date(s.startTime);
     const ed=s.endTime?new Date(s.endTime):now;
     const sH=(sd-midnight)/3600000;
@@ -3055,7 +3060,6 @@ function renderTimeline24(){
   Object.values(S.running||{}).forEach(ctx=>{
     if(!ctx.lapStartTime&&!ctx.startTime) return;
     const sd=new Date(ctx.lapStartTime||ctx.startTime);
-    if(sd.toDateString()!==todayStr) return;
     const sH=(sd-midnight)/3600000;
     if(nowH<bStart||sH>bEnd) return;
     const x=Math.max(0,hToX(Math.max(sH,bStart)));
